@@ -7,6 +7,7 @@ import Sales from './pages/Sales';
 import Customers from './pages/Customers';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuthStore } from '@/store/auth.store';
+import Inventory from './pages/Inventory';
 
 // Removed inline Dashboard duplicate
 
@@ -17,47 +18,54 @@ function App() {
 		checkAuth();
 	}, [checkAuth]);
 
-	return (
-		<BrowserRouter>
-			<Routes>
-				<Route path="/login" element={<LoginPage />} />
-				<Route path="/" element={<Navigate to="/dashboard" replace />} />
-				<Route
-					path="/dashboard"
-					element={
-						<ProtectedRoute>
-							<Dashboard />
-						</ProtectedRoute>
-					}
-				/>
-				<Route
-					path="/pos"
-					element={
-						<ProtectedRoute>
-							<POS />
-						</ProtectedRoute>
-					}
-				/>
-				<Route
-					path="/sales"
-					element={
-						<ProtectedRoute>
-							<Sales />
-						</ProtectedRoute>
-					}
-				/>
-				<Route
-					path="/customers"
-					element={
-						<ProtectedRoute>
-							<Customers />
-						</ProtectedRoute>
-					}
-				/>
-				<Route path="*" element={<Navigate to="/dashboard" replace />} />
-			</Routes>
-		</BrowserRouter>
-	);
-}
-
-export default App;
+		return (
+			<BrowserRouter>
+				<Routes>
+					<Route path="/login" element={<LoginPage />} />
+					<Route path="/" element={<Navigate to="/dashboard" replace />} />
+					<Route
+						path="/dashboard"
+						element={
+							<ProtectedRoute>
+								<Dashboard />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/pos"
+						element={
+							<ProtectedRoute>
+								<POS />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/sales"
+						element={
+							<ProtectedRoute>
+								<Sales />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/customers"
+						element={
+							<ProtectedRoute>
+								<Customers />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/inventory"
+						element={
+							<ProtectedRoute>
+								<Inventory />
+							</ProtectedRoute>
+						}
+					/>
+					<Route path="*" element={<Navigate to="/dashboard" replace />} />
+				</Routes>
+			</BrowserRouter>
+		);
+	}
+	export default App;

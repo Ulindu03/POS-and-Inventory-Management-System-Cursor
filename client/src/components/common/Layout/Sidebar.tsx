@@ -1,16 +1,17 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Users } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, Package } from 'lucide-react';
 import { BrandLogo } from '@/components/common/BrandLogo';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: ShoppingCart, label: 'POS', path: '/pos' },
+  { icon: Package, label: 'Inventory', path: '/inventory' },
   { icon: Users, label: 'Customers', path: '/customers' },
 ];
 
 export const Sidebar = () => {
   const location = useLocation();
-
+  
   return (
     <aside className="h-screen w-64 bg-black/30 backdrop-blur-xl border-r border-white/10 text-[#F8F8F8] hidden md:flex flex-col">
       <div className="px-5 py-6 border-b border-white/10">
@@ -43,5 +44,3 @@ export const Sidebar = () => {
     </aside>
   );
 };
-
-
