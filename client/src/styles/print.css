@@ -1,0 +1,12 @@
+@media print {
+  body { background: #fff !important; color: #000 !important; }
+  .no-print { display: none !important; }
+  .print-area { display: block !important; }
+  .receipt { width: 80mm; font-family: 'Montserrat', Arial, sans-serif; }
+  .receipt h1 { font-size: 16px; margin: 0 0 8px; }
+  .receipt .row { display: flex; justify-content: space-between; }
+  .receipt table { width: 100%; border-collapse: collapse; }
+  .receipt th, .receipt td { text-align: left; font-size: 12px; padding: 2px 0; }
+}
+
+

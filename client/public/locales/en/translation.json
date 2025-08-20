@@ -1,0 +1,20 @@
+{
+  "common": {
+    "welcome": "Welcome",
+    "login": "Login",
+    "logout": "Logout",
+    "dashboard": "Dashboard",
+    "loading": "Loading...",
+    "currency": "LKR"
+  },
+  "auth": {
+    "title": "VoltZone POS System",
+    "subtitle": "Glow Smart, Live Bright",
+    "username": "Username",
+    "password": "Password",
+    "loginButton": "Sign In",
+    "demo": "Demo Credentials",
+    "admin": "Admin",
+    "cashier": "Cashier"
+  }
+}
