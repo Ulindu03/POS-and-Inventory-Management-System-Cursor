@@ -14,6 +14,10 @@ const damageSchema = new mongoose.Schema({
     required: true
   },
   source: {
+    trip: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Trip'
+    },
     delivery: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Delivery'
@@ -169,7 +173,6 @@ const damageSchema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
-damageSchema.index({ referenceNo: 1 });
 damageSchema.index({ type: 1 });
 damageSchema.index({ status: 1 });
 damageSchema.index({ reportedBy: 1 });

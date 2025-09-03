@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, Package, ShoppingCart, Eye } from 'lucide-react';
-import { formatLKR } from '@/lib/utils/currency';
+import { inventoryApi } from '@/lib/api/inventory.api';
+import { createPurchaseOrder } from '@/lib/api/purchaseOrders.api';
 
 interface LowStockItem {
   _id: string;
@@ -14,71 +15,55 @@ interface LowStockItem {
   currentStock: number;
   minimumStock: number;
   reorderPoint: number;
-  stockStatus: 'low' | 'critical' | 'out';
+  stockStatus: StockStatus;
   daysUntilOut: number;
   suggestedReorder: number;
 }
 
+type StockStatus = 'low' | 'critical' | 'out';
+
 export const LowStockAlert = () => {
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [counts, setCounts] = useState({ low: 0, critical: 0, out: 0 });
+  const skeletonKeys = ['s1', 's2', 's3', 's4', 's5'];
 
   useEffect(() => {
     const loadLowStockItems = async () => {
       setLoading(true);
       try {
-        // Mock data - replace with actual API call
-        const mockData: LowStockItem[] = [
-          {
-            _id: '1',
-            product: {
-              _id: '1',
-              sku: 'ELK002',
-              name: { en: 'iPhone 15 Pro', si: 'අයිෆෝන් 15 ප්‍රෝ' },
-              category: 'Electronics',
-              supplier: 'Tech Distributors Ltd'
-            },
-            currentStock: 5,
-            minimumStock: 10,
-            reorderPoint: 15,
-            stockStatus: 'low',
-            daysUntilOut: 12,
-            suggestedReorder: 50
+        const res = await inventoryApi.lowStock();
+        const items = (res?.data || []).map((row: any) => {
+          const current = row.currentStock ?? row.stock?.current ?? 0;
+          const min = row.minimumStock ?? row.stock?.min ?? 0;
+          let status: StockStatus;
+          if (current === 0) status = 'out';
+          else if (current <= min) status = 'critical';
+          else status = 'low';
+          return {
+          _id: row.product?._id || row._id,
+          product: {
+            _id: row.product?._id || row._id,
+            sku: row.product?.sku || row.sku,
+            name: row.product?.name || { en: row.product?.name?.en || row.name || 'Unknown', si: row.product?.name?.si || '' },
+            category: row.product?.category?.name?.en || row.category?.name?.en || '—',
+            supplier: row.product?.supplier?.name || row.supplier?.name || '—',
           },
-          {
-            _id: '2',
-            product: {
-              _id: '2',
-              sku: 'ELK003',
-              name: { en: 'Dell XPS 13', si: 'ඩෙල් XPS 13' },
-              category: 'Electronics',
-              supplier: 'Computer World'
-            },
-            currentStock: 2,
-            minimumStock: 5,
-            reorderPoint: 8,
-            stockStatus: 'critical',
-            daysUntilOut: 3,
-            suggestedReorder: 25
-          },
-          {
-            _id: '3',
-            product: {
-              _id: '3',
-              sku: 'ELK004',
-              name: { en: 'MacBook Air M3', si: 'මැක්බුක් එයාර් M3' },
-              category: 'Electronics',
-              supplier: 'Apple Store'
-            },
-            currentStock: 0,
-            minimumStock: 3,
-            reorderPoint: 5,
-            stockStatus: 'out',
-            daysUntilOut: 0,
-            suggestedReorder: 15
-          }
-        ];
-        setLowStockItems(mockData);
+          currentStock: current,
+          minimumStock: min,
+          reorderPoint: row.reorderPoint ?? row.stock?.reorderPoint ?? 0,
+          stockStatus: row.stockStatus || status,
+          daysUntilOut: row.daysUntilOut ?? 0,
+          suggestedReorder: row.suggestedReorder ?? Math.max(0, (row.reorderPoint ?? 0) - (row.currentStock ?? 0)),
+        };
+        }) as LowStockItem[];
+        setLowStockItems(items);
+        const c = {
+          low: items.filter((i: LowStockItem) => i.stockStatus === 'low').length,
+          critical: items.filter((i: LowStockItem) => i.stockStatus === 'critical').length,
+          out: items.filter((i: LowStockItem) => i.stockStatus === 'out').length,
+        } as any;
+        setCounts(c);
       } catch (error) {
         console.error('Error loading low stock items:', error);
       } finally {
@@ -88,6 +73,67 @@ export const LowStockAlert = () => {
 
     loadLowStockItems();
   }, []);
+
+  const handleCreatePOs = async () => {
+    try {
+      const res = await inventoryApi.reorderSuggestions();
+      const groups = (res?.data?.suggestions || []) as Array<{ supplier: any; items: any[] }>; 
+      for (const g of groups) {
+        if (!g.items || g.items.length === 0) continue;
+        const payload = {
+          supplier: g.supplier?._id || g.supplier,
+          items: g.items.map((it: any) => ({
+            product: it.product?._id || it.product,
+            quantity: it.quantity || it.suggestedQuantity || it.suggestedReorder || 0,
+            unitCost: it.product?.price?.cost || 0,
+            totalCost: (it.product?.price?.cost || 0) * (it.quantity || it.suggestedQuantity || it.suggestedReorder || 0),
+          })),
+          status: 'draft',
+          orderDate: new Date().toISOString(),
+          paymentTerms: 'Due on receipt',
+          tax: { vat: 0, nbt: 0 },
+          discount: 0,
+          subtotal: 0,
+          total: 0,
+        } as any;
+        // compute totals
+        payload.subtotal = payload.items.reduce((s: number, it: any) => s + (it.totalCost || 0), 0);
+        payload.total = payload.subtotal - (payload.discount || 0) + (payload.tax?.vat || 0) + (payload.tax?.nbt || 0);
+        await createPurchaseOrder(payload);
+      }
+      // refresh list
+      await new Promise((r) => setTimeout(r, 250));
+      // naive reload of alerts
+      const res2 = await inventoryApi.lowStock();
+      const items2 = (res2?.data || []).map((row: any) => {
+        const current = row.currentStock ?? row.stock?.current ?? 0;
+        const min = row.minimumStock ?? row.stock?.min ?? 0;
+  let status: StockStatus;
+  if (current === 0) status = 'out';
+  else if (current <= min) status = 'critical';
+  else status = 'low';
+        return {
+          _id: row.product?._id || row._id,
+          product: {
+            _id: row.product?._id || row._id,
+            sku: row.product?.sku || row.sku,
+            name: row.product?.name || { en: row.product?.name?.en || row.name || 'Unknown', si: row.product?.name?.si || '' },
+            category: row.product?.category?.name?.en || row.category?.name?.en || '—',
+            supplier: row.product?.supplier?.name || row.supplier?.name || '—',
+          },
+          currentStock: current,
+          minimumStock: min,
+          reorderPoint: row.reorderPoint ?? row.stock?.reorderPoint ?? 0,
+          stockStatus: row.stockStatus || status,
+          daysUntilOut: row.daysUntilOut ?? 0,
+          suggestedReorder: row.suggestedReorder ?? Math.max(0, (row.reorderPoint ?? 0) - (row.currentStock ?? 0)),
+        };
+      }) as LowStockItem[];
+      setLowStockItems(items2);
+    } catch (e) {
+      console.error('Failed creating POs from suggestions', e);
+    }
+  };
 
   const getUrgencyColor = (status: string) => {
     switch (status) {
@@ -119,6 +165,7 @@ export const LowStockAlert = () => {
           <button 
             className="px-4 py-2 rounded-xl font-semibold transition-colors flex items-center"
             style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
+            onClick={handleCreatePOs}
           >
             <ShoppingCart className="w-4 h-4 mr-2" />
             Create Purchase Order
@@ -133,7 +180,7 @@ export const LowStockAlert = () => {
             <AlertTriangle className="w-8 h-8 text-yellow-400 mr-3" />
             <div>
               <p className="text-sm text-[#F8F8F8]/70">Low Stock</p>
-              <p className="text-2xl font-bold text-yellow-400">15</p>
+              <p className="text-2xl font-bold text-yellow-400">{counts.low}</p>
               <p className="text-xs text-[#F8F8F8]/50">Items below minimum</p>
             </div>
           </div>
@@ -144,7 +191,7 @@ export const LowStockAlert = () => {
             <AlertTriangle className="w-8 h-8 text-orange-400 mr-3" />
             <div>
               <p className="text-sm text-[#F8F8F8]/70">Critical</p>
-              <p className="text-2xl font-bold text-orange-400">8</p>
+              <p className="text-2xl font-bold text-orange-400">{counts.critical}</p>
               <p className="text-xs text-[#F8F8F8]/50">Need immediate action</p>
             </div>
           </div>
@@ -155,7 +202,7 @@ export const LowStockAlert = () => {
             <Package className="w-8 h-8 text-red-400 mr-3" />
             <div>
               <p className="text-sm text-[#F8F8F8]/70">Out of Stock</p>
-              <p className="text-2xl font-bold text-red-400">3</p>
+              <p className="text-2xl font-bold text-red-400">{counts.out}</p>
               <p className="text-xs text-[#F8F8F8]/50">Zero inventory</p>
             </div>
           </div>
@@ -165,8 +212,8 @@ export const LowStockAlert = () => {
       {/* Alert Items */}
       <div className="space-y-4">
         {loading ? (
-          Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 animate-pulse">
+          skeletonKeys.map((key) => (
+            <div key={key} className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 animate-pulse">
               <div className="flex items-center justify-between">
                 <div className="flex items-center flex-1">
                   <div className="w-12 h-12 bg-white/10 rounded-xl mr-4"></div>
@@ -195,13 +242,16 @@ export const LowStockAlert = () => {
                       <h3 className="font-semibold text-[#F8F8F8] mr-2">
                         {item.product.name.en}
                       </h3>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        item.stockStatus === 'low' ? 'bg-yellow-500/20 text-yellow-400' :
-                        item.stockStatus === 'critical' ? 'bg-orange-500/20 text-orange-400' :
-                        'bg-red-500/20 text-red-400'
-                      }`}>
-                        {item.stockStatus.toUpperCase()}
-                      </span>
+                      {(() => {
+                        let chip = 'bg-yellow-500/20 text-yellow-400';
+                        if (item.stockStatus === 'critical') chip = 'bg-orange-500/20 text-orange-400';
+                        else if (item.stockStatus === 'out') chip = 'bg-red-500/20 text-red-400';
+                        return (
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${chip}`}>
+                            {item.stockStatus.toUpperCase()}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center text-sm text-[#F8F8F8]/70 space-x-4">
                       <span>SKU: {item.product.sku}</span>

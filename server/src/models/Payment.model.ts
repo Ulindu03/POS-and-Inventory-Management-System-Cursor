@@ -118,8 +118,6 @@ const paymentSchema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
-paymentSchema.index({ paymentNo: 1 });
-paymentSchema.index({ sale: 1 });
 paymentSchema.index({ customer: 1 });
 paymentSchema.index({ supplier: 1 });
 paymentSchema.index({ type: 1 });

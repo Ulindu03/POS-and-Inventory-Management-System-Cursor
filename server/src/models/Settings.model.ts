@@ -90,6 +90,30 @@ const settingsSchema = new mongoose.Schema({
       default: 'en'
     }
   },
+  branding: {
+    logoUrl: {
+      type: String,
+      trim: true,
+      default: ''
+    }
+  },
+  stickers: {
+    barcodeMode: {
+      type: String,
+      enum: ['reuse_product_barcode', 'unique_per_unit'],
+      default: 'reuse_product_barcode'
+    },
+    defaultLabelSize: {
+      type: String,
+      enum: ['50x25', '40x30', 'custom'],
+      default: '50x25'
+    },
+    defaultSheetType: {
+      type: String,
+      enum: ['roll', 'a4'],
+      default: 'roll'
+    }
+  },
   inventory: {
     lowStockThreshold: {
       type: Number,
@@ -246,6 +270,12 @@ const settingsSchema = new mongoose.Schema({
       default: 2,
       min: 0,
       max: 4
+    },
+    available: [{ type: String, trim: true, uppercase: true }],
+    fxRates: {
+      type: Map,
+      of: Number,
+      default: {}, // e.g., { USD: 0.0033, LKR: 1 }
     }
   },
   language: {

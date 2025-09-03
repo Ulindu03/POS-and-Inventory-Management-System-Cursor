@@ -129,8 +129,7 @@ const purchaseOrderSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for efficient queries
-purchaseOrderSchema.index({ poNumber: 1 });
+// Indexes for efficient queries (excluding poNumber which is already indexed by unique: true)
 purchaseOrderSchema.index({ supplier: 1 });
 purchaseOrderSchema.index({ status: 1 });
 purchaseOrderSchema.index({ orderDate: -1 });

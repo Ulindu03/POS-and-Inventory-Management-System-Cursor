@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GlassCard } from '@/components/common/Card';
 import { 
   Search, 
-  Filter, 
+  // Filter, 
   Plus, 
   Edit, 
   Eye, 
@@ -11,31 +11,15 @@ import {
   Phone, 
   Mail, 
   MapPin,
-  CreditCard,
+  // CreditCard,
   Users,
   Building,
   ShoppingBag
 } from 'lucide-react';
 import { formatLKR } from '@/lib/utils/currency';
+import type { Customer } from '@/lib/api/customers.api';
 
-interface Customer {
-  _id: string;
-  customerCode: string;
-  name: string;
-  email: string;
-  phone: string;
-  type: 'retail' | 'wholesale' | 'corporate';
-  creditLimit: number;
-  creditUsed: number;
-  loyaltyPoints: number;
-  address: {
-    city: string;
-    province: string;
-  };
-  totalPurchases: number;
-  lastPurchase: string;
-  isActive: boolean;
-}
+// Using API Customer type
 
 interface CustomerListProps {
   customers: Customer[];
@@ -64,7 +48,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({
                           customer.phone.includes(searchTerm) ||
                           customer.customerCode.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesType = filterType === 'all' || customer.type === filterType;
+  const matchesType = filterType === 'all' || customer.type === filterType;
       
       return matchesSearch && matchesType;
     })

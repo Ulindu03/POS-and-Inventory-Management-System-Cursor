@@ -210,8 +210,7 @@ const deliverySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for efficient queries
-deliverySchema.index({ deliveryNo: 1 });
+// Indexes for efficient queries (deliveryNo already indexed via unique: true)
 deliverySchema.index({ 'lorryDetails.vehicleNo': 1 });
 deliverySchema.index({ 'lorryDetails.driverName': 1 });
 deliverySchema.index({ salesRep: 1 });

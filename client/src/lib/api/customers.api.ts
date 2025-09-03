@@ -1,4 +1,4 @@
-import client from './client';
+import { apiClient } from './client';
 
 export interface Customer {
   _id: string;
@@ -20,11 +20,12 @@ export interface Customer {
   taxId?: string;
   birthday?: string;
   notes?: string;
-  totalPurchases: number;
-  totalSpent: number;
-  lastPurchase: string;
+  totalPurchases?: number;
+  totalSpent?: number;
+  lastPurchase?: string;
   isActive: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface CreateCustomerData {
@@ -46,11 +47,39 @@ export interface CreateCustomerData {
   notes?: string;
 }
 
-export interface UpdateCustomerData extends Partial<CreateCustomerData> {
-  isActive?: boolean;
+export interface UpdateCustomerData extends Partial<CreateCustomerData> {}
+
+export interface CustomerFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  type?: string;
+  status?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
-export interface CustomerPurchase {
+export interface CustomerStats {
+  totalCustomers: number;
+  activeCustomers: number;
+  totalLoyaltyPoints: number;
+  typeDistribution: Array<{ _id: string; count: number }>;
+  recentCustomers: Array<{ name: string; customerCode: string; createdAt: string }>;
+}
+
+export interface LoyaltyPointsUpdate {
+  points: number;
+  action: 'add' | 'subtract' | 'set';
+  reason?: string;
+}
+
+export interface LoyaltyPointsRedemption {
+  points: number;
+  redemptionType: string;
+  description?: string;
+}
+
+export interface Purchase {
   _id: string;
   invoiceNo: string;
   total: number;
@@ -63,222 +92,58 @@ export interface CustomerPurchase {
   }>;
 }
 
-export interface LoyaltyTransaction {
-  _id: string;
-  customerId: string;
-  type: 'earned' | 'redeemed' | 'expired' | 'bonus';
-  points: number;
-  description: string;
-  orderId?: string;
-  createdAt: string;
-}
-
-export interface CustomerStats {
-  totalCustomers: number;
-  activeCustomers: number;
-  newCustomersThisMonth: number;
-  totalLoyaltyPoints: number;
-  averageLoyaltyPoints: number;
-  topCustomerTypes: Array<{
-    type: string;
-    count: number;
-    percentage: number;
-  }>;
-  loyaltyTierDistribution: Array<{
-    tier: string;
-    count: number;
-    percentage: number;
-  }>;
-}
-
-export const customersApi = {
-  // Get all customers with optional filters
-  getAll: async (params?: {
-    search?: string;
-    type?: string;
-    isActive?: boolean;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    page?: number;
-    limit?: number;
-  }): Promise<{ data: Customer[]; total: number; page: number; totalPages: number }> => {
-    const { data } = await client.get('/customers', { params });
-    return data.data;
-  },
-
-  // Get customer by ID
-  getById: async (id: string): Promise<Customer> => {
-    const { data } = await client.get(`/customers/${id}`);
-    return data.data;
-  },
-
-  // Get customer by customer code
-  getByCode: async (code: string): Promise<Customer> => {
-    const { data } = await client.get(`/customers/code/${code}`);
-    return data.data;
-  },
-
-  // Create new customer
-  create: async (customerData: CreateCustomerData): Promise<Customer> => {
-    const { data } = await client.post('/customers', customerData);
-    return data.data;
-  },
-
-  // Update customer
-  update: async (id: string, customerData: UpdateCustomerData): Promise<Customer> => {
-    const { data } = await client.put(`/customers/${id}`, customerData);
-    return data.data;
-  },
-
-  // Delete customer (soft delete)
-  delete: async (id: string): Promise<void> => {
-    await client.delete(`/customers/${id}`);
-  },
-
-  // Get customer purchase history
-  getPurchaseHistory: async (customerId: string, params?: {
-    page?: number;
-    limit?: number;
-    status?: string;
-    startDate?: string;
-    endDate?: string;
-  }): Promise<{ data: CustomerPurchase[]; total: number; page: number; totalPages: number }> => {
-    const { data } = await client.get(`/customers/${customerId}/purchases`, { params });
-    return data.data;
-  },
-
-  // Get customer loyalty transactions
-  getLoyaltyTransactions: async (customerId: string, params?: {
-    page?: number;
-    limit?: number;
-    type?: string;
-    startDate?: string;
-    endDate?: string;
-  }): Promise<{ data: LoyaltyTransaction[]; total: number; page: number; totalPages: number }> => {
-    const { data } = await client.get(`/customers/${customerId}/loyalty`, { params });
-    return data.data;
-  },
-
-  // Add loyalty points to customer
-  addLoyaltyPoints: async (customerId: string, data: {
-    points: number;
-    type: 'earned' | 'bonus';
-    description: string;
-    orderId?: string;
-  }): Promise<{ customer: Customer; transaction: LoyaltyTransaction }> => {
-    const response = await client.post(`/customers/${customerId}/loyalty/add`, data);
-    return response.data.data;
-  },
-
-  // Redeem loyalty points
-  redeemLoyaltyPoints: async (customerId: string, data: {
-    points: number;
-    description: string;
-    orderId?: string;
-  }): Promise<{ customer: Customer; transaction: LoyaltyTransaction }> => {
-    const response = await client.post(`/customers/${customerId}/loyalty/redeem`, data);
-    return response.data.data;
-  },
-
-  // Update customer credit limit
-  updateCreditLimit: async (customerId: string, creditLimit: number): Promise<Customer> => {
-    const { data } = await client.patch(`/customers/${customerId}/credit-limit`, { creditLimit });
-    return data.data;
-  },
-
-  // Get customer statistics
-  getStats: async (): Promise<CustomerStats> => {
-    const { data } = await client.get('/customers/stats');
-    return data.data;
-  },
-
-  // Bulk operations
-  bulkUpdate: async (customerIds: string[], updates: UpdateCustomerData): Promise<Customer[]> => {
-    const { data } = await client.patch('/customers/bulk-update', { customerIds, updates });
-    return data.data;
-  },
-
-  // Export customers
-  export: async (params?: {
-    format?: 'csv' | 'excel';
-    type?: string;
-    isActive?: boolean;
-  }): Promise<Blob> => {
-    const response = await client.get('/customers/export', { 
-      params,
-      responseType: 'blob'
-    });
-    return response.data;
-  },
-
-  // Import customers
-  import: async (file: File, options?: {
-    updateExisting?: boolean;
-    skipDuplicates?: boolean;
-  }): Promise<{ 
-    success: number; 
-    failed: number; 
-    errors: string[] 
-  }> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (options) {
-      formData.append('options', JSON.stringify(options));
+// Get all customers with filters and pagination
+export const getCustomers = async (filters: CustomerFilters = {}) => {
+  const params = new URLSearchParams();
+  
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') {
+      params.append(key, value.toString());
     }
-    
-    const { data } = await client.post('/customers/import', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    return data.data;
-  },
+  });
 
-  // Search customers
-  search: async (query: string, params?: {
-    type?: string;
-    isActive?: boolean;
-    limit?: number;
-  }): Promise<Customer[]> => {
-    const { data } = await client.get('/customers/search', { 
-      params: { q: query, ...params }
-    });
-    return data.data;
-  },
+  const response = await apiClient.get(`/customers?${params.toString()}`);
+  return response.data;
+};
 
-  // Get customers by type
-  getByType: async (type: string): Promise<Customer[]> => {
-    const { data } = await client.get(`/customers/type/${type}`);
-    return data.data;
-  },
+// Get customer statistics
+export const getCustomerStats = async () => {
+  const response = await apiClient.get('/customers/stats');
+  return response.data;
+};
 
-  // Get inactive customers
-  getInactive: async (params?: {
-    page?: number;
-    limit?: number;
-    lastActivityBefore?: string;
-  }): Promise<{ data: Customer[]; total: number; page: number; totalPages: number }> => {
-    const { data } = await client.get('/customers/inactive', { params });
-    return data.data;
-  },
+// Get single customer by ID
+export const getCustomerById = async (id: string) => {
+  const response = await apiClient.get(`/customers/${id}`);
+  return response.data;
+};
 
-  // Reactivate customer
-  reactivate: async (id: string): Promise<Customer> => {
-    const { data } = await client.patch(`/customers/${id}/reactivate`);
-    return data.data;
-  },
+// Create new customer
+export const createCustomer = async (customerData: CreateCustomerData) => {
+  const response = await apiClient.post('/customers', customerData);
+  return response.data;
+};
 
-  // Get customer analytics
-  getAnalytics: async (customerId: string, period: 'week' | 'month' | 'year' = 'month'): Promise<{
-    purchaseTrend: Array<{ date: string; amount: number; count: number }>;
-    topProducts: Array<{ product: string; quantity: number; revenue: number }>;
-    averageOrderValue: number;
-    totalOrders: number;
-    totalRevenue: number;
-    loyaltyPointsEarned: number;
-    loyaltyPointsRedeemed: number;
-  }> => {
-    const { data } = await client.get(`/customers/${customerId}/analytics`, { 
-      params: { period }
-    });
-    return data.data;
-  }
+// Update customer
+export const updateCustomer = async (id: string, customerData: UpdateCustomerData) => {
+  const response = await apiClient.put(`/customers/${id}`, customerData);
+  return response.data;
+};
+
+// Delete customer
+export const deleteCustomer = async (id: string) => {
+  const response = await apiClient.delete(`/customers/${id}`);
+  return response.data;
+};
+
+// Update loyalty points
+export const updateLoyaltyPoints = async (id: string, data: LoyaltyPointsUpdate) => {
+  const response = await apiClient.patch(`/customers/${id}/loyalty-points`, data);
+  return response.data;
+};
+
+// Redeem loyalty points
+export const redeemLoyaltyPoints = async (id: string, data: LoyaltyPointsRedemption) => {
+  const response = await apiClient.post(`/customers/${id}/redeem-points`, data);
+  return response.data;
 };

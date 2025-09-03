@@ -27,14 +27,21 @@ export const authenticate = async (
 
     const decoded = JWTService.verifyAccessToken(token);
     req.user = decoded;
-    next();
+    return next();
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid or expired token',
-    });
+    // Avoid noisy stack traces for routine expirations
+    const err: any = error;
+    if (err && (err.name === 'TokenExpiredError' || err.message?.includes('jwt expired'))) {
+      res.setHeader('WWW-Authenticate', 'Bearer error="invalid_token", error_description="The access token expired"');
+      res.setHeader('X-Token-Expired', 'true');
+      return res.status(401).json({ success: false, message: 'Access token expired' });
+    }
+    return res.status(401).json({ success: false, message: 'Invalid token' });
   }
 };
+
+// Alias for backward compatibility
+export const authenticateToken = authenticate;
 
 export const authorize = (...roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -52,6 +59,6 @@ export const authorize = (...roles: string[]) => {
       });
     }
 
-    next();
+    return next();
   };
 };

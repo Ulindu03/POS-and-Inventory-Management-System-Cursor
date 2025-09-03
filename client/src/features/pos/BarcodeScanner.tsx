@@ -14,7 +14,10 @@ export const BarcodeScanner = () => {
     const start = async () => {
       scanner = new Html5Qrcode(divId.current);
       try {
-        await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 250, height: 250 } }, async (text) => {
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          async (text) => {
           try {
             const res = await productsApi.getByBarcode(text.trim());
             addItem({ id: (res.data.product as any)._id || (res.data.product as any).id, name: res.data.product.name.en, price: res.data.product.price.retail });
@@ -23,7 +26,9 @@ export const BarcodeScanner = () => {
           } catch {
             // ignore not found
           }
-        });
+          },
+          () => { /* ignore decode errors */ }
+        );
       } catch (e) {
         console.error(e);
       }

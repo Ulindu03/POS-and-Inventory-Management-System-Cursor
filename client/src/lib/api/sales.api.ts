@@ -7,17 +7,29 @@ export interface CreateSaleItem {
   discount?: number;
 }
 
+export type PaymentMethod = 'cash' | 'card' | 'digital' | 'bank_transfer' | 'credit';
+export interface PaymentInput { method: PaymentMethod; amount: number; reference?: string };
 export interface CreateSalePayload {
   items: CreateSaleItem[];
   discount?: number;
-  payment: { method: 'cash' | 'card' | 'digital'; amount: number; reference?: string };
+  payment?: PaymentInput; // single legacy
+  payments?: PaymentInput[]; // multi
   customer?: string | null;
+  discountCode?: string;
 }
 
 export const salesApi = {
   create: async (payload: CreateSalePayload) => {
     const { data } = await client.post('/sales', payload);
     return data as { success: true; data: { sale: { id: string; invoiceNo: string; total: number } } };
+  },
+  validateDiscount: async (payload: { code: string; subtotal: number }) => {
+    const { data } = await client.post('/sales/validate-discount', payload);
+    return data as { success: true; data: { valid: boolean; type?: string; value?: number; amount?: number } };
+  },
+  refund: async (id: string, payload: { items: Array<{ product: string; quantity: number; amount: number }>; method: PaymentMethod; reference?: string }) => {
+    const { data } = await client.post(`/sales/${id}/refund`, payload);
+    return data as { success: true; data: { refund: { total: number }; sale: { id: string; total: number; status: string } } };
   },
   list: async (params?: { page?: number; limit?: number; q?: string }) => {
     const { data } = await client.get('/sales', { params });

@@ -7,9 +7,9 @@ export const Cart = ({ onPay }: { onPay?: () => void }) => {
   const totalAmount = total();
 
   return (
-    <div className="flex flex-col h-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
-      <div className="p-4 border-b border-white/10 font-semibold">Cart</div>
-      <div className="p-4 space-y-3 overflow-auto">
+    <div className="flex flex-col h-full min-h-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
+      <div className="p-4 border-b border-white/10 font-semibold shrink-0">Cart</div>
+      <div className="p-4 space-y-3 overflow-auto min-h-0">
         {items.length === 0 && <div className="opacity-70">No items yet</div>}
         {items.map((i) => (
           <div key={i.id} className="flex items-center justify-between gap-3">
@@ -32,7 +32,7 @@ export const Cart = ({ onPay }: { onPay?: () => void }) => {
           </div>
         ))}
       </div>
-      <div className="mt-auto p-4 border-t border-white/10 space-y-2">
+  <div className="mt-auto p-4 border-t border-white/10 space-y-2 shrink-0">
         <div className="flex justify-between text-sm opacity-90"><span>Subtotal</span><span>{formatLKR(subtotal())}</span></div>
         <div className="flex justify-between text-sm opacity-90"><span>Tax</span><span>{formatLKR(tax())}</span></div>
         <div className="flex justify-between items-center text-sm opacity-90">

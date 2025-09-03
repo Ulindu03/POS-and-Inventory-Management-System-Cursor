@@ -16,7 +16,7 @@ export interface IUser extends Document {
 	refreshToken?: string | null;
 	resetPasswordToken?: string;
 	resetPasswordExpires?: Date;
-	TwoFactorEnabled?: boolean;
+	twoFactorEnabled?: boolean;
 	permissions: string[];
 	comparePassword(candidate: string): Promise<boolean>;
 }

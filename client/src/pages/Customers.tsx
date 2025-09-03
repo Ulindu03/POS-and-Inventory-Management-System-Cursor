@@ -4,60 +4,53 @@ import { CustomerList } from '@/features/customers/CustomerList';
 import { CustomerForm } from '@/features/customers/CustomerForm';
 import { CustomerProfile } from '@/features/customers/CustomerProfile';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Plus, TrendingUp, Star, CreditCard } from 'lucide-react';
+import { Users, TrendingUp, Star, CreditCard } from 'lucide-react';
 import { GlassCard } from '@/components/common/Card';
+import { 
+  getCustomers, 
+  getCustomerStats, 
+  createCustomer, 
+  updateCustomer, 
+  // deleteCustomer,
+  redeemLoyaltyPoints,
+  type Customer,
+  type Purchase
+} from '@/lib/api/customers.api';
 
-interface Customer {
-  _id: string;
-  customerCode: string;
-  name: string;
-  email: string;
-  phone: string;
-  alternatePhone?: string;
-  type: 'retail' | 'wholesale' | 'corporate';
-  creditLimit: number;
-  creditUsed: number;
-  loyaltyPoints: number;
-  address: {
-    street: string;
-    city: string;
-    province: string;
-    postalCode: string;
-  };
-  taxId?: string;
-  birthday?: string;
-  notes?: string;
-  totalPurchases: number;
-  totalSpent: number;
-  lastPurchase: string;
-  isActive: boolean;
-  createdAt: string;
-}
 
-interface Purchase {
-  _id: string;
-  invoiceNo: string;
-  total: number;
-  status: 'completed' | 'pending' | 'cancelled';
-  createdAt: string;
-  items: Array<{
-    product: string;
-    quantity: number;
-    price: number;
-  }>;
-}
 
 const Customers = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sample data - in real app, this would come from API
+  // Load customers and stats from API
   useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const [customersResponse, statsResponse] = await Promise.all([
+          getCustomers({ limit: 50 }),
+          getCustomerStats()
+        ]);
+        
+        setCustomers(customersResponse.data || []);
+        setStats(statsResponse.data);
+      } catch (error) {
+        console.error('Error loading customers:', error);
+        // Fallback to sample data if API fails
+        loadSampleData();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     const loadSampleData = () => {
       const sampleCustomers: Customer[] = [
         {
@@ -84,7 +77,8 @@ const Customers = () => {
           totalSpent: 125000,
           lastPurchase: new Date(Date.now() - 86400000 * 3).toISOString(),
           isActive: true,
-          createdAt: new Date(Date.now() - 86400000 * 365).toISOString()
+          createdAt: new Date(Date.now() - 86400000 * 365).toISOString(),
+          updatedAt: new Date().toISOString()
         },
         {
           _id: '2',
@@ -107,53 +101,8 @@ const Customers = () => {
           totalSpent: 2500000,
           lastPurchase: new Date(Date.now() - 86400000 * 1).toISOString(),
           isActive: true,
-          createdAt: new Date(Date.now() - 86400000 * 730).toISOString()
-        },
-        {
-          _id: '3',
-          customerCode: 'CUST-003',
-          name: 'Sarah Wilson',
-          email: 'sarah.wilson@email.com',
-          phone: '+94 72 456 7890',
-          type: 'retail',
-          creditLimit: 0,
-          creditUsed: 0,
-          loyaltyPoints: 450,
-          address: {
-            street: '789 Residential Road',
-            city: 'Kandy',
-            province: 'Central',
-            postalCode: '20000'
-          },
-          birthday: '1985-12-20',
-          totalPurchases: 23,
-          totalSpent: 45000,
-          lastPurchase: new Date(Date.now() - 86400000 * 7).toISOString(),
-          isActive: true,
-          createdAt: new Date(Date.now() - 86400000 * 180).toISOString()
-        },
-        {
-          _id: '4',
-          customerCode: 'CUST-004',
-          name: 'XYZ Wholesale',
-          email: 'info@xyzwholesale.lk',
-          phone: '+94 11 567 8901',
-          type: 'wholesale',
-          creditLimit: 1000000,
-          creditUsed: 750000,
-          loyaltyPoints: 15000,
-          address: {
-            street: '321 Industrial Zone',
-            city: 'Gampaha',
-            province: 'Western',
-            postalCode: '11000'
-          },
-          taxId: 'WHOL345678',
-          totalPurchases: 89,
-          totalSpent: 1800000,
-          lastPurchase: new Date(Date.now() - 86400000 * 2).toISOString(),
-          isActive: true,
-          createdAt: new Date(Date.now() - 86400000 * 1095).toISOString()
+          createdAt: new Date(Date.now() - 86400000 * 730).toISOString(),
+          updatedAt: new Date().toISOString()
         }
       ];
 
@@ -177,26 +126,24 @@ const Customers = () => {
           items: [
             { product: 'Extension Cord 5m', quantity: 2, price: 6000 }
           ]
-        },
-        {
-          _id: 'p3',
-          invoiceNo: 'INV-003',
-          total: 8500,
-          status: 'pending',
-          createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-          items: [
-            { product: 'Switch 2-Gang', quantity: 3, price: 2833 }
-          ]
         }
       ];
 
       setCustomers(sampleCustomers);
       setPurchases(samplePurchases);
-      setIsLoading(false);
+      setStats({
+        totalCustomers: sampleCustomers.length,
+        activeCustomers: sampleCustomers.length,
+        totalLoyaltyPoints: sampleCustomers.reduce((sum, c) => sum + c.loyaltyPoints, 0),
+        typeDistribution: [
+          { _id: 'retail', count: 1 },
+          { _id: 'corporate', count: 1 }
+        ],
+        recentCustomers: sampleCustomers.slice(0, 3)
+      });
     };
 
-    // Simulate API delay
-    setTimeout(loadSampleData, 1000);
+    loadData();
   }, []);
 
   const handleAddCustomer = () => {
@@ -214,30 +161,43 @@ const Customers = () => {
     setShowProfile(true);
   };
 
-  const handleFormSubmit = (data: any) => {
-    if (editingCustomer) {
-      // Update existing customer
-      setCustomers(prev => prev.map(c => 
-        c._id === editingCustomer._id 
-          ? { ...c, ...data, _id: c._id, customerCode: c.customerCode, createdAt: c.createdAt }
-          : c
-      ));
-    } else {
-      // Add new customer
-      const newCustomer: Customer = {
+  const handleFormSubmit = async (data: any) => {
+    try {
+      setIsSubmitting(true);
+      // Sanitize payload: remove empty strings and convert date fields
+      const payload = {
         ...data,
-        _id: Date.now().toString(),
-        customerCode: `CUST-${String(customers.length + 1).padStart(3, '0')}`,
-        creditUsed: 0,
-        totalPurchases: 0,
-        totalSpent: 0,
-        isActive: true,
-        createdAt: new Date().toISOString()
+        birthday: data.birthday ? new Date(data.birthday).toISOString() : undefined,
+        alternatePhone: data.alternatePhone?.trim() ? data.alternatePhone : undefined,
+        taxId: data.taxId?.trim() ? data.taxId : undefined,
+        notes: data.notes?.trim() ? data.notes : undefined,
       };
-      setCustomers(prev => [...prev, newCustomer]);
+      
+      if (editingCustomer) {
+        // Update existing customer
+        const response = await updateCustomer(editingCustomer._id, payload);
+        const updated = response.data?.data ?? response.data; // support both shapes
+        setCustomers(prev => prev.map(c => 
+          c._id === editingCustomer._id 
+            ? { ...c, ...updated }
+            : c
+        ));
+      } else {
+        // Add new customer
+        const response = await createCustomer(payload);
+        const created = response.data?.data ?? response.data;
+        setCustomers(prev => [...prev, created]);
+      }
+        // removed unused totalCreditUsed
+      setShowForm(false);
+      setEditingCustomer(null);
+    } catch (error: any) {
+      console.error('Error saving customer:', error);
+      const message = error?.response?.data?.message || error?.message || 'Failed to save customer. Please try again.';
+      alert(message);
+    } finally {
+      setIsSubmitting(false);
     }
-    setShowForm(false);
-    setEditingCustomer(null);
   };
 
   const handleFormCancel = () => {
@@ -258,31 +218,45 @@ const Customers = () => {
     }
   };
 
-  // Calculate statistics
-  const totalCustomers = customers.length;
-  const activeCustomers = customers.filter(c => c.isActive).length;
-  const totalLoyaltyPoints = customers.reduce((sum, c) => sum + c.loyaltyPoints, 0);
+  const handleRedeemPoints = async (data: any) => {
+    if (!selectedCustomer) return;
+    try {
+      setIsSubmitting(true);
+      await redeemLoyaltyPoints(selectedCustomer._id, data);
+      setCustomers(prev => prev.map(c => 
+        c._id === selectedCustomer._id 
+          ? { ...c, loyaltyPoints: c.loyaltyPoints - data.points }
+          : c
+      ));
+      
+      // Update selected customer
+      setSelectedCustomer(prev => prev ? { ...prev, loyaltyPoints: prev.loyaltyPoints - data.points } : null);
+      
+      alert('Points redeemed successfully!');
+    } catch (error) {
+      console.error('Error redeeming points:', error);
+      alert('Failed to redeem points. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Use stats from API or calculate from customers
+  const totalCustomers = stats?.totalCustomers || customers.length;
+  const activeCustomers = stats?.activeCustomers || customers.filter(c => c.isActive).length;
+  const totalLoyaltyPoints = stats?.totalLoyaltyPoints || customers.reduce((sum, c) => sum + c.loyaltyPoints, 0);
   const totalCreditLimit = customers.reduce((sum, c) => sum + c.creditLimit, 0);
-  const totalCreditUsed = customers.reduce((sum, c) => sum + c.creditUsed, 0);
+  
 
   return (
     <AppLayout>
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative">
-        {/* Animated background elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-          <div className="absolute top-40 left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
-        </div>
-
-        {/* Content */}
-        <div className="relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="space-y-8 p-6"
-          >
+      <div className="relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="space-y-8 p-6"
+        >
             {/* Header */}
             <div className="text-center">
               <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
@@ -334,8 +308,7 @@ const Customers = () => {
               onViewCustomer={handleViewCustomer}
               isLoading={isLoading}
             />
-          </motion.div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Modals */}
@@ -345,6 +318,7 @@ const Customers = () => {
             customer={editingCustomer || undefined}
             onSubmit={handleFormSubmit}
             onCancel={handleFormCancel}
+            isLoading={isSubmitting}
           />
         )}
 
@@ -354,6 +328,7 @@ const Customers = () => {
             purchases={purchases}
             onEdit={handleProfileEdit}
             onClose={handleProfileClose}
+            onRedeemPoints={handleRedeemPoints}
           />
         )}
       </AnimatePresence>

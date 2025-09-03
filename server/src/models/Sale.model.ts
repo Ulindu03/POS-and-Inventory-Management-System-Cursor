@@ -91,7 +91,37 @@ const saleSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  currency: {
+    code: { type: String, default: 'LKR' },
+    rateToBase: { type: Number, default: 1 }, // amount_in_base = amount * rateToBase
+    baseCode: { type: String, default: 'LKR' },
+  },
   payment: {
+    method: {
+      type: String,
+      enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit'],
+    },
+    amount: {
+      type: Number,
+      min: 0
+    },
+    reference: {
+      type: String,
+      trim: true
+    },
+    change: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    cardType: {
+      type: String
+    },
+    transactionId: {
+      type: String
+    }
+  },
+  payments: [{
     method: {
       type: String,
       enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit'],
@@ -117,7 +147,44 @@ const saleSchema = new mongoose.Schema({
     transactionId: {
       type: String
     }
-  },
+  }],
+  returns: [{
+    items: [{
+      product: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
+        required: true
+      },
+      quantity: {
+        type: Number,
+        required: true,
+        min: 1
+      },
+      amount: {
+        type: Number,
+        required: true,
+        min: 0
+      }
+    }],
+    total: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    method: {
+      type: String,
+      enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit'],
+      required: true
+    },
+    reference: {
+      type: String,
+      trim: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   status: {
     type: String,
     enum: ['completed', 'pending', 'cancelled', 'refunded', 'held'],
@@ -151,8 +218,7 @@ const saleSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for efficient queries
-saleSchema.index({ invoiceNo: 1 });
+// Indexes for efficient queries (excluding invoiceNo which is already indexed by unique: true)
 saleSchema.index({ customer: 1 });
 saleSchema.index({ cashier: 1 });
 saleSchema.index({ status: 1 });

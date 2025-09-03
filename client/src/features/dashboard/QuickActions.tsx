@@ -1,13 +1,11 @@
-import { GlassCard } from '@/components/common/Card';
 import { motion } from 'framer-motion';
 import { 
   Plus, 
-  ShoppingCart, 
+  // ShoppingCart, 
   Package, 
   Users, 
   FileText, 
   Settings,
-  TrendingUp,
   BarChart3
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -52,7 +50,7 @@ const quickActions: QuickAction[] = [
   {
     title: 'Analytics',
     description: 'Detailed business insights',
-    icon: <BarChart3 className="w-6 h-6" />,
+  icon: <BarChart3 className="w-6 h-6" />,
     href: '/analytics',
     color: 'from-teal-500 to-cyan-600'
   },
@@ -67,9 +65,9 @@ const quickActions: QuickAction[] = [
 
 export const QuickActions: React.FC = () => {
   return (
-    <GlassCard className="p-6">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
-      
+    <div className="p-6 rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl">
+      <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">Quick Actions</h3>
+
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {quickActions.map((action, index) => (
           <motion.div
@@ -82,10 +80,7 @@ export const QuickActions: React.FC = () => {
           >
             <Link
               to={action.href}
-              className="block p-4 rounded-xl bg-gradient-to-br hover:shadow-xl transition-all duration-300 group border border-white/20"
-              style={{
-                background: `linear-gradient(135deg, ${action.color.split(' ')[0].replace('from-', '')} 0%, ${action.color.split(' ')[1].replace('to-', '')} 100%)`
-              }}
+              className={`block p-4 rounded-xl bg-gradient-to-br ${action.color} hover:shadow-xl transition-all duration-300 group border border-white/10`}
             >
               <div className="text-white text-center">
                 <div className="mb-2 transform group-hover:scale-110 transition-transform duration-300">
@@ -98,6 +93,6 @@ export const QuickActions: React.FC = () => {
           </motion.div>
         ))}
       </div>
-    </GlassCard>
+    </div>
   );
 };

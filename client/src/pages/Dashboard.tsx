@@ -74,51 +74,38 @@ const Dashboard = () => {
 
   return (
     <AppLayout>
-      {/* Beautiful gradient background */}
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative">
-        {/* Animated background elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-          <div className="absolute top-40 left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="space-y-8 p-6"
+      >
+        {/* Header */}
+        <div className="text-center">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+            Dashboard
+          </h1>
+          <p className="text-gray-300 mt-2">Welcome to VoltZone POS - Your business at a glance</p>
         </div>
 
-        {/* Content */}
-        <div className="relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="space-y-8 p-6"
-          >
-            {/* Header */}
-            <div className="text-center">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                Dashboard
-              </h1>
-              <p className="text-gray-300 mt-2">Welcome to VoltZone POS - Your business at a glance</p>
-            </div>
+        {/* Quick Actions */}
+        <QuickActions />
 
-            {/* Quick Actions */}
-            <QuickActions />
+        {/* Stats Cards */}
+        <DashboardStats stats={stats} />
 
-            {/* Stats Cards */}
-            <DashboardStats stats={stats} />
-
-            {/* Charts Row 1 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <SalesChart data={salesData} />
-              <TopProducts data={topProductsData} />
-            </div>
-
-            {/* Charts Row 2 */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <CategoryDistribution data={categoryData} />
-              <RecentSales sales={recentSales} />
-            </div>
-          </motion.div>
+        {/* Charts Row 1 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SalesChart data={salesData} />
+          <TopProducts data={topProductsData} />
         </div>
-      </div>
+
+        {/* Charts Row 2 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <CategoryDistribution data={categoryData} />
+          <RecentSales sales={recentSales} />
+        </div>
+      </motion.div>
     </AppLayout>
   );
 };

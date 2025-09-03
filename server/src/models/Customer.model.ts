@@ -141,8 +141,7 @@ const customerSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for efficient queries
-customerSchema.index({ customerCode: 1 });
+// Indexes for efficient queries (excluding customerCode which is already indexed by unique: true)
 customerSchema.index({ phone: 1 });
 customerSchema.index({ email: 1 });
 customerSchema.index({ type: 1, isActive: 1 });

@@ -2,17 +2,26 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import POS from './pages/POS';
+import Products from './pages/Products';
+import Pos from './pages/POS';
 import Sales from './pages/Sales';
 import Customers from './pages/Customers';
+import Suppliers from './pages/Suppliers';
+import PurchaseOrders from './pages/PurchaseOrders';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuthStore } from '@/store/auth.store';
 import Inventory from './pages/Inventory';
-
-// Removed inline Dashboard duplicate
+import Reports from './pages/Reports';
+import Analytics from './pages/Analytics';
+import UsersPage from './pages/Users';
+import SettingsPage from './pages/Settings';
+import DeliveriesPage from './pages/Deliveries';
+import CategoriesPage from './pages/Categories';
+import DamagesPage from './pages/Damages';
 
 function App() {
 	const checkAuth = useAuthStore((s) => s.checkAuth);
+	const isChecking = useAuthStore((s) => s.isChecking);
 
 	useEffect(() => {
 		checkAuth();
@@ -20,9 +29,53 @@ function App() {
 
 		return (
 			<BrowserRouter>
+				{isChecking ? (
+					// Minimal splash while verifying auth on refresh
+					<div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F8F8F8' }}>Loading…</div>
+				) : (
 				<Routes>
 					<Route path="/login" element={<LoginPage />} />
-					<Route path="/" element={<Navigate to="/dashboard" replace />} />
+					<Route path="/" element={<LoginPage />} />
+					<Route
+						path="/damages"
+						element={
+							<ProtectedRoute requiredRoles={['admin', 'sales_rep']}>
+								<DamagesPage />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/categories"
+						element={
+							<ProtectedRoute>
+								<CategoriesPage />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/users"
+						element={
+							<ProtectedRoute requiredRoles={['admin']}>
+								<UsersPage />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/settings"
+						element={
+							<ProtectedRoute requiredRoles={['admin']}>
+								<SettingsPage />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/deliveries"
+						element={
+							<ProtectedRoute requiredRoles={['admin', 'sales_rep']}>
+								<DeliveriesPage />
+							</ProtectedRoute>
+						}
+					/>
 					<Route
 						path="/dashboard"
 						element={
@@ -34,15 +87,15 @@ function App() {
 					<Route
 						path="/pos"
 						element={
-							<ProtectedRoute>
-								<POS />
+							<ProtectedRoute requiredRoles={["admin","cashier","sales_rep"]}>
+								<Pos />
 							</ProtectedRoute>
 						}
 					/>
 					<Route
 						path="/sales"
 						element={
-							<ProtectedRoute>
+							<ProtectedRoute requiredRoles={["admin","cashier","sales_rep"]}>
 								<Sales />
 							</ProtectedRoute>
 						}
@@ -50,7 +103,7 @@ function App() {
 					<Route
 						path="/customers"
 						element={
-							<ProtectedRoute>
+							<ProtectedRoute requiredRoles={["admin","sales_rep"]}>
 								<Customers />
 							</ProtectedRoute>
 						}
@@ -58,13 +111,54 @@ function App() {
 					<Route
 						path="/inventory"
 						element={
-							<ProtectedRoute>
+							<ProtectedRoute requiredRoles={["admin","sales_rep"]}>
 								<Inventory />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/suppliers"
+						element={
+							<ProtectedRoute requiredRoles={["admin","sales_rep"]}>
+								<Suppliers />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/purchase-orders"
+						element={
+							<ProtectedRoute requiredRoles={["admin","sales_rep"]}>
+								<PurchaseOrders />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/reports"
+						element={
+							<ProtectedRoute requiredRoles={["admin","sales_rep"]}>
+								<Reports />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/products"
+						element={
+							<ProtectedRoute requiredRoles={["admin","sales_rep"]}>
+								<Products />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/analytics"
+						element={
+							<ProtectedRoute requiredRoles={["admin","sales_rep"]}>
+								<Analytics />
 							</ProtectedRoute>
 						}
 					/>
 					<Route path="*" element={<Navigate to="/dashboard" replace />} />
 				</Routes>
+				)}
 			</BrowserRouter>
 		);
 	}

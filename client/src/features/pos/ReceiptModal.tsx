@@ -1,4 +1,6 @@
 import { formatLKR } from '@/lib/utils/currency';
+import { useEffect, useState } from 'react';
+import { settingsApi } from '@/lib/api/settings.api';
 
 interface Item { name: string; qty: number; price: number; total: number }
 interface Props {
@@ -11,13 +13,34 @@ interface Props {
   tax: number;
   total: number;
   method?: 'cash' | 'card' | 'digital';
+  payments?: Array<{ method: string; amount: number }>;
+  promoCode?: string | null;
 }
 
-export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discount, tax, total, method }: Props) => {
+export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discount, tax, total, method, payments, promoCode }: Props) => {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [showLogo, setShowLogo] = useState<boolean>(true);
+  useEffect(() => {
+    if (!open) return;
+    let mounted = true;
+    settingsApi.get().then((res) => {
+      const s = res.data.data || res.data;
+      if (mounted) {
+        setLogoUrl(s?.branding?.logoUrl || null);
+        setShowLogo(Boolean(s?.receipt?.showLogo ?? true));
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 no-print" onClick={onClose} />
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/70 no-print"
+        onClick={onClose}
+        aria-label="Close receipt"
+      />
       <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-5 text-[#F8F8F8]">
         <div className="flex items-center justify-between mb-3 no-print">
           <div className="text-lg font-semibold">Receipt Preview</div>
@@ -26,22 +49,35 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
         <div className="print-area">
           <div className="receipt">
             <div style={{ textAlign: 'center', marginBottom: 8 }}>
-              <img src="/logo.jpg" alt="Company Logo" style={{ width: 80, height: 80, objectFit: 'contain', margin: '0 auto' }} />
+              {showLogo && (
+                <img src={logoUrl || '/logo.jpg'} alt="Company Logo" style={{ width: 80, height: 80, objectFit: 'contain', margin: '0 auto' }} />
+              )}
               <h1 style={{ marginTop: 6 }}>VoltZone</h1>
-              <div style={{ fontSize: 12 }}>"Glow Smart, Live Bright."</div>
+              <div className="muted">"Glow Smart, Live Bright."</div>
             </div>
             <div className="row"><span>Invoice:</span><span>{invoiceNo}</span></div>
             <div className="row"><span>Date:</span><span>{new Date().toLocaleDateString()}</span></div>
             <div className="row"><span>Time:</span><span>{new Date().toLocaleTimeString()}</span></div>
             <div className="row"><span>Payment:</span><span>{(method || 'cash').toUpperCase()}</span></div>
+            {promoCode && <div className="row"><span>Promo</span><span>{promoCode}</span></div>}
             <hr />
             <table>
               <thead>
-                <tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+                <tr>
+                  <th>Item</th>
+                  <th className="qty">Qty</th>
+                  <th className="price">Price</th>
+                  <th className="total">Total</th>
+                </tr>
               </thead>
               <tbody>
-                {items.map((i, idx) => (
-                  <tr key={idx}><td>{i.name}</td><td>{i.qty}</td><td>{formatLKR(i.price)}</td><td>{formatLKR(i.total)}</td></tr>
+                {items.map((i) => (
+                  <tr key={`${i.name}-${i.qty}-${i.total}`}>
+                    <td className="item-name">{i.name}</td>
+                    <td className="qty">{i.qty}</td>
+                    <td className="price">{formatLKR(i.price)}</td>
+                    <td className="total">{formatLKR(i.total)}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -50,8 +86,17 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
             <div className="row"><span>Discount</span><span>-{formatLKR(discount)}</span></div>
             <div className="row"><span>Tax</span><span>{formatLKR(tax)}</span></div>
             <div className="row"><strong>Total</strong><strong>{formatLKR(total)}</strong></div>
+            {payments && payments.length > 0 && (
+              <>
+                <hr />
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Payments</div>
+                {payments.map((p, idx) => (
+                  <div key={`${p.method}-${idx}`} className="row"><span>{p.method.toUpperCase()}</span><span>{formatLKR(p.amount)}</span></div>
+                ))}
+              </>
+            )}
             <hr />
-            <div style={{ textAlign: 'center', fontSize: 12, marginTop: 8 }}>
+            <div className="muted" style={{ textAlign: 'center', marginTop: 8 }}>
               Items sold are not returnable after 3 days.
               <br />
               Thank you for your visit

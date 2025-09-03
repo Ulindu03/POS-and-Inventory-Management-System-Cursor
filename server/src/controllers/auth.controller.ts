@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { User, IUser } from '../models/User.model';
+import { User } from '../models/User.model';
 import { JWTService } from '../services/jwt.service';
 import crypto from 'crypto';
+import { sendPasswordResetEmail } from '../services/email.service';
 
 export class AuthController {
   // Register new user
@@ -34,8 +35,8 @@ export class AuthController {
 
       await user.save();
 
-      // Generate tokens
-      const { accessToken, refreshToken } = JWTService.generateTokenPair(user);
+  // Generate tokens
+  const { accessToken, refreshToken } = JWTService.generateTokenPair(user);
 
       // Save refresh token to database
       user.refreshToken = refreshToken;
@@ -45,11 +46,12 @@ export class AuthController {
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
+        // Strict cookies are not sent on cross-site XHR; keep strict but also return token in body for dev fallback
         sameSite: 'strict',
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
 
-      res.status(201).json({
+  return res.status(201).json({
         success: true,
         message: 'User registered successfully',
         data: {
@@ -63,10 +65,11 @@ export class AuthController {
             language: user.language,
           },
           accessToken,
+          refreshToken,
         },
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 
@@ -128,7 +131,7 @@ export class AuthController {
         maxAge: cookieMaxAge,
       });
 
-      res.json({
+  return res.json({
         success: true,
         message: 'Login successful',
         data: {
@@ -143,19 +146,25 @@ export class AuthController {
             avatar: user.avatar,
           },
           accessToken,
+          refreshToken,
         },
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 
   // Refresh token
   static async refreshToken(req: Request, res: Response, next: NextFunction) {
     try {
-      const { refreshToken } = req.cookies;
+  // Accept refresh token from httpOnly cookie, Authorization bearer, header, or body for dev
+  const cookieToken = req.cookies?.refreshToken;
+  const authHeader = req.headers.authorization?.split(' ')[1];
+  const headerToken = (req.headers['x-refresh-token'] as string) || authHeader;
+  const bodyToken: string | undefined = (req.body as any)?.refreshToken;
+  const refreshToken = cookieToken || headerToken || bodyToken;
 
-      if (!refreshToken) {
+  if (!refreshToken) {
         return res.status(401).json({
           success: false,
           message: 'Refresh token not provided',
@@ -189,14 +198,15 @@ export class AuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-      res.json({
+    return res.json({
         success: true,
         data: {
-          accessToken,
+      accessToken,
+      refreshToken: newRefreshToken,
         },
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 
@@ -216,12 +226,12 @@ export class AuthController {
       // Clear cookie
       res.clearCookie('refreshToken');
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Logout successful',
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 
@@ -247,18 +257,21 @@ export class AuthController {
       user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
       await user.save();
 
-      // In production, send email with reset link
-      // For now, return the token (remove in production)
-      res.json({
+      const appUrl = process.env.APP_URL || 'http://localhost:5173';
+      const resetUrl = `${appUrl}/reset-password/${resetToken}`;
+      const result = await sendPasswordResetEmail(email, resetUrl);
+
+      return res.json({
         success: true,
-        message: 'Password reset token generated',
+        message: result.ok ? 'Password reset email sent' : 'Password reset token generated',
         data: {
-          resetToken, // Remove this in production
-          resetUrl: `http://localhost:5173/reset-password/${resetToken}`,
+          // Only include raw token if email not configured
+          ...(result.ok ? {} : { resetToken }),
+          resetUrl,
         },
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 
@@ -288,12 +301,12 @@ export class AuthController {
       user.resetPasswordExpires = undefined;
       await user.save();
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Password reset successful',
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 
@@ -309,12 +322,12 @@ export class AuthController {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: { user },
       });
     } catch (error) {
-      next(error);
+      return next(error);
     }
   }
 }

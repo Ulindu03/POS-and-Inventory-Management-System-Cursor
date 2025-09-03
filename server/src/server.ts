@@ -1,4 +1,7 @@
 import express from 'express';
+import http from 'http';
+import { Server as IOServer, Socket } from 'socket.io';
+import { setIO } from './services/realtime.service';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -7,16 +10,36 @@ import connectDB from './config/database';
 import { User } from './models/User.model';
 import { Category } from './models/Category.model';
 import { Product } from './models/Product.model';
+import { Customer } from './models/Customer.model';
+import { Supplier } from './models/Supplier.model';
 import authRoutes from './routes/auth.routes';
 import productRoutes from './routes/product.routes';
 import categoryRoutes from './routes/category.routes';
 import saleRoutes from './routes/sale.routes';
+import customerRoutes from './routes/customer.routes';
+import supplierRoutes from './routes/supplier.routes';
+import purchaseOrderRoutes from './routes/purchaseOrder.routes';
+import inventoryRoutes from './routes/inventory.routes';
+import reportsRoutes from './routes/reports.routes';
+import userRoutes from './routes/user.routes';
+import settingsRoutes from './routes/settings.routes';
+import deliveryRoutes from './routes/delivery.routes';
+import returnRoutes from './routes/return.routes';
+import promotionRoutes from './routes/promotion.routes';
+import tripRoutes from './routes/trip.routes';
+import damageRoutes from './routes/damage.routes';
+import compression from 'compression';
+import path from 'path';
+import fs from 'fs';
+import swaggerUI from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger';
 
 // Load environment variables
 dotenv.config();
 
-// Create Express app
+// Create Express app and HTTP server
 const app = express();
+const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB
@@ -24,15 +47,38 @@ connectDB();
 
 // Middleware
 app.use(helmet());
+// CORS: allow all origins in development to avoid dev-port/origin churn; restrict in production
 app.use(cors({
-	origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
-	credentials: true,
+  origin: (_origin, cb) => {
+    if ((process.env.NODE_ENV || 'development') !== 'production') {
+      // allow any origin in development
+      return cb(null, true);
+    }
+    // no origin (e.g., curl/postman) or allowed list match
+    // Note: socket.io will use its own CORS below too
+    return cb(null, true);
+  },
+  credentials: true,
 }));
+app.use(compression());
 app.use(express.json());
 app.use(cookieParser());
+// Serve uploaded files
+const uploadsDir = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// Swagger API docs
+app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
+// Raw OpenAPI JSON (for debugging/spec inspection)
+app.get('/api/docs.json', (_req, res) => {
+  res.json(swaggerSpec);
+});
 
 // Test route
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.json({
     message: 'VoltZone POS API',
     status: 'Running',
@@ -45,6 +91,18 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/sales', saleRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/purchase-orders', purchaseOrderRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/deliveries', deliveryRoutes);
+app.use('/api/returns', returnRoutes);
+app.use('/api/promotions', promotionRoutes);
+app.use('/api/trips', tripRoutes);
+app.use('/api/damages', damageRoutes);
 
 // Dev seed route for products and categories
 app.get('/api/dev/seed-products', async (_req, res) => {
@@ -68,27 +126,223 @@ app.get('/api/dev/seed-products', async (_req, res) => {
 
     await Product.insertMany(sample);
 
-    res.json({ success: true, message: 'Seeded products and categories' });
+  return res.json({ success: true, message: 'Seeded products and categories' });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Seed error', error: (error as Error).message });
+  return res.status(500).json({ success: false, message: 'Seed error', error: (error as Error).message });
+  }
+});
+
+// Dev seed route for customers
+app.get('/api/dev/seed-customers', async (_req, res) => {
+  try {
+    const count = await Customer.countDocuments();
+    if (count > 0) {
+      return res.json({ success: true, message: 'Customers already seeded' });
+    }
+
+    const sampleCustomers = [
+      {
+        customerCode: 'CUST-001',
+        name: 'John Doe',
+        email: 'john.doe@email.com',
+        phone: '+94 71 234 5678',
+        alternatePhone: '+94 11 234 5678',
+        type: 'retail',
+        creditLimit: 50000,
+        creditUsed: 15000,
+        loyaltyPoints: 1250,
+        address: {
+          street: '123 Main Street',
+          city: 'Colombo',
+          province: 'Western',
+          postalCode: '10000'
+        },
+        taxId: 'TAX123456',
+        birthday: '1990-05-15',
+        notes: 'Regular customer, prefers LED products',
+        isActive: true
+      },
+      {
+        customerCode: 'CUST-002',
+        name: 'ABC Electronics Ltd',
+        email: 'orders@abcelectronics.lk',
+        phone: '+94 11 345 6789',
+        type: 'corporate',
+        creditLimit: 500000,
+        creditUsed: 125000,
+        loyaltyPoints: 8500,
+        address: {
+          street: '456 Business Avenue',
+          city: 'Colombo',
+          province: 'Western',
+          postalCode: '10001'
+        },
+        taxId: 'CORP789012',
+        notes: 'Corporate client, bulk orders',
+        isActive: true
+      },
+      {
+        customerCode: 'CUST-003',
+        name: 'Sarah Wilson',
+        email: 'sarah.wilson@email.com',
+        phone: '+94 72 456 7890',
+        type: 'retail',
+        creditLimit: 0,
+        creditUsed: 0,
+        loyaltyPoints: 450,
+        address: {
+          street: '789 Residential Road',
+          city: 'Kandy',
+          province: 'Central',
+          postalCode: '20000'
+        },
+        birthday: '1985-12-20',
+        notes: 'New customer',
+        isActive: true
+      }
+    ];
+
+    await Customer.insertMany(sampleCustomers);
+
+  return res.json({ success: true, message: 'Seeded customers' });
+  } catch (error) {
+  return res.status(500).json({ success: false, message: 'Seed error', error: (error as Error).message });
+  }
+});
+
+// Dev seed route for suppliers
+app.get('/api/dev/seed-suppliers', async (_req, res) => {
+  try {
+    const count = await Supplier.countDocuments();
+    if (count > 0) {
+      return res.json({ success: true, message: 'Suppliers already seeded' });
+    }
+
+    const sampleSuppliers = [
+      {
+        supplierCode: 'SUP-001',
+        name: 'Tech Distributors Ltd',
+        contactPerson: 'Mr. Rajesh Kumar',
+        email: 'orders@techdistributors.lk',
+        phone: '+94 11 234 5678',
+        alternatePhone: '+94 71 234 5678',
+        address: {
+          street: '123 Industrial Zone',
+          city: 'Colombo',
+          province: 'Western',
+          postalCode: '10000'
+        },
+        taxId: 'TAX123456789',
+        paymentTerms: '30 days',
+        creditLimit: 1000000,
+        creditUsed: 250000,
+        rating: 4,
+        performance: {
+          onTimeDelivery: 95,
+          qualityRating: 92,
+          priceCompetitiveness: 88
+        },
+        status: 'active',
+        isActive: true,
+        notes: 'Primary supplier for LED products and smart devices',
+        bankDetails: {
+          accountName: 'Tech Distributors Ltd',
+          accountNumber: '1234567890',
+          bankName: 'Commercial Bank',
+          branch: 'Colombo Main'
+        }
+      },
+      {
+        supplierCode: 'SUP-002',
+        name: 'Electrical Components Co',
+        contactPerson: 'Ms. Priya Silva',
+        email: 'sales@electricalcomp.lk',
+        phone: '+94 11 345 6789',
+        alternatePhone: '+94 72 345 6789',
+        address: {
+          street: '456 Manufacturing Road',
+          city: 'Gampaha',
+          province: 'Western',
+          postalCode: '11000'
+        },
+        taxId: 'TAX987654321',
+        paymentTerms: '45 days',
+        creditLimit: 750000,
+        creditUsed: 180000,
+        rating: 3,
+        performance: {
+          onTimeDelivery: 85,
+          qualityRating: 78,
+          priceCompetitiveness: 95
+        },
+        status: 'active',
+        isActive: true,
+        notes: 'Good for bulk wiring and basic electrical components',
+        bankDetails: {
+          accountName: 'Electrical Components Co',
+          accountNumber: '0987654321',
+          bankName: 'Bank of Ceylon',
+          branch: 'Gampaha'
+        }
+      },
+      {
+        supplierCode: 'SUP-003',
+        name: 'Smart Solutions Lanka',
+        contactPerson: 'Mr. Anil Perera',
+        email: 'info@smartsolutions.lk',
+        phone: '+94 11 456 7890',
+        alternatePhone: '+94 73 456 7890',
+        address: {
+          street: '789 Innovation Park',
+          city: 'Kandy',
+          province: 'Central',
+          postalCode: '20000'
+        },
+        taxId: 'TAX456789123',
+        paymentTerms: '15 days',
+        creditLimit: 500000,
+        creditUsed: 75000,
+        rating: 5,
+        performance: {
+          onTimeDelivery: 98,
+          qualityRating: 96,
+          priceCompetitiveness: 82
+        },
+        status: 'active',
+        isActive: true,
+        notes: 'Premium supplier for smart home devices and IoT products',
+        bankDetails: {
+          accountName: 'Smart Solutions Lanka',
+          accountNumber: '1122334455',
+          bankName: 'Sampath Bank',
+          branch: 'Kandy'
+        }
+      }
+    ];
+
+    await Supplier.insertMany(sampleSuppliers);
+
+  return res.json({ success: true, message: 'Seeded suppliers' });
+  } catch (error) {
+  return res.status(500).json({ success: false, message: 'Seed error', error: (error as Error).message });
   }
 });
 
 // Test route to check database
-app.get('/api/test-db', async (req, res) => {
+app.get('/api/test-db', async (_req, res) => {
   try {
     // Count users in database
     const userCount = await User.countDocuments();
-    res.json({
+    return res.json({
       success: true,
       message: 'Database is working!',
       userCount: userCount
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Database error',
-      error: error.message
+      error: (error as Error).message
     });
   }
 });
@@ -113,14 +367,21 @@ app.get('/api/dev/seed-users', async (_req, res) => {
           role,
         });
         await user.save();
+      } else {
+        // Keep email in sync for dev seeding if it changed
+        if (email && user.email !== email) {
+          user.email = email;
+          await user.save();
+        }
       }
       return user;
     };
 
-    const admin = await ensureUser('admin', 'admin@voltzone.lk', 'admin123', 'admin');
-    const cashier = await ensureUser('cashier', 'cashier@voltzone.lk', 'cashier123', 'cashier');
+  // Seed both admin and cashier demo accounts
+  const admin = await ensureUser('admin', 'admin@voltzone.lk', 'admin123', 'admin');
+  const cashier = await ensureUser('cashier', 'cashier@voltzone.lk', 'cashier123', 'cashier');
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Seed complete',
       users: [
@@ -133,7 +394,7 @@ app.get('/api/dev/seed-users', async (_req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Error seeding users',
       error: (error as Error).message,
@@ -141,16 +402,58 @@ app.get('/api/dev/seed-users', async (_req, res) => {
   }
 });
 
+// Dev helper: list users with emails (do NOT enable in production)
+app.get('/api/dev/list-users', async (_req, res) => {
+  try {
+    const users = await User.find({}, { username: 1, email: 1, role: 1 }).lean();
+    return res.json({ success: true, users });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error listing users', error: (error as Error).message });
+  }
+});
+
+// Socket.io
+const io = new IOServer(httpServer, {
+  cors: {
+  origin: (_origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
+      if ((process.env.NODE_ENV || 'development') !== 'production') {
+        return cb(null, true);
+      }
+      // if you need strict production origins, replace with an includes check
+      return cb(null, true);
+  },
+  credentials: true,
+  },
+});
+
+io.on('connection', (socket: Socket) => {
+  if (process.env.NODE_ENV !== 'production') console.log('🔌 socket connected', socket.id);
+  socket.on('disconnect', (reason: any) => {
+    if (process.env.NODE_ENV !== 'production') console.log('🔌 socket disconnected', socket.id, 'reason:', reason);
+  });
+  socket.on('error', (err: any) => {
+    if (process.env.NODE_ENV !== 'production') console.warn('⚠️ socket error', socket.id, err);
+  });
+});
+
+// Log low-level engine.io connection errors (e.g., CORS/transport issues)
+// @ts-ignore - engine is a public property on the server instance
+(io as any).engine.on('connection_error', (err: any) => {
+  if ((process.env.NODE_ENV || 'development') !== 'production') {
+    console.warn('⚠️ engine.io connection_error:', {
+      code: err.code,
+      message: err.message,
+      context: err.context,
+    });
+  }
+});
+
+// expose io to services
+setIO(io);
+
+// cache busting is invoked directly in controllers after mutations
+
 // Start server
-app.listen(PORT, () => {
-  console.log('╔════════════════════════════════════════╗');
-  console.log('║                                        ║');
-  console.log('║     VoltZone POS Server Started!      ║');
-  console.log('║                                        ║');
-  console.log('╚════════════════════════════════════════╝');
-  console.log('');
-  console.log(`🚀 Server: http://localhost:${PORT}`);
-  console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log('');
-  console.log('Press CTRL + C to stop the server');
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Server listening on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
 });

@@ -94,7 +94,10 @@ const supplierSchema = new mongoose.Schema({
       default: 0,
       min: 0,
       max: 100
-    }
+  },
+  leadTimeDays: { type: Number, default: 0, min: 0 },
+  fillRate: { type: Number, default: 0, min: 0, max: 100 },
+  returnRate: { type: Number, default: 0, min: 0, max: 100 }
   },
   status: {
     type: String,
@@ -139,8 +142,7 @@ const supplierSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for efficient queries
-supplierSchema.index({ supplierCode: 1 });
+// Indexes for efficient queries (excluding supplierCode which is already indexed by unique: true)
 supplierSchema.index({ name: 1 });
 supplierSchema.index({ email: 1 });
 supplierSchema.index({ phone: 1 });

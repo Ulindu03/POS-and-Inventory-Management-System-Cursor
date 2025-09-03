@@ -1,0 +1,58 @@
+// @ts-nocheck
+/// <reference path="../types/lucide-deep-imports.d.ts" />
+// Safe lucide-react wrapper: export only used icons via deep ESM paths to avoid quarantined files
+// Add new icons here as needed; this bypasses the package index that imports ./icons/chrome.js
+
+export { default as Activity } from 'lucide-react/dist/esm/icons/activity.js';
+export { default as AlertCircle } from 'lucide-react/dist/esm/icons/alert-circle.js';
+export { default as AlertTriangle } from 'lucide-react/dist/esm/icons/alert-triangle.js';
+export { default as AreaChart } from 'lucide-react/dist/esm/icons/area-chart.js';
+export { default as ArrowLeft } from 'lucide-react/dist/esm/icons/arrow-left.js';
+export { default as Award } from 'lucide-react/dist/esm/icons/award.js';
+export { default as BarChart3 } from 'lucide-react/dist/esm/icons/bar-chart-3.js';
+export { default as Building } from 'lucide-react/dist/esm/icons/building.js';
+export { default as Calendar } from 'lucide-react/dist/esm/icons/calendar.js';
+export { default as CheckCircle } from 'lucide-react/dist/esm/icons/check-circle.js';
+export { default as ChevronRight } from 'lucide-react/dist/esm/icons/chevron-right.js';
+export { default as CreditCard } from 'lucide-react/dist/esm/icons/credit-card.js';
+export { default as DollarSign } from 'lucide-react/dist/esm/icons/dollar-sign.js';
+export { default as Download } from 'lucide-react/dist/esm/icons/download.js';
+export { default as Edit } from 'lucide-react/dist/esm/icons/edit.js';
+export { default as Eye } from 'lucide-react/dist/esm/icons/eye.js';
+export { default as EyeOff } from 'lucide-react/dist/esm/icons/eye-off.js';
+export { default as FileText } from 'lucide-react/dist/esm/icons/file-text.js';
+export { default as Filter } from 'lucide-react/dist/esm/icons/filter.js';
+export { default as Folder } from 'lucide-react/dist/esm/icons/folder.js';
+export { default as Box } from 'lucide-react/dist/esm/icons/box.js';
+export { default as Gift } from 'lucide-react/dist/esm/icons/gift.js';
+export { default as Globe } from 'lucide-react/dist/esm/icons/globe.js';
+export { default as Hash } from 'lucide-react/dist/esm/icons/hash.js';
+export { default as LayoutDashboard } from 'lucide-react/dist/esm/icons/layout-dashboard.js';
+export { default as Loader2 } from 'lucide-react/dist/esm/icons/loader-2.js';
+export { default as Lock } from 'lucide-react/dist/esm/icons/lock.js';
+export { default as Mail } from 'lucide-react/dist/esm/icons/mail.js';
+export { default as MapPin } from 'lucide-react/dist/esm/icons/map-pin.js';
+export { default as Minus } from 'lucide-react/dist/esm/icons/minus.js';
+export { default as Package } from 'lucide-react/dist/esm/icons/package.js';
+export { default as Percent } from 'lucide-react/dist/esm/icons/percent.js';
+export { default as Phone } from 'lucide-react/dist/esm/icons/phone.js';
+export { default as PieChart } from 'lucide-react/dist/esm/icons/pie-chart.js';
+export { default as Plus } from 'lucide-react/dist/esm/icons/plus.js';
+export { default as RefreshCcw } from 'lucide-react/dist/esm/icons/refresh-ccw.js';
+export { default as Route } from 'lucide-react/dist/esm/icons/route.js';
+export { default as Save } from 'lucide-react/dist/esm/icons/save.js';
+export { default as Search } from 'lucide-react/dist/esm/icons/search.js';
+export { default as Settings } from 'lucide-react/dist/esm/icons/settings.js';
+export { default as ShoppingBag } from 'lucide-react/dist/esm/icons/shopping-bag.js';
+export { default as ShoppingCart } from 'lucide-react/dist/esm/icons/shopping-cart.js';
+export { default as Sparkles } from 'lucide-react/dist/esm/icons/sparkles.js';
+export { default as Star } from 'lucide-react/dist/esm/icons/star.js';
+export { default as Tag } from 'lucide-react/dist/esm/icons/tag.js';
+export { default as Trash2 } from 'lucide-react/dist/esm/icons/trash-2.js';
+export { default as TrendingDown } from 'lucide-react/dist/esm/icons/trending-down.js';
+export { default as TrendingUp } from 'lucide-react/dist/esm/icons/trending-up.js';
+export { default as Truck } from 'lucide-react/dist/esm/icons/truck.js';
+export { default as User } from 'lucide-react/dist/esm/icons/user.js';
+export { default as Users } from 'lucide-react/dist/esm/icons/users.js';
+export { default as X } from 'lucide-react/dist/esm/icons/x.js';
+export { default as Clock } from 'lucide-react/dist/esm/icons/clock.js';

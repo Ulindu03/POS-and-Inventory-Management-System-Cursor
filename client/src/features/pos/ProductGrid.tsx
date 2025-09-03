@@ -40,7 +40,7 @@ export const ProductGrid = () => {
   }, []);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 min-h-0">
       <div className="flex items-center gap-2">
         <input
           value={q}
@@ -64,7 +64,7 @@ export const ProductGrid = () => {
       {loading ? (
         <div className="opacity-80">Loading...</div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {items.map((p) => (
             <motion.button
               key={p._id}

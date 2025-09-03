@@ -16,6 +16,7 @@ interface UserInfo {
 interface AuthState {
 	user: UserInfo | null;
 	isAuthenticated: boolean;
+	isChecking: boolean;
 	accessToken: string | null;
 	login: (credentials: { username: string; password: string; rememberMe?: boolean }) => Promise<void>;
 	logout: () => Promise<void>;
@@ -26,13 +27,13 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
 	user: null,
 	isAuthenticated: false,
+	isChecking: true,
 	accessToken: getAccessToken(),
 
 	login: async (credentials) => {
-		const response = await authApi.login(credentials);
-		const { user, accessToken } = response.data;
+		const { user, accessToken } = await authApi.login(credentials);
 		setAccessToken(accessToken);
-		set({ user, accessToken, isAuthenticated: true });
+		set({ user, accessToken, isAuthenticated: true, isChecking: false });
 	},
 
 	logout: async () => {
@@ -40,29 +41,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 			await authApi.logout();
 		} finally {
 			clearAccessToken();
-			set({ user: null, isAuthenticated: false, accessToken: null });
+			set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
 		}
 	},
 
 	refreshToken: async () => {
-		const response = await authApi.refreshToken();
-		const { accessToken } = response.data;
+		const { accessToken } = await authApi.refreshToken();
 		setAccessToken(accessToken);
 		set({ accessToken, isAuthenticated: Boolean(get().user) });
 	},
 
 	checkAuth: async () => {
+		set({ isChecking: true });
 		try {
-			const me = await authApi.getCurrentUser();
-			set({ user: me.data.user, isAuthenticated: true });
+				const me = await authApi.getCurrentUser();
+				const hasUser = Boolean(me?.user && (me.user.id || me.user._id));
+				if (hasUser) {
+					set({ user: me.user, isAuthenticated: true, isChecking: false });
+				} else {
+					clearAccessToken();
+					set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
+				}
 		} catch {
 			try {
 				await get().refreshToken();
-				const me = await authApi.getCurrentUser();
-				set({ user: me.data.user, isAuthenticated: true });
+						const me = await authApi.getCurrentUser();
+						const hasUser = Boolean(me?.user && (me.user.id || me.user._id));
+						if (hasUser) {
+							set({ user: me.user, isAuthenticated: true, isChecking: false });
+						} else {
+							clearAccessToken();
+							set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
+						}
 			} catch {
 				clearAccessToken();
-				set({ user: null, isAuthenticated: false, accessToken: null });
+				set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
 			}
 		}
 	},

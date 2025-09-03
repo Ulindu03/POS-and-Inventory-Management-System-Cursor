@@ -17,11 +17,13 @@ import {
   Users,
   ShoppingBag,
   Award,
-  Clock,
-  DollarSign
+  // Clock,
+  DollarSign,
+  Gift
 } from 'lucide-react';
 import { formatLKR } from '@/lib/utils/currency';
 import { AreaChart } from '@/components/common/Charts';
+import { LoyaltyRedemptionModal } from './LoyaltyRedemptionModal';
 
 interface Customer {
   _id: string;
@@ -43,9 +45,9 @@ interface Customer {
   taxId?: string;
   birthday?: string;
   notes?: string;
-  totalPurchases: number;
-  totalSpent: number;
-  lastPurchase: string;
+  totalPurchases?: number;
+  totalSpent?: number;
+  lastPurchase?: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -68,15 +70,18 @@ interface CustomerProfileProps {
   purchases: Purchase[];
   onEdit: () => void;
   onClose: () => void;
+  onRedeemPoints?: (data: any) => Promise<void>;
 }
 
 export const CustomerProfile: React.FC<CustomerProfileProps> = ({
   customer,
   purchases,
   onEdit,
-  onClose
+  onClose,
+  onRedeemPoints
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'loyalty'>('overview');
+  const [showRedemptionModal, setShowRedemptionModal] = useState(false);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -150,6 +155,13 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
               >
                 <Edit className="w-4 h-4" />
                 Edit
+              </button>
+              <button
+                onClick={() => setShowRedemptionModal(true)}
+                className="px-4 py-2 bg-yellow-100 text-yellow-700 rounded-xl hover:bg-yellow-200 transition-colors flex items-center gap-2"
+              >
+                <Gift className="w-4 h-4" />
+                Redeem Points
               </button>
               <button
                 onClick={onClose}
@@ -266,7 +278,7 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Total Spent</p>
-                        <p className="text-2xl font-bold text-blue-600">{formatLKR(customer.totalSpent)}</p>
+                        <p className="text-2xl font-bold text-blue-600">{formatLKR(customer.totalSpent ?? 0)}</p>
                       </div>
                     </div>
                   </div>
@@ -375,13 +387,18 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
                           </div>
                           <div className="text-right">
                             <p className="font-semibold text-gray-900">{formatLKR(purchase.total)}</p>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              purchase.status === 'completed' ? 'bg-green-100 text-green-700' :
-                              purchase.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-red-100 text-red-700'
-                            }`}>
-                              {purchase.status}
-                            </span>
+                            {(() => {
+                              const getStatusClass = (status: string) => {
+                                if (status === 'completed') return 'bg-green-100 text-green-700';
+                                if (status === 'pending') return 'bg-yellow-100 text-yellow-700';
+                                return 'bg-red-100 text-red-700';
+                              };
+                              return (
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusClass(purchase.status)}`}>
+                                  {purchase.status}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                       ))
@@ -508,6 +525,18 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
           </div>
         </div>
       </GlassCard>
+
+      {/* Loyalty Redemption Modal */}
+      {showRedemptionModal && onRedeemPoints && (
+        <LoyaltyRedemptionModal
+          customer={customer}
+          onRedeem={async (data) => {
+            await onRedeemPoints(data);
+            setShowRedemptionModal(false);
+          }}
+          onCancel={() => setShowRedemptionModal(false)}
+        />
+      )}
     </motion.div>
   );
 };

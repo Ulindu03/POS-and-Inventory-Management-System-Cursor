@@ -1,8 +1,5 @@
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
+// Note: dotenv is loaded in server entry. Do not load here to avoid duplicate logs.
 
 const connectDB = async () => {
   try {
@@ -16,9 +13,7 @@ const connectDB = async () => {
     // Connect to MongoDB
     await mongoose.connect(connectionString);
     
-    console.log('✅ MongoDB Connected Successfully!');
-    console.log('📦 Database: voltzone_pos');
-    console.log('🔗 Host: MongoDB Atlas');
+  console.log('✅ MongoDB connected');
     
   } catch (error) {
     console.error('❌ MongoDB Connection Error:', error);
@@ -28,7 +23,7 @@ const connectDB = async () => {
 
 // Handle connection events
 mongoose.connection.on('connected', () => {
-  console.log('📡 Mongoose connected to MongoDB');
+  console.log('📡 Mongoose ready');
 });
 
 mongoose.connection.on('error', (err) => {
@@ -42,7 +37,7 @@ mongoose.connection.on('disconnected', () => {
 // Handle app termination
 process.on('SIGINT', async () => {
   await mongoose.connection.close();
-  console.log('📴 MongoDB connection closed through app termination');
+  console.log('📴 MongoDB connection closed');
   process.exit(0);
 });
 

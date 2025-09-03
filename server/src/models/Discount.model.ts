@@ -104,7 +104,7 @@ const discountSchema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
-discountSchema.index({ discountCode: 1 });
+   // Unique index for discountCode is already created via { unique: true } on the field
 discountSchema.index({ isActive: 1 });
 discountSchema.index({ startDate: 1, endDate: 1 });
 discountSchema.index({ type: 1 });

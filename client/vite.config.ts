@@ -4,18 +4,28 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    exclude: ['lucide-react'],
+  },
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@components': path.resolve(__dirname, './src/components'),
-      '@pages': path.resolve(__dirname, './src/pages'),
-      '@hooks': path.resolve(__dirname, './src/hooks'),
-      '@lib': path.resolve(__dirname, './src/lib'),
-      '@types': path.resolve(__dirname, './src/types'),
-      '@assets': path.resolve(__dirname, './src/assets'),
-      '@store': path.resolve(__dirname, './src/store'),
-      '@services': path.resolve(__dirname, './src/services'),
-    },
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+      { find: '@components', replacement: path.resolve(__dirname, './src/components') },
+      { find: '@pages', replacement: path.resolve(__dirname, './src/pages') },
+      { find: '@hooks', replacement: path.resolve(__dirname, './src/hooks') },
+      { find: '@lib', replacement: path.resolve(__dirname, './src/lib') },
+      { find: '@types', replacement: path.resolve(__dirname, './src/types') },
+      { find: '@assets', replacement: path.resolve(__dirname, './src/assets') },
+      { find: '@store', replacement: path.resolve(__dirname, './src/store') },
+      { find: '@services', replacement: path.resolve(__dirname, './src/services') },
+  // Map deep icon imports to the actual node_modules path to avoid index scan
+  { find: /^lucide-react\/dist\/esm\/icons\/(.+)$/, replacement: path.resolve(__dirname, './node_modules/lucide-react/dist/esm/icons') + '/$1' },
+  // Exact-match only: redirect bare lucide-react imports to our safe wrapper
+      { find: /^lucide-react$/, replacement: path.resolve(__dirname, './src/lib/safe-lucide-react.ts') },
+      { find: /^lucide-react\/dist\/esm\/lucide-react(\.js)?$/, replacement: path.resolve(__dirname, './src/lib/safe-lucide-react.ts') },
+      // Workaround: Defender flags chrome icon file; force it to resolve to a safe stub
+      { find: /^lucide-react\/dist\/esm\/icons\/chrome(\.js)?$/, replacement: path.resolve(__dirname, './src/lib/icon-stubs/chrome.js') },
+    ],
   },
   server: {
     port: 5173,

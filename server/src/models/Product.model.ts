@@ -100,6 +100,11 @@ const productSchema = new mongoose.Schema({
       type: Number,
       default: 0,
       min: 0
+    },
+    inTransit: {
+      type: Number,
+      default: 0,
+      min: 0
     }
   },
   variants: [{
@@ -161,8 +166,16 @@ const productSchema = new mongoose.Schema({
       type: String
     },
     warranty: {
-      type: Number,
-      min: 0
+      duration: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      type: {
+        type: String,
+        enum: ['days', 'months', 'years'],
+        default: 'months'
+      }
     }
   },
   isActive: {
@@ -222,9 +235,7 @@ const productSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for efficient queries
-productSchema.index({ sku: 1 });
-productSchema.index({ barcode: 1 });
+// Indexes for efficient queries (excluding sku and barcode which are already indexed by unique: true)
 productSchema.index({ category: 1, isActive: 1 });
 productSchema.index({ 'stock.current': 1 });
 productSchema.index({ 'price.retail': 1 });

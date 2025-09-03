@@ -3,7 +3,7 @@ import { GlassCard } from '../Card/GlassCard';
 
 interface DataPoint {
   name: string;
-  value: number;
+  value?: number; // optional to allow other numeric keys like 'revenue', 'sales'
   [key: string]: any;
 }
 

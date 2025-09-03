@@ -1,371 +1,328 @@
-import { useState, useEffect } from 'react';
+/* eslint-disable jsx-a11y/label-has-associated-control */
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { motion } from 'framer-motion';
-import { GlassCard } from '@/components/common/Card';
-import { User, Mail, Phone, MapPin, CreditCard, Star, Save, X } from 'lucide-react';
+import { User, Mail, Phone, MapPin, CreditCard, Star, Save } from 'lucide-react';
+import FormModal from '@/components/ui/FormModal';
 
 const customerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email address'),
+  email: z.string().refine((v) => /.+@.+\..+/.test(v), { message: 'Invalid email address' }),
   phone: z.string().min(10, 'Phone must be at least 10 digits'),
   alternatePhone: z.string().optional(),
   address: z.object({
     street: z.string().min(5, 'Street address is required'),
     city: z.string().min(2, 'City is required'),
     province: z.string().min(2, 'Province is required'),
-    postalCode: z.string().min(4, 'Postal code is required')
+    postalCode: z.string().min(4, 'Postal code is required'),
   }),
   type: z.enum(['retail', 'wholesale', 'corporate']),
   creditLimit: z.number().min(0, 'Credit limit cannot be negative'),
   loyaltyPoints: z.number().min(0, 'Loyalty points cannot be negative'),
   taxId: z.string().optional(),
   birthday: z.string().optional(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
 });
 
-type CustomerFormData = z.infer<typeof customerSchema>;
-
 interface CustomerFormProps {
-  customer?: Partial<CustomerFormData>;
-  onSubmit: (data: CustomerFormData) => void;
+  customer?: Partial<z.infer<typeof customerSchema>>;
+  onSubmit: (data: z.infer<typeof customerSchema>) => void;
   onCancel: () => void;
   isLoading?: boolean;
 }
 
-export const CustomerForm: React.FC<CustomerFormProps> = ({
-  customer,
-  onSubmit,
-  onCancel,
-  isLoading = false
-}) => {
-  const [isEditing, setIsEditing] = useState(false);
-  
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isValid },
-    reset,
-    watch
-  } = useForm<CustomerFormData>({
+export const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSubmit, onCancel, isLoading = false }) => {
+  const isEditing = useMemo(() => Boolean(customer), [customer]);
+
+  const { register, handleSubmit, formState: { errors, isValid }, reset } = useForm({
     resolver: zodResolver(customerSchema),
-    defaultValues: customer || {
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      alternatePhone: '',
+      address: { street: '', city: '', province: '', postalCode: '' },
       type: 'retail',
       creditLimit: 0,
       loyaltyPoints: 0,
-      address: {
-        street: '',
-        city: '',
-        province: '',
-        postalCode: ''
-      }
-    }
+      taxId: '',
+      birthday: '',
+      notes: '',
+    },
   });
-
-  const customerType = watch('type');
 
   useEffect(() => {
     if (customer) {
-      setIsEditing(true);
-      reset(customer);
+      reset({
+        name: customer.name ?? '',
+        email: customer.email ?? '',
+        phone: customer.phone ?? '',
+        alternatePhone: customer.alternatePhone ?? '',
+        address: {
+          street: customer.address?.street ?? '',
+          city: customer.address?.city ?? '',
+          province: customer.address?.province ?? '',
+          postalCode: customer.address?.postalCode ?? '',
+        },
+  type: (customer.type as z.infer<typeof customerSchema>['type']) ?? 'retail',
+        creditLimit: customer.creditLimit ?? 0,
+        loyaltyPoints: customer.loyaltyPoints ?? 0,
+        taxId: customer.taxId ?? '',
+        birthday: customer.birthday ?? '',
+        notes: customer.notes ?? '',
+      });
     }
   }, [customer, reset]);
 
-  const handleFormSubmit = (data: CustomerFormData) => {
-    onSubmit(data);
-  };
+  const handleFormSubmit = (values: any) => onSubmit(values as z.infer<typeof customerSchema>);
+
+  let submitText = 'Create Customer';
+  if (isEditing) submitText = 'Update Customer';
+  if (isLoading) submitText = 'Saving...';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+    <FormModal
+      isOpen
+      onClose={onCancel}
+      title={isEditing ? 'Edit Customer' : 'Add New Customer'}
+      subtitle={isEditing ? 'Update customer information' : 'Register a new customer'}
+      icon={<User className="w-6 h-6 text-[#F8F8F8]" />}
+      widthClass="max-w-4xl"
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] hover:bg-white/20 disabled:opacity-50"
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+          <button
+            form="customer-form"
+            type="submit"
+            disabled={!isValid || isLoading}
+            className="px-4 py-2 rounded-xl bg-emerald-500 text-white flex items-center gap-2 disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" /> {submitText}
+          </button>
+        </div>
+      }
     >
-      <GlassCard className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-blue-600 rounded-lg text-white">
-                <User className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800">
-                  {isEditing ? 'Edit Customer' : 'New Customer'}
-                </h2>
-                <p className="text-gray-600">
-                  {isEditing ? 'Update customer information' : 'Register a new customer'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onCancel}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <X className="w-6 h-6 text-gray-600" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-            {/* Basic Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Full Name *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    {...register('name')}
-                    type="text"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="Enter full name"
-                  />
-                </div>
-                {errors.name && (
-                  <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Email *
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    {...register('email')}
-                    type="email"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="Enter email address"
-                  />
-                </div>
-                {errors.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Phone *
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    {...register('phone')}
-                    type="tel"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="Enter phone number"
-                  />
-                </div>
-                {errors.phone && (
-                  <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Alternate Phone
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    {...register('alternatePhone')}
-                    type="tel"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="Enter alternate phone"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Address Information */}
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-purple-600" />
-                Address Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Street Address *
-                  </label>
-                  <input
-                    {...register('address.street')}
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="Enter street address"
-                  />
-                  {errors.address?.street && (
-                    <p className="mt-1 text-sm text-red-600">{errors.address.street.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    City *
-                  </label>
-                  <input
-                    {...register('address.city')}
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="Enter city"
-                  />
-                  {errors.address?.city && (
-                    <p className="mt-1 text-sm text-red-600">{errors.address.city.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Province *
-                  </label>
-                  <input
-                    {...register('address.province')}
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="Enter province"
-                  />
-                  {errors.address?.province && (
-                    <p className="mt-1 text-sm text-red-600">{errors.address.province.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Postal Code *
-                  </label>
-                  <input
-                    {...register('address.postalCode')}
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="Enter postal code"
-                  />
-                  {errors.address?.postalCode && (
-                    <p className="mt-1 text-sm text-red-600">{errors.address.postalCode.message}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Business Information */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Customer Type *
-                </label>
-                <select
-                  {...register('type')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                >
-                  <option value="retail">Retail</option>
-                  <option value="wholesale">Wholesale</option>
-                  <option value="corporate">Corporate</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Credit Limit (LKR)
-                </label>
-                <div className="relative">
-                  <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    {...register('creditLimit', { valueAsNumber: true })}
-                    type="number"
-                    min="0"
-                    step="100"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="0.00"
-                  />
-                </div>
-                {errors.creditLimit && (
-                  <p className="mt-1 text-sm text-red-600">{errors.creditLimit.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Loyalty Points
-                </label>
-                <div className="relative">
-                  <Star className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    {...register('loyaltyPoints', { valueAsNumber: true })}
-                    type="number"
-                    min="0"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    placeholder="0"
-                  />
-                </div>
-                {errors.loyaltyPoints && (
-                  <p className="mt-1 text-sm text-red-600">{errors.loyaltyPoints.message}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Additional Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Tax ID
-                </label>
-                <input
-                  {...register('taxId')}
-                  type="text"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                  placeholder="Enter tax ID"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Birthday
-                </label>
-                <input
-                  {...register('birthday')}
-                  type="date"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Notes */}
+      <form id="customer-form" onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+        {/* Basic Information */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">Basic Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Notes
-              </label>
-              <textarea
-                {...register('notes')}
-                rows={3}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-none"
-                placeholder="Enter any additional notes about the customer..."
+              <label htmlFor="customer-name" className="block text-sm font-medium text-[#F8F8F8] mb-2">Full Name *</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
+                <input
+                  {...register('name')}
+                  id="customer-name"
+                  type="text"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                  placeholder="Enter full name"
+                />
+              </div>
+              {errors.name && <p className="mt-1 text-sm text-red-400">{errors.name.message}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="customer-email" className="block text-sm font-medium text-[#F8F8F8] mb-2">Email *</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
+                <input
+                  {...register('email')}
+                  id="customer-email"
+                  type="email"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                  placeholder="Enter email address"
+                />
+              </div>
+              {errors.email && <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="customer-phone" className="block text-sm font-medium text-[#F8F8F8] mb-2">Phone *</label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
+                <input
+                  {...register('phone')}
+                  id="customer-phone"
+                  type="tel"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                  placeholder="Enter phone number"
+                />
+              </div>
+              {errors.phone && <p className="mt-1 text-sm text-red-400">{errors.phone.message}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="customer-altPhone" className="block text-sm font-medium text-[#F8F8F8] mb-2">Alternate Phone</label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
+                <input
+                  {...register('alternatePhone')}
+                  id="customer-altPhone"
+                  type="tel"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                  placeholder="Enter alternate phone"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Address Information */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4"><MapPin className="inline w-5 h-5 mr-2" />Address Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label htmlFor="customer-street" className="block text-sm font-medium text-[#F8F8F8] mb-2">Street Address *</label>
+              <input
+                {...register('address.street')}
+                id="customer-street"
+                type="text"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                placeholder="Enter street address"
+              />
+              {errors.address?.street && <p className="mt-1 text-sm text-red-400">{errors.address.street.message}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="customer-city" className="block text-sm font-medium text-[#F8F8F8] mb-2">City *</label>
+              <input
+                {...register('address.city')}
+                id="customer-city"
+                type="text"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                placeholder="Enter city"
+              />
+              {errors.address?.city && <p className="mt-1 text-sm text-red-400">{errors.address.city.message}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="customer-province" className="block text-sm font-medium text-[#F8F8F8] mb-2">Province *</label>
+              <input
+                {...register('address.province')}
+                id="customer-province"
+                type="text"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                placeholder="Enter province"
+              />
+              {errors.address?.province && <p className="mt-1 text-sm text-red-400">{errors.address.province.message}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="customer-postalCode" className="block text-sm font-medium text-[#F8F8F8] mb-2">Postal Code *</label>
+              <input
+                {...register('address.postalCode')}
+                id="customer-postalCode"
+                type="text"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                placeholder="Enter postal code"
+              />
+              {errors.address?.postalCode && <p className="mt-1 text-sm text-red-400">{errors.address.postalCode.message}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Business Information */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">Business Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label htmlFor="customer-type" className="block text-sm font-medium text-[#F8F8F8] mb-2">Customer Type *</label>
+              <select
+                {...register('type')}
+                id="customer-type"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+              >
+                <option value="retail">Retail</option>
+                <option value="wholesale">Wholesale</option>
+                <option value="corporate">Corporate</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="customer-creditLimit" className="block text-sm font-medium text-[#F8F8F8] mb-2">Credit Limit (LKR)</label>
+              <div className="relative">
+                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
+                <input
+                  {...register('creditLimit', { valueAsNumber: true })}
+                  id="customer-creditLimit"
+                  type="number"
+                  min={0}
+                  step={100}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                  placeholder="0.00"
+                />
+              </div>
+              {errors.creditLimit && <p className="mt-1 text-sm text-red-400">{errors.creditLimit.message}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="customer-loyaltyPoints" className="block text-sm font-medium text-[#F8F8F8] mb-2">Loyalty Points</label>
+              <div className="relative">
+                <Star className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
+                <input
+                  {...register('loyaltyPoints', { valueAsNumber: true })}
+                  id="customer-loyaltyPoints"
+                  type="number"
+                  min={0}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                  placeholder="0"
+                />
+              </div>
+              {errors.loyaltyPoints && <p className="mt-1 text-sm text-red-400">{errors.loyaltyPoints.message}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Additional Information */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="customer-taxId" className="block text-sm font-medium text-[#F8F8F8] mb-2">Tax ID</label>
+              <input
+                  {...register('taxId')}
+                  id="customer-taxId"
+                  type="text"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                placeholder="Enter tax ID"
               />
             </div>
 
-            {/* Form Actions */}
-            <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={onCancel}
-                className="px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!isValid || isLoading}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-              >
-                <Save className="w-5 h-5" />
-                {isLoading ? 'Saving...' : (isEditing ? 'Update Customer' : 'Create Customer')}
-              </button>
+            <div>
+              <label htmlFor="customer-birthday" className="block text-sm font-medium text-[#F8F8F8] mb-2">Birthday</label>
+              <input
+                  {...register('birthday')}
+                  id="customer-birthday"
+                  type="date"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+              />
             </div>
-          </form>
+          </div>
         </div>
-      </GlassCard>
-    </motion.div>
+
+        {/* Notes */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <label htmlFor="customer-notes" className="block text-sm font-medium text-[#F8F8F8] mb-2">Notes</label>
+          <textarea
+            {...register('notes')}
+            id="customer-notes"
+            rows={3}
+            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30 resize-none"
+            placeholder="Enter any additional notes about the customer..."
+          />
+        </div>
+      </form>
+    </FormModal>
   );
 };
+
+export default CustomerForm;
