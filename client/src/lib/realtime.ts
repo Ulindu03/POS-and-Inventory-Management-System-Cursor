@@ -11,7 +11,16 @@ let socket: ClientSocket | null = null;
 export function getSocket() {
   if (!socket) {
     const url = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:5000';
-    socket = io(url, { withCredentials: true, transports: ['websocket', 'polling'], autoConnect: true, reconnection: true }) as unknown as ClientSocket;
+    socket = io(url, {
+      withCredentials: true,
+      transports: ['websocket'],
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+    }) as unknown as ClientSocket;
     if (import.meta.env.DEV) {
       const s = socket as ClientSocket & { on: any };
       s.on('connect_error', (err: any) => {

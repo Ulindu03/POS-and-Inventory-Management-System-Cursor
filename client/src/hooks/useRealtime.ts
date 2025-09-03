@@ -12,6 +12,7 @@ export function useRealtime(subscribe: (socket: ReturnType<typeof getSocket>) =>
       s.off('delivery:created');
       s.off('delivery:updated');
       s.off('delivery:status');
+  s.off('inventory.low_stock');
     };
   }, [subscribe]);
 }

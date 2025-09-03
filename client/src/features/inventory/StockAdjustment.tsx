@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { Search, Plus, Minus, Package, Save, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Search, Plus, Minus, Package } from 'lucide-react';
+import { productsApi } from '@/lib/api/products.api';
+import { toast } from 'sonner';
 
 interface Product {
   _id: string;
@@ -19,32 +21,48 @@ export const StockAdjustment = () => {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Mock products - replace with actual API call
-  const products: Product[] = [
-    {
-      _id: '1',
-      sku: 'ELK001',
-      name: { en: 'Samsung Galaxy S24', si: 'සැම්සුන් ගැලැක්සි' },
-      currentStock: 25
-    },
-    {
-      _id: '2',
-      sku: 'ELK002',
-      name: { en: 'iPhone 15 Pro', si: 'අයිෆෝන් 15 ප්‍රෝ' },
-      currentStock: 15
-    },
-    {
-      _id: '3',
-      sku: 'ELK003',
-      name: { en: 'Dell XPS 13', si: 'ඩෙල් XPS 13' },
-      currentStock: 8
-    }
-  ];
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const filteredProducts = useMemo(() => searchResults, [searchResults]);
 
-  const filteredProducts = products.filter(product =>
-    product.name.en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.sku.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Load product from sessionStorage handoff (Adjust button in list)
+  useEffect(() => {
+  const raw = sessionStorage.getItem('inventory.adjust.pending');
+    if (raw) {
+      try {
+    const p = JSON.parse(raw);
+    if (p?.
+_id) setSelectedProduct(p);
+      } catch {}
+      sessionStorage.removeItem('inventory.adjust.pending');
+    }
+  }, []);
+
+  // Simple search using products API list
+  useEffect(() => {
+    let ignore = false;
+    const run = async () => {
+      if (!searchTerm || searchTerm.trim().length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      try {
+        const res = await productsApi.list({ q: searchTerm, limit: 20 });
+        const items = res?.data?.items || [];
+        const mapped: Product[] = items.map((p: any) => ({
+          _id: p._id,
+          sku: p.sku,
+          name: p.name,
+          currentStock: Number(p?.stock?.current ?? 0),
+        }));
+        if (!ignore) setSearchResults(mapped);
+      } catch (e) {
+        console.error('Search failed', e);
+        if (!ignore) setSearchResults([]);
+      }
+    };
+    const h = setTimeout(run, 250);
+    return () => { ignore = true; clearTimeout(h); };
+  }, [searchTerm]);
 
   const handleProductSelect = (product: Product) => {
     setSelectedProduct(product);
@@ -67,27 +85,60 @@ export const StockAdjustment = () => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedProduct || !quantity || !reason) return;
+    if (!selectedProduct) {
+      toast.error('Select a product');
+      return;
+    }
+    if (!reason) {
+      toast.error('Select a reason');
+      return;
+    }
+    if (adjustmentType !== 'set' && (!quantity || quantity <= 0)) {
+      toast.error('Enter a positive quantity');
+      return;
+    }
+
+    // Compute server payload
+    let serverType: 'add' | 'remove';
+    let serverQty = 0;
+    if (adjustmentType === 'increase') {
+      serverType = 'add';
+      serverQty = quantity;
+    } else if (adjustmentType === 'decrease') {
+      serverType = 'remove';
+      serverQty = quantity;
+    } else {
+      // set
+      const target = Math.max(0, quantity);
+      const diff = target - Number(selectedProduct.currentStock || 0);
+      if (diff === 0) {
+        toast.info('Stock already at desired quantity');
+        return;
+      }
+  serverType = diff > 0 ? 'add' : 'remove';
+      serverQty = Math.abs(diff);
+    }
 
     setLoading(true);
     try {
-      // Replace with actual API call
-      console.log('Stock adjustment:', {
-        product: selectedProduct._id,
-        adjustmentType,
-        quantity,
+      const res = await productsApi.adjustStock(selectedProduct._id, {
+        quantity: serverQty,
+        type: serverType,
         reason,
-        notes
       });
-      
-      // Reset form
-      setSelectedProduct(null);
-      setQuantity(0);
-      setReason('');
-      setNotes('');
-      setAdjustmentType('increase');
-    } catch (error) {
-      console.error('Error adjusting stock:', error);
+      if (res?.success) {
+        toast.success(res.message || 'Stock updated');
+        // Update selectedProduct with new stock
+        setSelectedProduct((prev) => prev ? { ...prev, currentStock: res.data.newStock } : prev);
+        // Reset quantity and notes only
+        setQuantity(0);
+        setNotes('');
+      } else {
+        toast.error('Failed to update stock');
+      }
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || 'Error updating stock';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -114,10 +165,11 @@ export const StockAdjustment = () => {
             {searchTerm && (
               <div className="max-h-60 overflow-y-auto border border-white/10 rounded-xl bg-white/5">
                 {filteredProducts.map((product) => (
-                  <div
+                  <button
+                    type="button"
                     key={product._id}
                     onClick={() => handleProductSelect(product)}
-                    className="p-4 hover:bg-white/10 cursor-pointer border-b border-white/10 last:border-b-0 transition-colors"
+                    className="w-full text-left p-4 hover:bg-white/10 cursor-pointer border-b border-white/10 last:border-b-0 transition-colors"
                   >
                     <div className="flex justify-between items-center">
                       <div>
@@ -128,7 +180,7 @@ export const StockAdjustment = () => {
                         <p className="text-sm font-medium text-[#F8F8F8]">Stock: {product.currentStock}</p>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
                 {filteredProducts.length === 0 && (
                   <div className="p-4 text-center text-[#F8F8F8]/70">
@@ -168,14 +220,15 @@ export const StockAdjustment = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-[#F8F8F8]/80 mb-2">
+        <label htmlFor="adjustmentType" className="block text-sm font-medium text-[#F8F8F8]/80 mb-2">
                   Adjustment Type *
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   <label className="flex items-center space-x-2 cursor-pointer p-3 rounded-xl border border-white/10 hover:bg-white/5 transition-colors">
                     <input
                       type="radio"
-                      name="adjustmentType"
+          name="adjustmentType"
+          id="adjustmentType-increase"
                       value="increase"
                       checked={adjustmentType === 'increase'}
                       onChange={(e) => setAdjustmentType(e.target.value as AdjustmentType)}
@@ -189,7 +242,8 @@ export const StockAdjustment = () => {
                   <label className="flex items-center space-x-2 cursor-pointer p-3 rounded-xl border border-white/10 hover:bg-white/5 transition-colors">
                     <input
                       type="radio"
-                      name="adjustmentType"
+          name="adjustmentType"
+          id="adjustmentType-decrease"
                       value="decrease"
                       checked={adjustmentType === 'decrease'}
                       onChange={(e) => setAdjustmentType(e.target.value as AdjustmentType)}
@@ -203,7 +257,8 @@ export const StockAdjustment = () => {
                   <label className="flex items-center space-x-2 cursor-pointer p-3 rounded-xl border border-white/10 hover:bg-white/5 transition-colors">
                     <input
                       type="radio"
-                      name="adjustmentType"
+          name="adjustmentType"
+          id="adjustmentType-set"
                       value="set"
                       checked={adjustmentType === 'set'}
                       onChange={(e) => setAdjustmentType(e.target.value as AdjustmentType)}
@@ -218,7 +273,7 @@ export const StockAdjustment = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#F8F8F8]/80 mb-2">
+                <label htmlFor="quantity" className="block text-sm font-medium text-[#F8F8F8]/80 mb-2">
                   {adjustmentType === 'set' ? 'New Quantity' : 'Quantity'} *
                 </label>
                 <input
@@ -226,17 +281,19 @@ export const StockAdjustment = () => {
                   value={quantity}
                   onChange={(e) => setQuantity(Number(e.target.value))}
                   placeholder="Enter quantity"
+                  id="quantity"
                   className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-[#F8F8F8]/80 mb-2">
+                <label htmlFor="reason" className="block text-sm font-medium text-[#F8F8F8]/80 mb-2">
                   Reason *
                 </label>
                 <select
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
+                  id="reason"
                   className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
                 >
                   <option value="">Select reason</option>
@@ -252,7 +309,7 @@ export const StockAdjustment = () => {
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-[#F8F8F8]/80 mb-2">
+                <label htmlFor="notes" className="block text-sm font-medium text-[#F8F8F8]/80 mb-2">
                   Additional Notes
                 </label>
                 <textarea
@@ -260,6 +317,7 @@ export const StockAdjustment = () => {
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
                   placeholder="Enter any additional notes..."
+                  id="notes"
                   className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30 resize-none"
                 />
               </div>
@@ -267,7 +325,7 @@ export const StockAdjustment = () => {
           </div>
 
           {/* Stock Summary */}
-          {adjustmentType && quantity && (
+          {quantity > 0 && (
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6">
               <h2 className="text-xl font-semibold text-[#F8F8F8] mb-4">Stock Summary</h2>
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -282,9 +340,7 @@ export const StockAdjustment = () => {
                     {adjustmentType === 'set' && 'Set to '}
                     Adjustment
                   </p>
-                  <p className="text-2xl font-bold text-purple-400">
-                    {adjustmentType === 'set' ? quantity : quantity}
-                  </p>
+                  <p className="text-2xl font-bold text-purple-400">{quantity}</p>
                 </div>
                 <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/30">
                   <p className="text-sm text-green-400 font-medium">New Stock</p>
@@ -293,6 +349,35 @@ export const StockAdjustment = () => {
               </div>
             </div>
           )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading || !reason || !selectedProduct || (adjustmentType !== 'set' && quantity <= 0) || (adjustmentType === 'set' && quantity < 0)}
+              className={`px-4 py-2 rounded-xl border transition-colors ${
+                loading || !reason || !selectedProduct || (adjustmentType !== 'set' && quantity <= 0) || (adjustmentType === 'set' && quantity < 0)
+                  ? 'bg-white/5 border-white/10 text-[#F8F8F8]/50 cursor-not-allowed'
+                  : 'bg-white/20 border-white/20 text-[#F8F8F8] hover:bg-white/30'
+              }`}
+            >
+              {loading ? 'Applying…' : 'Apply Adjustment'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedProduct(null);
+                setQuantity(0);
+                setReason('');
+                setNotes('');
+                setAdjustmentType('increase');
+              }}
+              className="px-4 py-2 rounded-xl border border-white/10 bg-white/5 text-[#F8F8F8]/80 hover:bg-white/10"
+            >
+              Reset
+            </button>
+          </div>
         </>
       )}
     </div>

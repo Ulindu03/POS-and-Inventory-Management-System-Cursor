@@ -4,19 +4,40 @@ import { StockList } from "@/features/inventory/StockList";
 import { StockAdjustment } from "@/features/inventory/StockAdjustment";
 import { LowStockAlert } from "@/features/inventory/LowStockAlert";
 import { StockMovementHistory } from "@/features/inventory/StockMovementHistory";
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { inventoryApi } from '@/lib/api/inventory.api';
+import { useRealtime } from '@/hooks/useRealtime';
 
 type InventoryTab = 'stock' | 'adjust' | 'alerts' | 'history';
 
 const Inventory = () => {
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
+  const [lowCount, setLowCount] = useState<number | null>(null);
 
-  const tabs = [
+  const loadLowCount = useCallback(async () => {
+    try {
+      const res = await inventoryApi.lowStock();
+      const items: any[] = ((res as any)?.data?.items) || [];
+  // Count both low and critical as "low" for the badge
+  const count = items.filter((i: any) => (i.stockStatus === 'low' || i.stockStatus === 'critical')).length;
+  setLowCount(count);
+    } catch {
+      setLowCount(null);
+    }
+  }, []);
+
+  useEffect(() => { loadLowCount(); }, [loadLowCount]);
+  useRealtime((socket) => {
+  socket.on('inventory.low_stock', () => loadLowCount());
+  socket.on('inventory.updated', () => loadLowCount());
+  });
+
+  const tabs = useMemo(() => ([
     { id: 'stock' as const, label: 'Stock List', count: null },
     { id: 'adjust' as const, label: 'Adjust Stock', count: null },
-    { id: 'alerts' as const, label: 'Low Stock', count: 23 },
+    { id: 'alerts' as const, label: 'Low Stock', count: lowCount },
     { id: 'history' as const, label: 'Stock History', count: null },
-  ];
+  ]), [lowCount]);
 
   return (
     <AppLayout>
@@ -50,7 +71,22 @@ const Inventory = () => {
 
         {/* Content */}
         <div className="min-h-[600px]">
-          {activeTab === 'stock' && <StockList />}
+          {activeTab === 'stock' && (
+            <StockList
+              onAdjust={(p) => {
+                try {
+                  const payload = {
+                    _id: p._id,
+                    sku: p.sku,
+                    name: p.name,
+                    currentStock: Number(p.stock?.current ?? 0),
+                  };
+                  sessionStorage.setItem('inventory.adjust.pending', JSON.stringify(payload));
+                } catch {}
+                setActiveTab('adjust');
+              }}
+            />
+          )}
           {activeTab === 'adjust' && <StockAdjustment />}
           {activeTab === 'alerts' && <LowStockAlert />}
           {activeTab === 'history' && <StockMovementHistory />}

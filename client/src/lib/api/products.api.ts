@@ -8,6 +8,9 @@ export interface ProductListItem {
   name: { en: string; si: string };
   price: { retail: number };
   images?: { url: string; isPrimary?: boolean }[];
+  stock?: { current?: number; minimum?: number; reorderPoint?: number };
+  inventory?: { currentStock?: number; minimumStock?: number; reorderPoint?: number; reservedStock?: number; availableStock?: number };
+  effectiveStock?: { current?: number; minimum?: number; reorderPoint?: number; reserved?: number; available?: number };
 }
 
 export const productsApi = {
@@ -30,6 +33,17 @@ export const productsApi = {
   delete: async (id: string) => {
     const { data } = await client.delete(`/products/${id}`);
     return data as { success: boolean; message: string; data: { product: any } };
+  },
+  adjustStock: async (
+    id: string,
+    payload: { quantity: number; type: 'add' | 'remove'; reason: string }
+  ) => {
+    const { data } = await client.patch(`/products/${id}/stock`, payload);
+    return data as {
+      success: boolean;
+      message: string;
+      data: { previousStock: number; newStock: number; quantity: number };
+    };
   },
   generateBarcode: async () => {
     const { data } = await client.get('/products/barcode/generate');

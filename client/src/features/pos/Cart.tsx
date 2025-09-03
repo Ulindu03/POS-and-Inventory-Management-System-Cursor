@@ -2,7 +2,7 @@ import { useCartStore } from '@/store/cart.store';
 import { formatLKR } from '@/lib/utils/currency';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 
-export const Cart = ({ onPay }: { onPay?: () => void }) => {
+export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void; onClear?: () => void; onDamage?: () => void; onHold?: () => void }) => {
   const { items, inc, dec, remove, subtotal, tax, total, discount, setDiscount } = useCartStore();
   const totalAmount = total();
 
@@ -47,14 +47,21 @@ export const Cart = ({ onPay }: { onPay?: () => void }) => {
         <div className="flex justify-between font-semibold text-[#F8F8F8] pt-2 border-t border-white/10">
           <span>Total</span><span>{formatLKR(totalAmount)}</span>
         </div>
-        <button
-          disabled={!items.length || totalAmount <= 0}
-          onClick={onPay}
-          className="w-full mt-2 py-2 rounded-xl font-semibold disabled:opacity-60"
-          style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
-        >
-          Pay
-        </button>
+        <div className="space-y-2">
+          <button
+            disabled={!items.length || totalAmount <= 0}
+            onClick={onPay}
+            className="w-full py-2 rounded-xl font-semibold disabled:opacity-60"
+            style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
+          >
+            Pay
+          </button>
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={onClear} className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20">Clear</button>
+            <button onClick={onDamage} className="px-3 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-600">Damage</button>
+            <button onClick={onHold} className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20">Hold</button>
+          </div>
+        </div>
       </div>
     </div>
   );

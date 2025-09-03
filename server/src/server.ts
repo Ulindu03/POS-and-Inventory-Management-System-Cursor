@@ -424,6 +424,9 @@ const io = new IOServer(httpServer, {
   },
   credentials: true,
   },
+  transports: ['websocket'],
+  pingTimeout: 30000,
+  pingInterval: 25000,
 });
 
 io.on('connection', (socket: Socket) => {

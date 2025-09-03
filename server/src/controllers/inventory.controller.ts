@@ -1,47 +1,116 @@
 import { Request, Response, NextFunction } from 'express';
 import { Product } from '../models/Product.model';
+import { Inventory } from '../models/Inventory.model';
 
 export class InventoryController {
   // GET /api/inventory/low-stock
   static async lowStock(req: Request, res: Response, next: NextFunction) {
     try {
       const { limit = '100' } = req.query as Record<string, string>;
-  // Fetch candidates then filter in JS to compare fields reliably
-  const items = await Product.find({})
-        .select('sku name category supplier stock price')
-        .limit(Math.min(parseInt(String(limit), 10) || 100, 500))
-        .populate('category', 'name')
-        .populate('supplier', 'name supplierCode');
 
-      // Fallback since $lte with field ref is tricky in Mongoose without aggregation
-  const filtered = items.filter((p: any) => {
-        const c = p.stock?.current ?? 0;
-        const min = p.stock?.minimum ?? 0;
-        const rp = p.stock?.reorderPoint ?? 0;
-        return c <= min || c <= rp;
+      // Read from Inventory where thresholds actually live; treat 0 as unset
+      const inventories = await Inventory.find({})
+        .select('product currentStock minimumStock reorderPoint')
+        .limit(Math.min(parseInt(String(limit), 10) || 100, 500))
+        .populate({
+          path: 'product',
+          select: 'sku name category supplier price',
+          populate: [
+            { path: 'category', select: 'name' },
+            { path: 'supplier', select: 'name supplierCode' },
+          ],
+        });
+
+      const filtered = (inventories as any[]).filter((inv) => {
+        const c = Number(inv.currentStock ?? 0);
+        const min = Number(inv.minimumStock ?? 0);
+        const rp = Number(inv.reorderPoint ?? 0);
+        const thresholds = [min, rp].filter((x) => x > 0);
+        if (thresholds.length === 0) return false; // no thresholds set, not a low-stock candidate
+        const maxThresh = Math.max(...thresholds);
+        return c <= maxThresh;
       });
 
-      const mapped = filtered.map((p: any) => {
-        const current = p.stock?.current ?? 0;
-        const min = p.stock?.minimum ?? 0;
-        const rp = p.stock?.reorderPoint ?? 0;
-        const target = Math.max(min, rp);
+  const mapped = filtered.map((inv: any) => {
+        const current = Number(inv.currentStock ?? 0);
+        const min = Number(inv.minimumStock ?? 0);
+        const rp = Number(inv.reorderPoint ?? 0);
+        const target = Math.max(min, rp, 0);
         const suggestedReorder = Math.max(0, target * 2 - current); // simple heuristic
+        const p = inv.product || {};
+  let stockStatus: 'low' | 'critical' | 'out';
+        if (current <= 0) stockStatus = 'out';
+        else {
+          const positives = [min, rp].filter((x) => x > 0);
+          const minThresh = positives.length ? Math.min(...positives) : Infinity;
+          stockStatus = current <= minThresh ? 'critical' : 'low';
+        }
         return {
-          _id: p._id,
-          sku: p.sku,
-          name: p.name,
-          category: p.category,
-          supplier: p.supplier,
+          _id: p._id || inv._id,
+          product: {
+            _id: p._id,
+            sku: p.sku,
+            name: p.name,
+            category: p.category,
+            supplier: p.supplier,
+          },
           currentStock: current,
           minimumStock: min,
           reorderPoint: rp,
           suggestedReorder,
           price: p.price?.cost ?? 0,
+          stockStatus,
         };
       });
 
-      return res.json({ success: true, data: { items: mapped } });
+      // Fallback for products without Inventory records (legacy data)
+      const haveInvIds = new Set((inventories as any[]).map((iv: any) => String(iv.product?._id || iv.product)));
+      const productFallback = await Product.find({ _id: { $nin: Array.from(haveInvIds) } })
+        .select('sku name category supplier price stock')
+        .populate('category', 'name')
+        .populate('supplier', 'name supplierCode')
+        .lean();
+
+      const fallbackLow = (productFallback as any[])
+        .filter((p) => {
+          const c = Number(p?.stock?.current ?? 0);
+          const min = Number(p?.stock?.minimum ?? 0);
+          const rp = Number(p?.stock?.reorderPoint ?? 0);
+          const thresholds = [min, rp].filter((x) => x > 0);
+          if (thresholds.length === 0) return false;
+          const maxThresh = Math.max(...thresholds);
+          return c <= maxThresh;
+        })
+        .map((p) => {
+          const c = Number(p?.stock?.current ?? 0);
+          const min = Number(p?.stock?.minimum ?? 0);
+          const rp = Number(p?.stock?.reorderPoint ?? 0);
+          const positives = [min, rp].filter((x) => x > 0);
+          const minThresh = positives.length ? Math.min(...positives) : Infinity;
+          const target = Math.max(min, rp, 0);
+          const suggestedReorder = Math.max(0, target * 2 - c);
+          const status: 'low' | 'critical' | 'out' = c <= 0 ? 'out' : (c <= minThresh ? 'critical' : 'low');
+          return {
+            _id: p._id,
+            product: {
+              _id: p._id,
+              sku: p.sku,
+              name: p.name,
+              category: p.category,
+              supplier: p.supplier,
+            },
+            currentStock: c,
+            minimumStock: min,
+            reorderPoint: rp,
+            suggestedReorder,
+            price: p.price?.cost ?? 0,
+            stockStatus: status,
+          };
+        });
+
+      const all = [...mapped, ...fallbackLow];
+      const cap = Math.min(parseInt(String(limit), 10) || 100, 500);
+      return res.json({ success: true, data: { items: all.slice(0, cap) } });
     } catch (err) {
       return next(err);
     }

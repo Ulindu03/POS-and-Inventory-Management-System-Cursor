@@ -21,6 +21,7 @@ interface Product {
     en: string;
     si: string;
   };
+  images?: { url: string; alt?: string; isPrimary?: boolean }[];
   category: {
     _id: string;
     name: {
@@ -285,6 +286,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
                 ))
               ) : (
                 filteredProducts.map((product) => {
+                  const thumbUrl = product.images?.find((i) => i.isPrimary)?.url || product.images?.[0]?.url || '';
                   const stockInfo = getStockStatus(product.stock.current);
                   return (
                     <motion.tr
@@ -295,7 +297,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-lg flex items-center justify-center">
+                          <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center">
+                            {thumbUrl && (
+                              <img
+                                src={thumbUrl}
+                                alt={product.name.en}
+                                className="absolute inset-0 w-full h-full object-cover"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                              />
+                            )}
                             <Package className="w-5 h-5 text-[#F8F8F8]/70" />
                           </div>
                           <div>

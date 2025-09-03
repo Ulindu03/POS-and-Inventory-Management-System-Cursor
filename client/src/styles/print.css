@@ -2,16 +2,22 @@
   /* Print only the designated print area */
   body * { visibility: hidden !important; }
   .print-area, .print-area * { visibility: visible !important; }
-  .print-area { position: absolute; inset: 0 auto auto 0; background: #fff; }
+  .print-area { position: fixed; inset: 0; width: 100%; background: #fff; }
 
   .no-print { display: none !important; }
   .only-print { display: block !important; }
 
-  /* Named page for thermal receipt (opt-in) */
+  /* Default all pages to 80mm thermal size; many Chromium builds ignore named pages */
+  @page { size: 80mm auto; margin: 0; }
+  /* Keep named page as a hint for engines that support it */
   @page receipt { size: 80mm auto; margin: 0; }
-  .receipt { page: receipt; width: 80mm; padding: 2mm 2mm 4mm 2mm; color: #000; font-family: 'Consolas', 'Courier New', monospace; }
-  .receipt h1 { font-size: 16px; margin: 0 0 6px; font-family: Arial, Helvetica, sans-serif; }
-  .receipt .muted { color: #000; opacity: 0.8; font-size: 11px; }
+
+  .receipt { page: receipt; width: 80mm; padding: 2mm 2mm 4mm 2mm; color: #000; font-family: 'Consolas', 'Courier New', monospace; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .receipt h1 { font-size: 16px; margin: 0 0 4px; font-family: Arial, Helvetica, sans-serif; }
+  .receipt .store-block { text-align: center; margin-bottom: 6px; }
+  .receipt .store-block img { width: 28mm; height: auto; object-fit: contain; margin: 0 auto 2mm; }
+  .receipt .muted { color: #000; opacity: 0.85; font-size: 11px; }
+  .receipt .small { font-size: 10px; }
   .receipt .row { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; }
   .receipt .row strong { font-weight: 700; }
   .receipt hr { border: 0; border-top: 1px dashed #000; margin: 6px 0; }
@@ -21,16 +27,32 @@
   .receipt th.price, .receipt td.price { width: 18mm; text-align: right; }
   .receipt th.total, .receipt td.total { width: 22mm; text-align: right; }
   .receipt .item-name { word-break: break-word; }
+  .receipt .footer { text-align: center; margin-top: 8px; }
+
+  /* Fit-to-page fallback: when body has .print-fit, stretch receipt to full page width */
+  body.print-fit .receipt { width: 100% !important; page: auto; padding-left: 10mm; padding-right: 10mm; }
+  body.print-fit .receipt .qty { width: auto; }
+  body.print-fit .receipt .price { width: auto; }
+  body.print-fit .receipt .total { width: auto; }
+
+  /* Thermal-fit: fill the roll width during print (keeps screen preview unchanged) */
+  body.print-thermal-fit .receipt { width: 100% !important; padding-left: 2mm; padding-right: 2mm; }
 
 /* Screen preview to match thermal width */
 @media screen {
   .receipt { width: 80mm; margin: 0 auto; background: #fff; color: #000; padding: 8px; border-radius: 6px; }
+  .receipt .store-block img { width: 110px; height: auto; object-fit: contain; margin: 0 auto 6px; display: block; }
+  .receipt h1 { font-size: 18px; margin: 0 0 4px; font-family: Arial, Helvetica, sans-serif; }
   .receipt hr { border: 0; border-top: 1px dashed #000; margin: 8px 0; }
-  .receipt .row { font-family: 'Consolas', 'Courier New', monospace; }
+  .receipt .row { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; }
+  .receipt th, .receipt td { font-size: 12px; }
 }
 
 /* Optional: 58mm support (apply class thermal-58 on receipt wrapper if needed) */
 .thermal-58 { width: 58mm !important; }
+@media print {
+  .thermal-58 { width: 58mm !important; page: receipt; }
+}
 
 
 /* Sticker Labels: A4 and Roll support */

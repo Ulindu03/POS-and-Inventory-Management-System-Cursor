@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Package, ShoppingCart, Eye } from 'lucide-react';
 import { inventoryApi } from '@/lib/api/inventory.api';
 import { createPurchaseOrder } from '@/lib/api/purchaseOrders.api';
+import { useRealtime } from '@/hooks/useRealtime';
 
 interface LowStockItem {
   _id: string;
@@ -28,18 +29,24 @@ export const LowStockAlert = () => {
   const [counts, setCounts] = useState({ low: 0, critical: 0, out: 0 });
   const skeletonKeys = ['s1', 's2', 's3', 's4', 's5'];
 
-  useEffect(() => {
-    const loadLowStockItems = async () => {
+  const loadLowStockItems = useCallback(async () => {
       setLoading(true);
       try {
-        const res = await inventoryApi.lowStock();
-        const items = (res?.data || []).map((row: any) => {
+  const res = await inventoryApi.lowStock();
+  const rows: any[] = ((res as any)?.data?.items) || [];
+  const items = rows.map((row: any) => {
           const current = row.currentStock ?? row.stock?.current ?? 0;
-          const min = row.minimumStock ?? row.stock?.min ?? 0;
+          const min = row.minimumStock ?? row.stock?.minimum ?? 0;
+          const rp = row.reorderPoint ?? row.stock?.reorderPoint ?? 0;
           let status: StockStatus;
           if (current === 0) status = 'out';
-          else if (current <= min) status = 'critical';
-          else status = 'low';
+          else {
+            const thresholds = [Number(min), Number(rp)].filter((x) => x > 0);
+            if (thresholds.length === 0) status = 'low';
+            else if (current <= Math.min(...thresholds)) status = 'critical';
+            else if (current <= Math.max(...thresholds)) status = 'low';
+            else status = 'low';
+          }
           return {
           _id: row.product?._id || row._id,
           product: {
@@ -59,7 +66,7 @@ export const LowStockAlert = () => {
         }) as LowStockItem[];
         setLowStockItems(items);
         const c = {
-          low: items.filter((i: LowStockItem) => i.stockStatus === 'low').length,
+          low: items.filter((i: LowStockItem) => i.stockStatus === 'low' || i.stockStatus === 'critical').length,
           critical: items.filter((i: LowStockItem) => i.stockStatus === 'critical').length,
           out: items.filter((i: LowStockItem) => i.stockStatus === 'out').length,
         } as any;
@@ -69,24 +76,33 @@ export const LowStockAlert = () => {
       } finally {
         setLoading(false);
       }
-    };
-
-    loadLowStockItems();
   }, []);
+
+  useEffect(() => { loadLowStockItems(); }, [loadLowStockItems]);
+
+  // Realtime refresh on low stock events
+  useRealtime((socket) => {
+    socket.on('inventory.low_stock', () => {
+      loadLowStockItems();
+    });
+    socket.on('inventory.updated', () => {
+      loadLowStockItems();
+    });
+  });
 
   const handleCreatePOs = async () => {
     try {
-      const res = await inventoryApi.reorderSuggestions();
-      const groups = (res?.data?.suggestions || []) as Array<{ supplier: any; items: any[] }>; 
+  const res = await inventoryApi.reorderSuggestions();
+  const groups = (res?.data?.suggestions || []) as Array<{ supplier: any; items: any[] }>; 
       for (const g of groups) {
         if (!g.items || g.items.length === 0) continue;
         const payload = {
           supplier: g.supplier?._id || g.supplier,
           items: g.items.map((it: any) => ({
-            product: it.product?._id || it.product,
-            quantity: it.quantity || it.suggestedQuantity || it.suggestedReorder || 0,
-            unitCost: it.product?.price?.cost || 0,
-            totalCost: (it.product?.price?.cost || 0) * (it.quantity || it.suggestedQuantity || it.suggestedReorder || 0),
+    product: it.product?._id || it.product,
+    quantity: it.quantity || 0,
+    unitCost: it.unitCost || 0,
+    totalCost: (it.unitCost || 0) * (it.quantity || 0),
           })),
           status: 'draft',
           orderDate: new Date().toISOString(),
@@ -104,14 +120,21 @@ export const LowStockAlert = () => {
       // refresh list
       await new Promise((r) => setTimeout(r, 250));
       // naive reload of alerts
-      const res2 = await inventoryApi.lowStock();
-      const items2 = (res2?.data || []).map((row: any) => {
+  const res2 = await inventoryApi.lowStock();
+  const rows2: any[] = ((res2 as any)?.data?.items) || [];
+  const items2 = rows2.map((row: any) => {
         const current = row.currentStock ?? row.stock?.current ?? 0;
-        const min = row.minimumStock ?? row.stock?.min ?? 0;
-  let status: StockStatus;
-  if (current === 0) status = 'out';
-  else if (current <= min) status = 'critical';
-  else status = 'low';
+        const min = row.minimumStock ?? row.stock?.minimum ?? 0;
+        const rp = row.reorderPoint ?? row.stock?.reorderPoint ?? 0;
+        let status: StockStatus;
+        if (current === 0) status = 'out';
+        else {
+          const thresholds = [Number(min), Number(rp)].filter((x) => x > 0);
+          if (thresholds.length === 0) status = 'low';
+          else if (current <= Math.min(...thresholds)) status = 'critical';
+          else if (current <= Math.max(...thresholds)) status = 'low';
+          else status = 'low';
+        }
         return {
           _id: row.product?._id || row._id,
           product: {

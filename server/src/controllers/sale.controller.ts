@@ -1,9 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { Sale } from '../models/Sale.model';
 import { Product } from '../models/Product.model';
+import { Inventory } from '../models/Inventory.model';
 import { User } from '../models/User.model';
 import { DiscountService } from '../services/discount.service';
 import { Settings } from '../models/Settings.model';
+import { StockMovement } from '../models/StockMovement.model';
+import mongoose from 'mongoose';
+import { emit as emitRealtime } from '../services/realtime.service';
 
 const nextInvoiceNo = async (): Promise<string> => {
   const last = await Sale.findOne().sort({ createdAt: -1 }).select('invoiceNo');
@@ -11,6 +15,88 @@ const nextInvoiceNo = async (): Promise<string> => {
   const next = (n ? parseInt(n, 10) + 1 : 1).toString().padStart(6, '0');
   return `INV-${next}`;
 };
+
+async function applySaleStockMovement(params: {
+  session: mongoose.ClientSession;
+  productDoc: any;
+  item: { product: string; quantity: number };
+  cashierId: string;
+  invoiceNo: string;
+  saleId: any;
+}) {
+  const { session, productDoc: p, item: i, cashierId, invoiceNo, saleId } = params;
+  const track = p?.trackInventory !== false && !p?.isDigital;
+  if (!track) return;
+  const qty = Number(i.quantity);
+  const prev = p?.stock?.current ?? 0;
+  const next = prev - qty;
+  await Product.updateOne({ _id: i.product }, { $inc: { 'stock.current': -qty } }, { session });
+  p.stock.current = next;
+  // Update Inventory in parallel (if exists)
+  let invAfter: { currentStock: number; minimumStock: number; reorderPoint: number } | null = null;
+  try {
+    let inv = await Inventory.findOne({ product: i.product }).session(session);
+    if (!inv) {
+      // create inventory record if missing
+      inv = new Inventory({
+        product: i.product,
+        currentStock: Math.max(0, next),
+        minimumStock: Number(p?.stock?.minimum ?? 0),
+        reorderPoint: Number(p?.stock?.reorderPoint ?? 0),
+        reservedStock: 0,
+        availableStock: Math.max(0, next),
+        updatedAt: new Date(),
+      });
+    } else {
+      inv.currentStock = Math.max(0, (inv.currentStock ?? 0) - qty);
+      // availableStock typically = current - reserved; decrease by qty but not below 0
+      inv.availableStock = Math.max(0, (inv.availableStock ?? (inv.currentStock ?? 0)) - qty);
+      inv.updatedAt = new Date();
+    }
+    await inv.save({ session });
+    invAfter = { currentStock: inv.currentStock ?? 0, minimumStock: inv.minimumStock ?? 0, reorderPoint: inv.reorderPoint ?? 0 };
+  } catch {}
+  await StockMovement.create([
+    {
+      product: i.product,
+      type: 'sale',
+      quantity: -qty,
+      previousStock: prev,
+      newStock: next,
+      reference: invoiceNo,
+      referenceId: saleId,
+      referenceType: 'Sale',
+      performedBy: cashierId,
+    }
+  ], { session });
+
+  // Notify clients that inventory changed
+  setTimeout(() => {
+    try {
+      emitRealtime('inventory.updated', {
+        productId: String(i.product),
+        previous: prev,
+        current: next,
+        invoiceNo,
+        at: new Date().toISOString(),
+      });
+    } catch {}
+  }, 0);
+  // Low-stock event based on Inventory thresholds if available, else fallback to product reorderPoint
+  const minT = Number(invAfter?.minimumStock ?? 0);
+  const rpT = Number(invAfter?.reorderPoint ?? (p?.stock?.reorderPoint ?? 0));
+  const thresholds = [minT, rpT].filter((x) => x > 0);
+  const maxThresh = thresholds.length ? Math.max(...thresholds) : 0;
+  if (maxThresh > 0 && next <= maxThresh) {
+    setTimeout(() => {
+      try {
+        emitRealtime('inventory.low_stock', {
+          productId: String(i.product), previous: prev, current: next, threshold: maxThresh, invoiceNo, at: new Date().toISOString(),
+        });
+      } catch {}
+    }, 0);
+  }
+}
 
 export class SaleController {
   static async create(req: Request & { user?: any }, res: Response, next: NextFunction) {
@@ -20,9 +106,28 @@ export class SaleController {
         return res.status(400).json({ success: false, message: 'No items' });
       }
 
-      const productIds = items.map((i) => i.product);
-  const products = await Product.find({ _id: { $in: productIds } }).select('price.cost price.retail stock.current');
-  const costMap = new Map(products.map((p) => [p._id.toString(), (p as any).price?.cost || 0]));
+    const productIds = items.map((i) => i.product);
+  const products = await Product.find({ _id: { $in: productIds } }).select('price.cost price.retail stock.current stock.reorderPoint trackInventory allowBackorder isDigital');
+    // Load inventory snapshots to validate using available/current stock if present
+    const inventories = await Inventory.find({ product: { $in: productIds } }).select('product currentStock availableStock');
+      const productMap = new Map(products.map((p) => [p._id.toString(), p]));
+      const costMap = new Map(products.map((p) => [p._id.toString(), (p as any).price?.cost || 0]));
+    const invMap = new Map(inventories.map((iv: any) => [iv.product.toString(), iv]));
+
+      // Validate stock availability before proceeding (if tracking inventory and backorder not allowed)
+      for (const it of items) {
+        const p = productMap.get(String(it.product));
+        if (!p) return res.status(400).json({ success: false, message: 'Invalid product in items' });
+        const track = (p as any).trackInventory !== false && !(p as any).isDigital;
+        const allow = Boolean((p as any).allowBackorder);
+        if (track && !allow) {
+          const inv = invMap.get(String(it.product)) as any | undefined;
+          const current = (inv?.availableStock ?? inv?.currentStock ?? (p as any).stock?.current ?? 0);
+          if (current < Number(it.quantity)) {
+            return res.status(409).json({ success: false, message: `Insufficient stock for product ${(p as any)._id}`, data: { productId: (p as any)._id, available: current } });
+          }
+        }
+      }
 
       const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
       let discountAmount = Number(discount) || 0;
@@ -36,8 +141,8 @@ export class SaleController {
       const nbt = 0; // simplified
   const total = Math.max(0, subtotal + vat + nbt - discountAmount);
 
-      const invoiceNo = await nextInvoiceNo();
-      const cashierId = req.user?.userId || (await User.findOne().select('_id'))?._id; // fallback
+  const invoiceNo = await nextInvoiceNo();
+  const cashierId = req.user?.userId || (await User.findOne().select('_id'))?._id; // fallback
 
   type InPayment = { method: string; amount: number; reference?: string; change?: number; cardType?: string; transactionId?: string };
   const incomingPayments: InPayment[] = [];
@@ -50,7 +155,13 @@ export class SaleController {
   const baseCode = s?.currency?.primary || 'LKR';
   const code = currency?.code || baseCode;
   const rate = currency?.rateToBase ?? (s?.currency?.fxRates?.get?.(code) || 1);
-  const doc = await Sale.create({
+  // Try a transaction to keep sale + stock updates consistent; fallback to non-transaction if not supported
+  let doc: any;
+  try {
+    const session = await mongoose.startSession();
+    await session.withTransaction(async () => {
+      doc = await Sale.create([
+        {
         invoiceNo,
         customer: customer || null,
         cashier: cashierId,
@@ -71,7 +182,109 @@ export class SaleController {
   payment: payment || undefined,
   payments: incomingPayments,
         status: 'completed',
+        }
+      ], { session });
+      doc = Array.isArray(doc) ? doc[0] : doc;
+
+      // Adjust inventory and create stock movements
+      for (const i of items) {
+        const p = productMap.get(String(i.product)) as any;
+        await applySaleStockMovement({ session, productDoc: p, item: i, cashierId: String(cashierId), invoiceNo, saleId: doc._id });
+      }
+    });
+  } catch (txErr: any) {
+    // Fallback when MongoDB doesn't support transactions (e.g., standalone server)
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[sales.create] Transaction not used, falling back. Reason:', txErr?.message || txErr);
+    }
+    doc = await Sale.create({
+      invoiceNo,
+      customer: customer || null,
+      cashier: cashierId,
+      items: items.map((i: any) => ({
+        product: i.product,
+        quantity: i.quantity,
+        price: i.price,
+        cost: costMap.get(i.product) || 0,
+        discount: i.discount || 0,
+        tax: { vat: 0, nbt: 0 },
+        total: i.price * i.quantity - (i.discount || 0),
+      })),
+      subtotal,
+      tax: { vat, nbt },
+      currency: { code, rateToBase: rate, baseCode },
+      discount,
+      total,
+      payment: payment || undefined,
+      payments: incomingPayments,
+      status: 'completed',
+    });
+    // Adjust inventory and create stock movements (without session)
+    for (const i of items) {
+      const p = productMap.get(String(i.product)) as any;
+      const track = p?.trackInventory !== false && !p?.isDigital;
+      if (!track) continue;
+      const qty = Number(i.quantity);
+      const prev = p?.stock?.current ?? 0;
+      const next = prev - qty;
+      await Product.updateOne({ _id: i.product }, { $inc: { 'stock.current': -qty } });
+      // Update Inventory (non-transaction path)
+      try {
+        let inv = await Inventory.findOne({ product: i.product });
+        if (!inv) {
+          inv = new Inventory({
+            product: i.product,
+            currentStock: Math.max(0, next),
+            minimumStock: Number(p?.stock?.minimum ?? 0),
+            reorderPoint: Number(p?.stock?.reorderPoint ?? 0),
+            reservedStock: 0,
+            availableStock: Math.max(0, next),
+            updatedAt: new Date(),
+          });
+        } else {
+          const curPrev = inv.currentStock ?? 0;
+          inv.currentStock = Math.max(0, curPrev - qty);
+          inv.availableStock = Math.max(0, (inv.availableStock ?? curPrev) - qty);
+          inv.updatedAt = new Date();
+        }
+        await inv.save();
+        // recompute thresholds and emit low-stock if needed
+        const minT = Number(inv.minimumStock ?? 0);
+        const rpT = Number(inv.reorderPoint ?? (p?.stock?.reorderPoint ?? 0));
+        const thresholds = [minT, rpT].filter((x) => x > 0);
+        const maxThresh = thresholds.length ? Math.max(...thresholds) : 0;
+        if (maxThresh > 0 && (inv.currentStock ?? 0) <= maxThresh) {
+          setTimeout(() => {
+            try {
+              emitRealtime('inventory.low_stock', {
+                productId: String(i.product), previous: prev, current: inv.currentStock ?? next, threshold: maxThresh, invoiceNo, at: new Date().toISOString(),
+              });
+            } catch {}
+          }, 0);
+        }
+      } catch {}
+      p.stock.current = next;
+      await StockMovement.create({
+        product: i.product,
+        type: 'sale',
+        quantity: -qty,
+        previousStock: prev,
+        newStock: next,
+        reference: invoiceNo,
+        referenceId: doc._id,
+        referenceType: 'Sale',
+        performedBy: cashierId,
       });
+      setTimeout(() => {
+        try {
+          emitRealtime('inventory.updated', {
+            productId: String(i.product), previous: prev, current: next, invoiceNo, at: new Date().toISOString(),
+          });
+        } catch {}
+      }, 0);
+  // inventory.low_stock handled above after inventory save
+    }
+  }
 
   return res.status(201).json({ success: true, data: { sale: { id: doc._id, invoiceNo: doc.invoiceNo, total: doc.total } } });
     } catch (err) {
@@ -199,6 +412,56 @@ export class SaleController {
       if ((sale as any).total === 0) (sale as any).status = 'refunded';
 
       await sale.save();
+
+      // Restock returned quantities and log movements
+      const cashierId = req.user?.userId || (await User.findOne().select('_id'))?._id;
+      for (const it of items) {
+        const prod = await Product.findById(it.product).select('trackInventory isDigital stock.current');
+        const track = (prod as any)?.trackInventory !== false && !(prod as any)?.isDigital;
+        if (!track) continue;
+        const qty = Number(it.quantity);
+        const prev = (prod as any)?.stock?.current ?? 0;
+        const next = prev + qty;
+        await Product.updateOne({ _id: it.product }, { $inc: { 'stock.current': qty } });
+        // Update Inventory as well
+        try {
+          let inv = await Inventory.findOne({ product: it.product });
+          if (!inv) {
+            inv = new Inventory({
+              product: it.product,
+              currentStock: Math.max(0, prev + qty),
+              minimumStock: Number((prod as any)?.stock?.minimum ?? 0),
+              reorderPoint: Number((prod as any)?.stock?.reorderPoint ?? 0),
+              reservedStock: 0,
+              availableStock: Math.max(0, prev + qty),
+              updatedAt: new Date(),
+            });
+          } else {
+            const curPrev = inv.currentStock ?? 0;
+            inv.currentStock = Math.max(0, curPrev + qty);
+            inv.availableStock = Math.max(0, (inv.availableStock ?? curPrev) + qty);
+            inv.updatedAt = new Date();
+          }
+          await inv.save();
+        } catch {}
+        await StockMovement.create({
+          product: it.product,
+          type: 'return',
+          quantity: qty,
+          previousStock: prev,
+          newStock: next,
+          reference: String(reference || sale.invoiceNo),
+          referenceId: sale._id,
+          referenceType: 'Sale',
+          performedBy: cashierId,
+          reason: 'customer_return',
+        });
+        setTimeout(() => {
+          try {
+            emitRealtime('inventory.updated', { productId: String(it.product), previous: prev, current: next, refundOf: sale._id, at: new Date().toISOString() });
+          } catch {}
+        }, 0);
+      }
       return res.json({ success: true, data: { refund: { total: returnTotal }, sale: { id: sale._id, total: (sale as any).total, status: (sale as any).status } } });
     } catch (err) {
       return next(err);

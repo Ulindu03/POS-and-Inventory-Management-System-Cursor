@@ -6,6 +6,7 @@ import { UnitBarcode } from '../models/UnitBarcode.model';
 import { Category } from '../models/Category.model';
 import { Inventory } from '../models/Inventory.model';
 import { StockMovement } from '../models/StockMovement.model';
+import { emit as emitRealtime } from '../services/realtime.service';
 import fs from 'fs';
 import { getPublicUrl } from '../utils/upload';
 
@@ -38,16 +39,53 @@ export class ProductController {
       const take = Math.min(parseInt(limit, 10) || 24, 100);
       const skip = (Math.max(parseInt(page, 10) || 1, 1) - 1) * take;
 
-      const [items, total] = await Promise.all([
+      const [productsRaw, total] = await Promise.all([
         Product.find(filters)
           .populate('category', 'name')
           .populate('supplier', 'name supplierCode')
           .select('sku barcode name description price stock category supplier images brand unit isActive createdAt updatedAt')
           .sort({ updatedAt: -1 })
           .skip(skip)
-          .limit(take),
+          .limit(take)
+          .lean(),
         Product.countDocuments(filters),
       ]);
+
+      // Attach inventory snapshot so client can rely on Inventory as source of truth
+      const ids = productsRaw.map((p: any) => p._id);
+      const invList = await Inventory.find({ product: { $in: ids } })
+        .select('product currentStock minimumStock reorderPoint reservedStock availableStock')
+        .lean();
+      const invMap = new Map(invList.map((i: any) => [String(i.product), i]));
+      const items = productsRaw.map((p: any) => {
+        const inv = invMap.get(String(p._id));
+        if (inv) {
+          const merged = { ...p } as any;
+          // Add inventory snapshot
+          merged.inventory = {
+            currentStock: inv.currentStock ?? 0,
+            minimumStock: inv.minimumStock ?? 0,
+            reorderPoint: inv.reorderPoint ?? 0,
+            reservedStock: inv.reservedStock ?? 0,
+            availableStock: inv.availableStock ?? Math.max((inv.currentStock ?? 0) - (inv.reservedStock ?? 0), 0)
+          };
+          // Override stock fields to reflect inventory (combine details)
+          merged.stock = merged.stock || {};
+          merged.stock.current = merged.inventory.currentStock;
+          merged.stock.minimum = merged.inventory.minimumStock;
+          merged.stock.reorderPoint = merged.inventory.reorderPoint;
+          // Provide a single effectiveStock field too
+          merged.effectiveStock = {
+            current: merged.inventory.currentStock,
+            minimum: merged.inventory.minimumStock,
+            reorderPoint: merged.inventory.reorderPoint,
+            reserved: merged.inventory.reservedStock,
+            available: merged.inventory.availableStock,
+          };
+          return merged;
+        }
+        return p;
+      });
 
   return res.json({ success: true, data: { items, total, page: parseInt(page, 10) || 1, limit: take } });
     } catch (err) {
@@ -648,6 +686,30 @@ export class ProductController {
         performedBy: req.user?.userId,
         referenceType: 'Adjustment'
       });
+
+      // Emit realtime events for UI sync
+      try {
+        emitRealtime('inventory.updated', {
+          productId: String(id),
+          previous: previousStock,
+          current: newStock,
+          reason,
+          via: 'adjustment',
+          at: new Date().toISOString(),
+        });
+        const threshold = Math.min(
+          Number.isFinite(Number(inventory.reorderPoint)) && Number(inventory.reorderPoint) > 0 ? Number(inventory.reorderPoint) : Infinity,
+          Number.isFinite(Number(inventory.minimumStock)) && Number(inventory.minimumStock) > 0 ? Number(inventory.minimumStock) : Infinity,
+        );
+        if (Number.isFinite(threshold) && newStock <= threshold) {
+          emitRealtime('inventory.low_stock', {
+            productId: String(id),
+            current: newStock,
+            threshold,
+            at: new Date().toISOString(),
+          });
+        }
+      } catch {}
 
   return res.json({
         success: true,

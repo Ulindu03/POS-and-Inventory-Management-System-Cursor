@@ -47,7 +47,7 @@ export const BarcodeScanner = () => {
           {active ? 'Stop' : 'Start'}
         </button>
       </div>
-      <div id={divId.current} style={{ width: '100%', minHeight: 280 }} />
+  <div id={divId.current} style={{ width: '100%', minHeight: 180 }} />
     </div>
   );
 };

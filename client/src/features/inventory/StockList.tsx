@@ -1,88 +1,77 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
-import { formatLKR } from '@/lib/utils/currency';
+import { productsApi } from '@/lib/api/products.api';
+import { useRealtime } from '@/hooks/useRealtime';
 
+type Status = 'good' | 'low' | 'critical' | 'out';
 interface StockItem {
   _id: string;
-  product: {
-    _id: string;
-    sku: string;
-    name: { en: string; si: string };
-    category: string;
-  };
-  currentStock: number;
-  minimumStock: number;
-  reorderPoint: number;
-  lastUpdated: string;
-  status: 'good' | 'low' | 'critical' | 'out';
+  sku: string;
+  name: { en: string; si: string };
+  category?: { _id?: string; name?: { en: string; si: string } } | string;
+  stock: { current?: number; minimum?: number; reorderPoint?: number };
+  status: Status;
 }
 
-export const StockList = () => {
+export const StockList = ({ onAdjust }: { onAdjust?: (p: StockItem) => void }) => {
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  useEffect(() => {
-    // Simulate API call - replace with your actual inventory API
-    const loadStock = async () => {
-      setLoading(true);
-      try {
-        // Mock data - replace with actual API call
-        const mockData: StockItem[] = [
-          {
-            _id: '1',
-            product: {
-              _id: '1',
-              sku: 'ELK001',
-              name: { en: 'Samsung Galaxy S24', si: 'සැම්සුන් ගැලැක්සි' },
-              category: 'Electronics'
-            },
-            currentStock: 25,
-            minimumStock: 10,
-            reorderPoint: 15,
-            lastUpdated: new Date().toISOString(),
-            status: 'good'
-          },
-          {
-            _id: '2',
-            product: {
-              _id: '2',
-              sku: 'ELK002',
-              name: { en: 'iPhone 15 Pro', si: 'අයිෆෝන් 15 ප්‍රෝ' },
-              category: 'Electronics'
-            },
-            currentStock: 5,
-            minimumStock: 10,
-            reorderPoint: 15,
-            lastUpdated: new Date().toISOString(),
-            status: 'low'
-          },
-          {
-            _id: '3',
-            product: {
-              _id: '3',
-              sku: 'ELK003',
-              name: { en: 'Dell XPS 13', si: 'ඩෙල් XPS 13' },
-              category: 'Electronics'
-            },
-            currentStock: 0,
-            minimumStock: 5,
-            reorderPoint: 8,
-            lastUpdated: new Date().toISOString(),
-            status: 'out'
-          }
-        ];
-        setItems(mockData);
-      } catch (error) {
-        console.error('Error loading stock:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const computeStatus = useCallback((current?: number, min?: number, rp?: number): Status => {
+    const c = Number.isFinite(Number(current)) ? Number(current) : 0;
+    const m = Number.isFinite(Number(min)) ? Number(min) : 0;
+    const r = Number.isFinite(Number(rp)) ? Number(rp) : 0;
+    if (c <= 0) return 'out';
+    const thresholds = [m, r].filter((x) => x > 0);
+    if (thresholds.length === 0) return 'good';
+    const minThresh = Math.min(...thresholds);
+    const maxThresh = Math.max(...thresholds);
+    if (c <= minThresh) return 'critical';
+    if (c <= maxThresh) return 'low';
+    return 'good';
+  }, []);
 
+  const loadStock = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await productsApi.list({ q: searchTerm || undefined, limit: 100 });
+      const rows = res.data.items;
+      const mapped: StockItem[] = rows.map((p: any) => {
+  const cur = p.effectiveStock?.current ?? p.inventory?.currentStock ?? p.stock?.current ?? 0;
+  const min = p.effectiveStock?.minimum ?? p.inventory?.minimumStock ?? p.stock?.minimum ?? 0;
+  const rp = p.effectiveStock?.reorderPoint ?? p.inventory?.reorderPoint ?? p.stock?.reorderPoint ?? 0;
+        return ({
+        _id: p._id,
+        sku: p.sku,
+        name: p.name,
+        category: p.category,
+        stock: { current: cur, minimum: min, reorderPoint: rp },
+        status: computeStatus(cur, min, rp),
+      });
+      });
+      setItems(mapped);
+    } catch (error) {
+      console.error('Error loading stock:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, computeStatus]);
+
+  useEffect(() => {
     loadStock();
-  }, [searchTerm, statusFilter]);
+  }, [loadStock, statusFilter]);
+
+  // Realtime refresh on low stock events
+  useRealtime((socket) => {
+    socket.on('inventory.low_stock', () => {
+      loadStock();
+    });
+    socket.on('inventory.updated', () => {
+      loadStock();
+    });
+  });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -104,15 +93,21 @@ export const StockList = () => {
     }
   };
 
-  const filteredItems = items.filter(item => {
-    const matchesSearch = item.product.name.en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredItems = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return items.filter((item) => {
+      const matchesSearch = item.name.en.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'all' || item.status === (statusFilter as Status);
+      return matchesSearch && matchesStatus;
+    });
+  }, [items, searchTerm, statusFilter]);
 
   return (
     <div className="space-y-4">
+  { /* skeleton keys to satisfy key uniqueness without using array index */ }
+  { /* eslint-disable-next-line @typescript-eslint/no-unused-vars */ }
+  { /* local constant only used in loading state */ }
+      
       {/* Search and Filters */}
       <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4">
         <div className="flex gap-4">
@@ -140,7 +135,7 @@ export const StockList = () => {
       </div>
 
       {/* Stock Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4">
           <div className="flex items-center">
             <div className="p-3 bg-green-500/20 rounded-xl mr-3">
@@ -148,7 +143,7 @@ export const StockList = () => {
             </div>
             <div>
               <p className="text-sm text-[#F8F8F8]/70">Good Stock</p>
-              <p className="text-2xl font-bold text-green-400">127</p>
+              <p className="text-2xl font-bold text-green-400">{items.filter(i => i.status === 'good').length}</p>
             </div>
           </div>
         </div>
@@ -160,7 +155,7 @@ export const StockList = () => {
             </div>
             <div>
               <p className="text-sm text-[#F8F8F8]/70">Low Stock</p>
-              <p className="text-2xl font-bold text-yellow-400">23</p>
+      <p className="text-2xl font-bold text-yellow-400">{items.filter(i => i.status === 'low' || i.status === 'critical').length}</p>
             </div>
           </div>
         </div>
@@ -172,7 +167,7 @@ export const StockList = () => {
             </div>
             <div>
               <p className="text-sm text-[#F8F8F8]/70">Critical</p>
-              <p className="text-2xl font-bold text-orange-400">8</p>
+              <p className="text-2xl font-bold text-orange-400">{items.filter(i => i.status === 'critical').length}</p>
             </div>
           </div>
         </div>
@@ -184,7 +179,7 @@ export const StockList = () => {
             </div>
             <div>
               <p className="text-sm text-[#F8F8F8]/70">Out of Stock</p>
-              <p className="text-2xl font-bold text-red-400">12</p>
+              <p className="text-2xl font-bold text-red-400">{items.filter(i => i.status === 'out').length}</p>
             </div>
           </div>
         </div>
@@ -218,8 +213,8 @@ export const StockList = () => {
             </thead>
             <tbody className="divide-y divide-white/10">
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
+                ['s1','s2','s3','s4','s5'].map((key) => (
+                  <tr key={key} className="animate-pulse">
                     <td className="px-6 py-4">
                       <div className="h-4 bg-white/10 rounded w-32"></div>
                     </td>
@@ -245,24 +240,20 @@ export const StockList = () => {
                   <tr key={item._id} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
                       <div>
-                        <div className="font-medium text-[#F8F8F8]">
-                          {item.product.name.en}
-                        </div>
-                        <div className="text-sm text-[#F8F8F8]/70">
-                          {item.product.category}
-                        </div>
+                        <div className="font-medium text-[#F8F8F8]">{item.name.en}</div>
+                        <div className="text-sm text-[#F8F8F8]/70">{(typeof item.category === 'string' ? item.category : (item.category as any)?.name?.en) || '—'}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-[#F8F8F8]">
-                      {item.product.sku}
+                      {item.sku}
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-lg font-semibold text-[#F8F8F8]">
-                        {item.currentStock}
+                        {item.stock.current ?? 0}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-[#F8F8F8]/70">
-                      {item.minimumStock}
+                      {item.stock.minimum ?? 0}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(item.status)}`}>
@@ -271,7 +262,10 @@ export const StockList = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <button className="px-3 py-1 text-sm bg-white/10 hover:bg-white/20 rounded-lg border border-white/10 transition-colors">
+                      <button
+                        onClick={() => onAdjust?.(item)}
+                        className="px-3 py-1 text-sm bg-white/10 hover:bg-white/20 rounded-lg border border-white/10 transition-colors"
+                      >
                         Adjust
                       </button>
                     </td>

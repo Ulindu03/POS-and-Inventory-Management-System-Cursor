@@ -1,6 +1,7 @@
 import { useCartStore } from '@/store/cart.store';
 import { formatLKR } from '@/lib/utils/currency';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { salesApi, PaymentMethod } from '@/lib/api/sales.api';
 
 interface Props {
@@ -93,7 +94,24 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
                   payments: paid,
                   discountCode: promo || undefined,
                 });
-                onComplete({ invoiceNo: res.data.sale.invoiceNo, id: res.data.sale.id, method: paid[0].method as any });
+                const sale = res.data.sale; // salesApi.create returns { success, data: { sale } }
+                onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method: paid[0].method as any });
+                toast.success('Sale completed');
+              } catch (err: any) {
+                // Show friendly error when stock is insufficient or any other issue occurs
+                const status = err?.response?.status;
+                const msg = err?.response?.data?.message || err?.message || 'Failed to complete sale';
+                if (status === 409) {
+                  const data = err?.response?.data as any;
+                  const pId = data?.data?.productId || data?.productId;
+                  const avail = data?.data?.available ?? data?.available;
+                  const name = items.find((i) => i.id === String(pId))?.name;
+                  const msg409 = name ? `Insufficient stock for ${name}. Available: ${avail ?? 0}.` : 'Insufficient stock for one or more items.';
+                  toast.error(msg409);
+                } else {
+                  toast.error(msg);
+                }
+                return; // keep modal open for correction
               } finally {
                 setLoading(false);
               }
