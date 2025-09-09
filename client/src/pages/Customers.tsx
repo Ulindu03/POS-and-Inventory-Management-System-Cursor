@@ -3,9 +3,8 @@ import { AppLayout } from '@/components/common/Layout/Layout';
 import { CustomerList } from '@/features/customers/CustomerList';
 import { CustomerForm } from '@/features/customers/CustomerForm';
 import { CustomerProfile } from '@/features/customers/CustomerProfile';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Users, TrendingUp, Star, CreditCard } from 'lucide-react';
-import { GlassCard } from '@/components/common/Card';
 import { 
   getCustomers, 
   getCustomerStats, 
@@ -21,7 +20,7 @@ import {
 
 const Customers = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [purchases] = useState<Purchase[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -96,65 +95,22 @@ const Customers = () => {
             province: 'Western',
             postalCode: '10001'
           },
-          taxId: 'CORP789012',
-          totalPurchases: 156,
+          taxId: 'TAX654321',
+          birthday: '1985-10-20',
+          notes: 'Bulk buyer, prefers monthly invoicing',
+          totalPurchases: 120,
           totalSpent: 2500000,
-          lastPurchase: new Date(Date.now() - 86400000 * 1).toISOString(),
+          lastPurchase: new Date(Date.now() - 86400000 * 10).toISOString(),
           isActive: true,
-          createdAt: new Date(Date.now() - 86400000 * 730).toISOString(),
+          createdAt: new Date(Date.now() - 86400000 * 365).toISOString(),
           updatedAt: new Date().toISOString()
         }
       ];
-
-      const samplePurchases: Purchase[] = [
-        {
-          _id: 'p1',
-          invoiceNo: 'INV-001',
-          total: 4500,
-          status: 'completed',
-          createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-          items: [
-            { product: 'LED Bulb 9W', quantity: 5, price: 900 }
-          ]
-        },
-        {
-          _id: 'p2',
-          invoiceNo: 'INV-002',
-          total: 12000,
-          status: 'completed',
-          createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-          items: [
-            { product: 'Extension Cord 5m', quantity: 2, price: 6000 }
-          ]
-        }
-      ];
-
       setCustomers(sampleCustomers);
-      setPurchases(samplePurchases);
-      setStats({
-        totalCustomers: sampleCustomers.length,
-        activeCustomers: sampleCustomers.length,
-        totalLoyaltyPoints: sampleCustomers.reduce((sum, c) => sum + c.loyaltyPoints, 0),
-        typeDistribution: [
-          { _id: 'retail', count: 1 },
-          { _id: 'corporate', count: 1 }
-        ],
-        recentCustomers: sampleCustomers.slice(0, 3)
-      });
     };
 
     loadData();
   }, []);
-
-  const handleAddCustomer = () => {
-    setEditingCustomer(null);
-    setShowForm(true);
-  };
-
-  const handleEditCustomer = (customer: Customer) => {
-    setEditingCustomer(customer);
-    setShowForm(true);
-  };
 
   const handleViewCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -211,12 +167,24 @@ const Customers = () => {
   };
 
   const handleProfileEdit = () => {
-    if (selectedCustomer) {
-      setEditingCustomer(selectedCustomer);
-      setShowProfile(false);
-      setShowForm(true);
-    }
-  };
+  if (selectedCustomer) {
+    setEditingCustomer(selectedCustomer);
+    setShowProfile(false);
+    setShowForm(true);
+  }
+};
+
+// Handler for Add Customer button
+const handleAddCustomer = () => {
+  setEditingCustomer(null);
+  setShowForm(true);
+};
+
+// Handler for Edit Customer action
+const handleEditCustomer = (customer: Customer) => {
+  setEditingCustomer(customer);
+  setShowForm(true);
+};
 
   const handleRedeemPoints = async (data: any) => {
     if (!selectedCustomer) return;
@@ -249,67 +217,130 @@ const Customers = () => {
   
 
   return (
-    <AppLayout>
-      <div className="relative z-10">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="space-y-8 p-6"
-        >
-            {/* Header */}
-            <div className="text-center">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                Customer Management
-              </h1>
-              <p className="text-gray-300 mt-2">Manage your customer database, loyalty programs, and relationships</p>
-            </div>
+    <div className="w-full min-h-screen bg-[#1d1d1d]">
+      <AppLayout>
+        <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 bg-[#242424] rounded-2xl border border-[#353945]">
+          {/* Enhanced Header */}
+          <div className="text-center">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2">
+              Customer Management
+            </h1>
+            <p className="text-gray-400 text-lg">Build lasting relationships with your customers</p>
+          </div>
 
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <GlassCard className="p-6 text-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl text-white mx-auto mb-4">
-                  <Users className="w-6 h-6" />
+          {/* Enhanced Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 hover:border-blue-400/30 transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative p-6">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                    <Users className="w-6 h-6 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{totalCustomers}</p>
+                    <p className="text-blue-300 text-sm font-medium">Total Customers</p>
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{totalCustomers}</h3>
-                <p className="text-gray-600">Total Customers</p>
-              </GlassCard>
-
-              <GlassCard className="p-6 text-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl text-white mx-auto mb-4">
-                  <TrendingUp className="w-6 h-6" />
+                <div className="h-1 bg-blue-500/30 rounded-full">
+                  <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full w-3/4"></div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{activeCustomers}</h3>
-                <p className="text-gray-600">Active Customers</p>
-              </GlassCard>
+              </div>
+            </motion.div>
 
-              <GlassCard className="p-6 text-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-xl text-white mx-auto mb-4">
-                  <Star className="w-6 h-6" />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20 hover:border-green-400/30 transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative p-6">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{activeCustomers}</p>
+                    <p className="text-green-300 text-sm font-medium">Active Customers</p>
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{totalLoyaltyPoints.toLocaleString()}</h3>
-                <p className="text-gray-600">Total Loyalty Points</p>
-              </GlassCard>
-
-              <GlassCard className="p-6 text-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl text-white mx-auto mb-4">
-                  <CreditCard className="w-6 h-6" />
+                <div className="h-1 bg-green-500/30 rounded-full">
+                  <div className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full w-4/5"></div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{formatLKR(totalCreditLimit)}</h3>
-                <p className="text-gray-600">Total Credit Limit</p>
-              </GlassCard>
-            </div>
+              </div>
+            </motion.div>
 
-            {/* Customer List */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border border-yellow-500/20 hover:border-yellow-400/30 transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative p-6">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
+                    <Star className="w-6 h-6 text-yellow-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{totalLoyaltyPoints.toLocaleString()}</p>
+                    <p className="text-yellow-300 text-sm font-medium">Loyalty Points</p>
+                  </div>
+                </div>
+                <div className="h-1 bg-yellow-500/30 rounded-full">
+                  <div className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full w-2/3"></div>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 hover:border-purple-400/30 transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative p-6">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                    <CreditCard className="w-6 h-6 text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{formatLKR(totalCreditLimit)}</p>
+                    <p className="text-purple-300 text-sm font-medium">Total Credit</p>
+                  </div>
+                </div>
+                <div className="h-1 bg-purple-500/30 rounded-full">
+                  <div className="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full w-5/6"></div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Customer List Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            className="bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 p-8 shadow-2xl"
+          >
             <CustomerList
               customers={customers}
               onAddCustomer={handleAddCustomer}
               onEditCustomer={handleEditCustomer}
               onViewCustomer={handleViewCustomer}
               isLoading={isLoading}
+              tableView={false} // Use card view for better design
             />
-        </motion.div>
-      </div>
+          </motion.div>
+        </div>
+      </AppLayout>
 
       {/* Modals */}
       <AnimatePresence>
@@ -332,12 +363,13 @@ const Customers = () => {
           />
         )}
       </AnimatePresence>
-    </AppLayout>
+
+    </div>
   );
 };
 
 // Helper function for currency formatting
-const formatLKR = (amount: number): string => {
+const formatLKR = (amount: number) => {
   return new Intl.NumberFormat('en-LK', {
     style: 'currency',
     currency: 'LKR',

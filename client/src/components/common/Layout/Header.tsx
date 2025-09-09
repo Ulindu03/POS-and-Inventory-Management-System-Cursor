@@ -53,7 +53,7 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
           title="Go to POS panel"
         >
           <img src="/POS.png" alt="POS" className="w-6 h-6 object-contain" draggable={false} />
-          <span className="hidden sm:inline">POS</span>
+          <span className="hidden sm:inline text-white">POS</span>
         </Link>
         <button
           type="button"
