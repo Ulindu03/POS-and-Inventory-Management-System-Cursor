@@ -11,8 +11,10 @@
     "start": "node dist/server.js",
     "start:prod": "NODE_ENV=production node dist/server.js",
     "lint": "eslint . --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "check": "npx tsx --version && npx nodemon --version"
+  "format": "prettier --write \"src/**/*.ts\"",
+  "check": "npx tsx --version && npx nodemon --version",
+  "script:backfill:canonicalPhone": "npx tsx src/scripts/backfillCanonicalPhone.ts",
+  "script:debug:customers": "npx tsx src/scripts/debugCustomers.ts"
   },
   "keywords": [
     "pos",

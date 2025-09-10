@@ -15,7 +15,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ data }) => {
       title="Sales Overview"
       dataKey="sales"
       height={350}
-      className="mb-6"
+  className=""
     />
   );
 };

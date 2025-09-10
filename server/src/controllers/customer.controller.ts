@@ -2,6 +2,78 @@ import { Request, Response } from 'express';
 import { Customer } from '../models/Customer.model';
 import { Sale } from '../models/Sale.model';
 
+// Quick lookup by phone (exact match)
+export const lookupCustomerByPhone = async (req: Request, res: Response) => {
+  try {
+    const q = req.query.phone;
+    let rawCandidate = '';
+    if (typeof q === 'string') {
+      rawCandidate = q;
+    } else if (Array.isArray(q) && typeof q[0] === 'string') {
+      rawCandidate = q[0];
+    }
+    const raw = rawCandidate.trim();
+    if (!raw) return res.status(400).json({ success: false, message: 'Phone required' });
+    const digits = raw.replace(/\D/g,'');
+    console.log('Phone lookup debug:', { raw, digits });
+    const variants: string[] = [];
+    if (digits) {
+      // Local (0XXXXXXXXX) and international (94XXXXXXXXX / +94XXXXXXXXX) variants
+      if (digits.length === 10 && digits.startsWith('0')) {
+        const local = digits; // 0XXXXXXXXX
+        const intlNoPlus = '94' + digits.slice(1); // 94XXXXXXXXX
+        const intlPlus = '+94' + digits.slice(1); // +94XXXXXXXXX
+        variants.push(local, intlNoPlus, intlPlus);
+      } else if (digits.length === 11 && digits.startsWith('94')) {
+        const intlNoPlus = digits; // 94XXXXXXXXX
+        const local = '0' + digits.slice(2); // 0XXXXXXXXX
+        const intlPlus = '+' + digits; // +94XXXXXXXXX
+        variants.push(local, intlNoPlus, intlPlus);
+      } else if (digits.length === 9) { // Missing leading 0, assume local
+        const local = '0' + digits;
+        const intlNoPlus = '94' + digits;
+        const intlPlus = '+94' + digits;
+        variants.push(local, intlNoPlus, intlPlus, digits);
+      } else {
+        variants.push(digits);
+      }
+    }
+    const unique = variants.filter((v, i) => variants.indexOf(v) === i);
+    // Split variants with plus sign (only match raw phone field) vs canonical (digits only / local)
+    const plusVariants = unique.filter(v => v.startsWith('+'));
+    const nonPlus = unique.map(v => v.startsWith('+') ? v.slice(1) : v); // remove + for canonical comparison
+
+    console.log('Search variants:', { unique, plusVariants, nonPlus });
+
+    let customer = await Customer.findOne({
+      $or: [
+        { phone: { $in: unique } }, // any exact stored phone
+        { phone: { $in: plusVariants } },
+        { canonicalPhone: { $in: nonPlus } }
+      ]
+    }).select('name phone canonicalPhone email nic customerCode type');
+
+    console.log('First query result:', customer ? 'FOUND' : 'NOT FOUND');
+
+    // Fallback: partial match last 7 digits if still not found and we have a reasonable digits string
+    if (!customer && digits.length >= 7) {
+      const last7 = digits.slice(-7);
+      console.log('Trying fallback with last 7 digits:', last7);
+      customer = await Customer.findOne({ phone: { $regex: last7 + '$' } }).select('name phone canonicalPhone email nic customerCode type');
+      console.log('Fallback result:', customer ? 'FOUND' : 'NOT FOUND');
+    }
+
+    if (!customer) {
+      console.log('Final result: NOT FOUND');
+      return res.status(404).json({ success: false, message: 'Not found' });
+    }
+    console.log('Final result: FOUND -', { name: customer.name, phone: customer.phone, canonicalPhone: customer.canonicalPhone });
+    return res.json({ success: true, data: customer });
+  } catch (e:any) {
+    return res.status(500).json({ success:false, message: e.message || 'Lookup failed' });
+  }
+};
+
 // Get all customers with pagination and filters
 export const getCustomers = async (req: Request, res: Response) => {
   try {
@@ -57,9 +129,12 @@ export const getCustomers = async (req: Request, res: Response) => {
         const sales = await Sale.find({ customer: customer._id });
         const totalPurchases = sales.length;
         const totalSpent = sales.reduce((sum, sale) => sum + sale.total, 0);
-        const lastPurchase = sales.length > 0 
-          ? sales.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].createdAt
-          : null;
+        let lastPurchase = null as Date | null;
+        if (sales.length > 0) {
+          // Copy then sort to avoid mutating original array (lint friendly)
+          const sorted = [...sales].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          lastPurchase = sorted[0].createdAt;
+        }
 
         return {
           ...customer.toObject(),

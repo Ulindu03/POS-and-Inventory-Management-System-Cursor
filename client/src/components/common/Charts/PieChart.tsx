@@ -12,6 +12,8 @@ interface PieChartProps {
   title?: string;
   height?: number;
   className?: string;
+  cardVariant?: 'default' | 'elevated' | 'subtle' | 'dark' | 'darkSubtle';
+  showLegend?: boolean;
 }
 
 const COLORS = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'];
@@ -20,12 +22,14 @@ export const PieChart: React.FC<PieChartProps> = ({
   data,
   title,
   height = 300,
-  className = ''
+  className = '',
+  cardVariant = 'darkSubtle',
+  showLegend = true
 }) => {
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <GlassCard variant={cardVariant} className={`p-6 ${className}`}>
       {title && (
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
+        <h3 className="text-lg font-semibold text-gray-100 mb-4 tracking-wide">{title}</h3>
       )}
       
       <ResponsiveContainer width="100%" height={height}>
@@ -42,29 +46,32 @@ export const PieChart: React.FC<PieChartProps> = ({
           >
             {data.map((entry, index) => (
               <Cell 
-                key={`cell-${index}`} 
+                key={`cell-${entry.name || index}`} 
                 fill={entry.color || COLORS[index % COLORS.length]} 
               />
             ))}
           </Pie>
           <Tooltip 
             contentStyle={{
-              backgroundColor: 'rgba(255, 255, 255, 0.98)',
-              border: '1px solid rgba(107, 114, 128, 0.2)',
+              backgroundColor: 'rgba(47,47,47,0.95)',
+              border: '1px solid #454545',
               borderRadius: '12px',
-              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 8px 28px -6px rgba(0,0,0,0.6)',
               fontSize: '12px',
-              fontWeight: '500'
+              fontWeight: 500,
+              color: '#f8f8f8'
             }}
             formatter={(value: any) => [`LKR ${value.toLocaleString()}`, '']}
           />
-          <Legend 
-            wrapperStyle={{
-              fontSize: '12px',
-              fontWeight: '500',
-              color: '#374151'
-            }}
-          />
+          {showLegend && (
+            <Legend 
+              wrapperStyle={{
+                fontSize: '12px',
+                fontWeight: 500,
+                color: '#d1d5db'
+              }}
+            />
+          )}
         </RechartsPieChart>
       </ResponsiveContainer>
     </GlassCard>

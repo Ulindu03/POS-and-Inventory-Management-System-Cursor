@@ -2,9 +2,8 @@ import { useCartStore } from '@/store/cart.store';
 import { productsApi, categoriesApi, type ProductListItem, type CategoryItem } from '@/lib/api/products.api';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-// Using custom FS.png from public for fullscreen toggle
 
-export const ProductGrid = ({ fullscreen }: { fullscreen?: { isFs: boolean; toggle: () => void } }) => {
+export const ProductGrid = () => {
   const addItem = useCartStore((s) => s.addItem);
   const [items, setItems] = useState<ProductListItem[]>([]);
   const [q, setQ] = useState('');
@@ -61,23 +60,6 @@ export const ProductGrid = ({ fullscreen }: { fullscreen?: { isFs: boolean; togg
             </option>
           ))}
         </select>
-        {fullscreen && (
-          <button
-            type="button"
-            onClick={fullscreen.toggle}
-            className="rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-[#F8F8F8] hover:bg-white/20 inline-flex items-center gap-2"
-            title={fullscreen.isFs ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
-            aria-label={fullscreen.isFs ? 'Exit fullscreen' : 'Enter fullscreen'}
-          >
-            <img
-              src="/FS.png"
-              alt={fullscreen.isFs ? 'Exit fullscreen' : 'Enter fullscreen'}
-              className="w-4 h-4 object-contain"
-              draggable={false}
-            />
-            <span className="hidden md:inline">{fullscreen.isFs ? 'Exit' : 'Fullscreen'}</span>
-          </button>
-        )}
       </div>
       {loading ? (
         <div className="opacity-80">Loading...</div>

@@ -16,6 +16,7 @@ export interface CreateSalePayload {
   payments?: PaymentInput[]; // multi
   customer?: string | null;
   discountCode?: string;
+  extendedWarrantySelections?: Record<string, { optionName?: string; additionalDays: number; fee: number }[]>;
 }
 
 export const salesApi = {

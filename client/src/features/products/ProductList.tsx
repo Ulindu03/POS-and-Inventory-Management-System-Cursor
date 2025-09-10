@@ -43,6 +43,7 @@ interface Product {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  warranty?: { enabled?: boolean; periodDays?: number; type?: string; requiresSerial?: boolean };
 }
 
 interface ProductListProps {
@@ -247,6 +248,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
                   Supplier
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-[#F8F8F8]/70 uppercase tracking-wider">
+                  Warranty
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-[#F8F8F8]/70 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -346,6 +350,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
                           </div>
                         ) : (
                           <span className="text-xs text-[#F8F8F8]/50">No supplier</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {product.warranty?.enabled ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                            {(product.warranty.periodDays||0)}d{product.warranty.requiresSerial ? ' • Serial' : ''}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[#F8F8F8]/30">—</span>
                         )}
                       </td>
                       <td className="px-6 py-4">

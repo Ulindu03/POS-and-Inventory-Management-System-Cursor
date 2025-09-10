@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, TrendingUp, Star, DollarSign } from 'lucide-react';
-import { GlassCard } from '@/components/common/Card';
 import { SupplierList, SupplierForm, SupplierProfile } from '@/features/suppliers';
 import { Supplier, getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '@/lib/api/suppliers.api';
 import { formatLKR } from '@/lib/utils/currency';
@@ -167,7 +166,10 @@ const Suppliers: React.FC = () => {
 
   return (
     <AppLayout>
-      <div className="relative z-10">
+      <div className="relative">
+        {/* Full-width side background */}
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen bg-[#242424]" />
+        <div className="relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -176,10 +178,8 @@ const Suppliers: React.FC = () => {
         >
             {/* Header */}
             <div className="text-center">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                Supplier Management
-              </h1>
-              <p className="text-gray-300 mt-2">Manage your suppliers and track performance</p>
+              <h1 className="text-4xl font-bold text-[#f8f8f8] drop-shadow-sm tracking-tight">Supplier Management</h1>
+              <p className="mt-2 text-sm tracking-wide text-gray-400">Manage your suppliers and track performance</p>
             </div>
 
             {/* Error banner */}
@@ -189,39 +189,103 @@ const Suppliers: React.FC = () => {
               </div>
             )}
 
-            {/* Statistics Cards */}
+            {/* Statistics Cards (gradient style like Customers page) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <GlassCard className="p-6 text-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl text-white mx-auto mb-4">
-                  <Users className="w-6 h-6" />
+              {/* Total Suppliers */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 hover:border-blue-400/30 transition-all duration-300"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative p-6">
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                      <Users className="w-6 h-6 text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-white">{stats.totalSuppliers}</p>
+                      <p className="text-blue-300 text-sm font-medium">Total Suppliers</p>
+                    </div>
+                  </div>
+                  <div className="h-1 bg-blue-500/30 rounded-full">
+                    <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full w-3/4" />
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{stats.totalSuppliers}</h3>
-                <p className="text-gray-600">Total Suppliers</p>
-              </GlassCard>
+              </motion.div>
 
-              <GlassCard className="p-6 text-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl text-white mx-auto mb-4">
-                  <TrendingUp className="w-6 h-6" />
+              {/* Active Suppliers */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20 hover:border-green-400/30 transition-all duration-300"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative p-6">
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-green-400" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-white">{stats.activeSuppliers}</p>
+                      <p className="text-green-300 text-sm font-medium">Active Suppliers</p>
+                    </div>
+                  </div>
+                  <div className="h-1 bg-green-500/30 rounded-full">
+                    <div className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full w-4/5" />
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{stats.activeSuppliers}</h3>
-                <p className="text-gray-600">Active Suppliers</p>
-              </GlassCard>
+              </motion.div>
 
-              <GlassCard className="p-6 text-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-xl text-white mx-auto mb-4">
-                  <Star className="w-6 h-6" />
+              {/* Total Spent */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border border-yellow-500/20 hover:border-yellow-400/30 transition-all duration-300"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative p-6">
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
+                      <Star className="w-6 h-6 text-yellow-400" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-white">{formatLKR(stats.totalSpent)}</p>
+                      <p className="text-yellow-300 text-sm font-medium">Total Spent</p>
+                    </div>
+                  </div>
+                  <div className="h-1 bg-yellow-500/30 rounded-full">
+                    <div className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full w-2/3" />
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{stats.totalSpent.toLocaleString()}</h3>
-                <p className="text-gray-600">Total Spent</p>
-              </GlassCard>
+              </motion.div>
 
-              <GlassCard className="p-6 text-center">
-                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl text-white mx-auto mb-4">
-                  <DollarSign className="w-6 h-6" />
+              {/* Outstanding Balance */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 hover:border-purple-400/30 transition-all duration-300"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative p-6">
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                      <DollarSign className="w-6 h-6 text-purple-400" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-white">{formatLKR(stats.outstandingBalance)}</p>
+                      <p className="text-purple-300 text-sm font-medium">Outstanding</p>
+                    </div>
+                  </div>
+                  <div className="h-1 bg-purple-500/30 rounded-full">
+                    <div className="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full w-5/6" />
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-800">{formatLKR(stats.outstandingBalance)}</h3>
-                <p className="text-gray-600">Outstanding</p>
-              </GlassCard>
+              </motion.div>
             </div>
 
             {/* Supplier List */}
@@ -233,7 +297,8 @@ const Suppliers: React.FC = () => {
               onAddSupplier={handleAddSupplier}
               loading={loading}
             />
-        </motion.div>
+  </motion.div>
+  </div>
       </div>
 
       {/* Modals */}

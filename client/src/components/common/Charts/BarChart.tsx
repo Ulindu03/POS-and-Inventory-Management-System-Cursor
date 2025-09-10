@@ -13,6 +13,9 @@ interface BarChartProps {
   dataKey?: string;
   height?: number;
   className?: string;
+  cardVariant?: 'default' | 'elevated' | 'subtle' | 'dark' | 'darkSubtle';
+  barColorStart?: string;
+  barColorEnd?: string;
 }
 
 export const BarChart: React.FC<BarChartProps> = ({
@@ -20,34 +23,37 @@ export const BarChart: React.FC<BarChartProps> = ({
   title,
   dataKey = 'value',
   height = 300,
-  className = ''
+  className = '',
+  cardVariant = 'darkSubtle',
+  barColorStart = '#667eea',
+  barColorEnd = '#764ba2'
 }) => {
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <GlassCard variant={cardVariant} className={`p-6 ${className}`}>
       {title && (
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
+        <h3 className="text-lg font-semibold text-gray-100 mb-4 tracking-wide">{title}</h3>
       )}
       
       <ResponsiveContainer width="100%" height={height}>
         <RechartsBarChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#667eea" stopOpacity={0.9}/>
-              <stop offset="100%" stopColor="#764ba2" stopOpacity={0.7}/>
+              <stop offset="0%" stopColor={barColorStart} stopOpacity={0.85}/>
+              <stop offset="100%" stopColor={barColorEnd} stopOpacity={0.4}/>
             </linearGradient>
           </defs>
           
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.6} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#454545" strokeOpacity={0.5} />
           <XAxis 
             dataKey="name" 
-            stroke="#374151"
+            stroke="#9ca3af"
             fontSize={12}
             fontWeight={500}
             tickLine={false}
             axisLine={false}
           />
           <YAxis 
-            stroke="#374151"
+            stroke="#9ca3af"
             fontSize={12}
             fontWeight={500}
             tickLine={false}
@@ -56,12 +62,13 @@ export const BarChart: React.FC<BarChartProps> = ({
           />
           <Tooltip 
             contentStyle={{
-              backgroundColor: 'rgba(255, 255, 255, 0.98)',
-              border: '1px solid rgba(107, 114, 128, 0.2)',
+              backgroundColor: 'rgba(47,47,47,0.95)',
+              border: '1px solid #454545',
               borderRadius: '12px',
-              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 8px 28px -6px rgba(0,0,0,0.6)',
               fontSize: '12px',
-              fontWeight: '500'
+              fontWeight: 500,
+              color: '#f8f8f8'
             }}
             formatter={(value: any) => [`LKR ${value.toLocaleString()}`, '']}
           />
@@ -69,6 +76,7 @@ export const BarChart: React.FC<BarChartProps> = ({
             dataKey={dataKey} 
             fill="url(#barGradient)"
             radius={[6, 6, 0, 0]}
+            maxBarSize={38}
           />
         </RechartsBarChart>
       </ResponsiveContainer>

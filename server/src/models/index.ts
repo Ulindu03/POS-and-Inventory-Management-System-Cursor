@@ -11,6 +11,7 @@ export { PurchaseOrder } from './PurchaseOrder.model';
 export { Delivery } from './Delivery.model';
 export { Damage } from './Damage.model';
 export { Warranty } from './Warranty.model';
+export { WarrantyClaim } from './WarrantyClaim.model';
 export { Payment } from './Payment.model';
 export { Discount } from './Discount.model';
 export { Tax } from './Tax.model';
@@ -33,6 +34,7 @@ export const MODEL_NAMES = {
   DELIVERY: 'Delivery',
   DAMAGE: 'Damage',
   WARRANTY: 'Warranty',
+  WARRANTY_CLAIM: 'WarrantyClaim',
   PAYMENT: 'Payment',
   DISCOUNT: 'Discount',
   TAX: 'Tax',

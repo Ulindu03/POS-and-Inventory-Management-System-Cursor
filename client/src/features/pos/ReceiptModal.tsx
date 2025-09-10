@@ -17,6 +17,7 @@ interface Props {
   promoCode?: string | null;
   cashierName?: string;
   paperWidth?: 80 | 58; // preview width toggle; print will force 80mm unless overridden
+  warranties?: Array<{ warrantyNo: string; status: string; periodDays: number; endDate?: string; requiresActivation?: boolean }>;
 }
 
 // Open a clean print window and print the provided HTML, scaled to fit page width.
@@ -77,7 +78,7 @@ function openAndPrintFit(html: string, title: string) {
   }
 }
 
-export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discount, tax, total, method, payments, promoCode, cashierName, paperWidth = 80 }: Props) => {
+export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discount, tax, total, method, payments, promoCode, cashierName, paperWidth = 80, warranties = [] }: Props) => {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [showLogo, setShowLogo] = useState<boolean>(true);
   const [store, setStore] = useState<{ name?: string; address?: string; phone?: string; email?: string } | null>(null);
@@ -162,6 +163,18 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
             <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Discount</span><span>-{formatLKR(discount)}</span></div>
             <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Tax</span><span>{formatLKR(tax)}</span></div>
             <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><strong>Total</strong><strong>{formatLKR(total)}</strong></div>
+            {warranties.length > 0 && (
+              <>
+                <hr />
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Warranties</div>
+                {warranties.map(w => (
+                  <div key={w.warrantyNo} className="row" style={{ fontSize: 11 }}>
+                    <span>{w.warrantyNo}</span>
+                    <span>{w.periodDays}d {w.requiresActivation ? 'Pending' : 'Active'}</span>
+                  </div>
+                ))}
+              </>
+            )}
             {payments && payments.length > 0 && (
               <>
                 <hr />

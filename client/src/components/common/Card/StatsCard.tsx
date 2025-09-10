@@ -51,7 +51,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
       <GlassCard className="p-6 group">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <p className="text-gray-700 text-sm font-semibold mb-2">{title}</p>
+            <p className="text-gray-300 text-sm font-semibold mb-2">{title}</p>
             <motion.p 
               className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 
                         bg-clip-text text-transparent"
@@ -67,7 +67,7 @@ export const StatsCard: React.FC<StatsCardProps> = ({
                 <span className={`text-sm font-semibold ${getTrendColor()}`}>
                   {getTrendIcon()} {Math.abs(change)}%
                 </span>
-                <span className="text-gray-600 text-xs ml-2 font-medium">{changeLabel}</span>
+                <span className="text-gray-400 text-xs ml-2 font-medium">{changeLabel}</span>
               </div>
             )}
           </div>

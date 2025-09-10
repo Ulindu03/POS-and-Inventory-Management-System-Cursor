@@ -149,11 +149,10 @@ type LoginFormProps = {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
-  setDemoCredentials: (role: 'admin' | 'cashier') => void;
   setCurrentView: (v: 'login' | 'forgot') => void;
 };
 
-const LoginView = ({ t, formData, showPassword, setShowPassword, handleInputChange, handleSubmit, isLoading, setDemoCredentials, setCurrentView }: LoginFormProps) => (
+const LoginView = ({ t, formData, showPassword, setShowPassword, handleInputChange, handleSubmit, isLoading, setCurrentView }: LoginFormProps) => (
   <>
     <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8F8F8' }}>{t.welcome}</h2>
     <p className="text-sm mb-6" style={{ color: '#F8F8F8B3' }}>{t.description}</p>
@@ -164,7 +163,7 @@ const LoginView = ({ t, formData, showPassword, setShowPassword, handleInputChan
         <label className="block text-sm font-medium mb-2" style={{ color: '#F8F8F8B3' }}>{t.username}</label>
         <div className="relative">
           <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" color="#000000" />
-          <input type="text" name="username" value={formData.username} onChange={handleInputChange} className="w-full pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black" style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }} placeholder="admin or cashier" autoComplete="username" />
+          <input type="text" name="username" value={formData.username} onChange={handleInputChange} className="w-full pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black" style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }} placeholder="Enter username or email" autoComplete="username" />
         </div>
       </motion.div>
 
@@ -198,18 +197,6 @@ const LoginView = ({ t, formData, showPassword, setShowPassword, handleInputChan
         </button>
       </motion.div>
 
-      {/* Demo creds */}
-      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.8 }} className="pt-4" style={{ borderTop: '1px solid rgba(248,248,248,0.10)' }}>
-        <p className="text-xs text-center mb-3" style={{ color: '#F8F8F8B3' }}>{t.demo}:</p>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setDemoCredentials('admin')} className="flex-1 py-2 px-3 text-sm rounded-lg transition-all duration-200 flex items-center justify-center gap-2" style={{ backgroundColor: 'rgba(248,248,248,0.08)', color: '#F8F8F8' }}>
-            <User className="w-4 h-4" /> {t.admin}
-          </button>
-          <button type="button" onClick={() => setDemoCredentials('cashier')} className="flex-1 py-2 px-3 text-sm rounded-lg transition-all duration-200 flex items-center justify-center gap-2" style={{ backgroundColor: 'rgba(248,248,248,0.08)', color: '#F8F8F8' }}>
-            <User className="w-4 h-4" /> {t.cashier}
-          </button>
-        </div>
-      </motion.div>
     </form>
   </>
 );
@@ -263,11 +250,8 @@ function buildText(language: 'en' | 'si') {
       backToLogin: 'Back to Login',
       resetSent: 'Reset link sent to your email!',
       loginSuccess: 'Login successful! Redirecting...',
-      loginError: 'Invalid username or password',
-      fillFields: 'Please fill in all fields',
-      demo: 'Demo Credentials',
-      admin: 'Admin',
-      cashier: 'Cashier',
+  loginError: 'Invalid username or password',
+  fillFields: 'Please fill in all fields',
     },
     si: {
       title: 'VoltZone POS පද්ධතිය',
@@ -286,11 +270,8 @@ function buildText(language: 'en' | 'si') {
       backToLogin: 'පිවිසුම වෙත ආපසු',
       resetSent: 'යළි සැකසීමේ සබැඳිය ඔබගේ ඊමේල් වෙත යවන ලදී!',
       loginSuccess: 'සාර්ථකව පිවිසුණි! යොමු කරමින්...',
-      loginError: 'වැරදි පරිශීලක නාමය හෝ මුරපදය',
-      fillFields: 'කරුණාකර සියලුම ක්ෂේත්‍ර පුරවන්න',
-      demo: 'නිදර්ශන අක්තපත්‍ර',
-      admin: 'පරිපාලක',
-      cashier: 'මුදල් අයකැමි',
+  loginError: 'වැරදි පරිශීලක නාමය හෝ මුරපදය',
+  fillFields: 'කරුණාකර සියලුම ක්ෂේත්‍ර පුරවන්න',
     }
   } as const;
   return map[language];
@@ -357,23 +338,6 @@ const LoginPage = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-  };
-
-  const setDemoCredentials = (role: 'admin' | 'cashier') => {
-    if (role === 'admin') {
-      setFormData(prev => ({
-        ...prev,
-        username: 'admin',
-        password: 'admin123'
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        username: 'cashier',
-        password: 'cashier123'
-      }));
-    }
-    toast.success(`${role === 'admin' ? t.admin : t.cashier} credentials filled`);
   };
 
   return (
@@ -471,7 +435,6 @@ const LoginPage = () => {
                     handleInputChange={handleInputChange}
                     handleSubmit={handleSubmit}
                     isLoading={isLoading}
-                    setDemoCredentials={setDemoCredentials}
                     setCurrentView={(v) => setCurrentView(v)}
                   />
                 </motion.div>

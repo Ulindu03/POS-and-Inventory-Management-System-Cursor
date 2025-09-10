@@ -77,36 +77,38 @@ const Products = () => {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-6">
+    <AppLayout className="bg-[#242424]">
+      <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[#F8F8F8]">Product Management</h1>
-            <p className="text-[#F8F8F8]/70 mt-1">Manage your products, categories, and inventory</p>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="text-center lg:text-left flex-1">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2 tracking-tight">
+              Product Management
+            </h1>
+            <p className="text-gray-400 text-lg max-w-xl mx-auto lg:mx-0">
+              Manage products, categories & bulk operations with ease
+            </p>
           </div>
-          
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-3 justify-center lg:justify-end">
             <button
               onClick={handleCreateProduct}
-              className="px-4 py-2 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2"
-              style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
+              className="relative group px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide flex items-center gap-2 text-black shadow hover:shadow-lg transition-all bg-gradient-to-br from-amber-300 via-yellow-300 to-amber-200 hover:from-amber-200 hover:via-yellow-200 hover:to-amber-100"
             >
-              ➕ Add Product
+              <span className="drop-shadow-sm">➕ Add Product</span>
             </button>
             <button
               onClick={() => setActiveModal('category')}
-              className="px-4 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-[#F8F8F8] border border-white/10 transition-all duration-200"
+              className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all"
             >
               🏷️ Manage Categories
             </button>
             <button
               onClick={handleExport}
-              className="px-4 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-[#F8F8F8] border border-white/10 transition-all duration-200"
+              className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all"
             >
               ⬇️ Export CSV
             </button>
-            <label className="px-4 py-2 rounded-xl font-semibold bg-white/10 hover:bg-white/20 text-[#F8F8F8] border border-white/10 transition-all duration-200 cursor-pointer">
+            <label className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all cursor-pointer">
               <span>⬆️ Import CSV</span>
               <input
                 type="file"
@@ -119,21 +121,29 @@ const Products = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 ${
-                activeTab === tab.id
-                  ? 'bg-white/20 text-[#F8F8F8] border border-white/20'
-                  : 'bg-white/5 text-[#F8F8F8]/70 hover:bg-white/10 border border-white/10'
-              }`}
-            >
-              <span>{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-3">
+          {tabs.map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative px-5 py-2.5 rounded-2xl text-sm font-semibold tracking-wide transition-all backdrop-blur-sm border group overflow-hidden flex items-center gap-2 ${
+                  active
+                    ? 'border-blue-400/40 text-white bg-gradient-to-r from-blue-500/30 via-indigo-500/20 to-purple-500/20 shadow-[0_4px_24px_-6px_rgba(59,130,246,0.4)]'
+                    : 'border-white/10 text-gray-300 bg-white/5 hover:bg-white/10 hover:border-white/20'
+                }`}
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  <span>{tab.icon}</span>
+                  {tab.label}
+                </span>
+                {active && (
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 via-indigo-500/20 to-purple-500/20 opacity-60 group-hover:opacity-80 transition-opacity" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Content */}
@@ -148,7 +158,7 @@ const Products = () => {
             <CategoryManager />
           )}
         </div>
-      </div>
+  </div>
 
       {/* Modals */}
       {(activeModal === 'create' || activeModal === 'edit') && (

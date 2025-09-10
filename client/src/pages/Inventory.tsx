@@ -40,33 +40,46 @@ const Inventory = () => {
   ]), [lowCount]);
 
   return (
-    <AppLayout>
-      <div className="space-y-4">
+    <AppLayout className="bg-[#242424]">
+      <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-[#F8F8F8]">Inventory Management</h1>
+        <div className="text-center">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2">
+            Inventory Management
+          </h1>
+          <p className="text-gray-400 text-lg">Track stock levels & movement across your store</p>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-xl font-medium transition-all ${
-                activeTab === tab.id
-                  ? 'bg-white/20 text-[#F8F8F8] border border-white/20'
-                  : 'bg-white/5 text-[#F8F8F8]/70 hover:bg-white/10 border border-white/10'
-              }`}
-            >
-              {tab.label}
-              {tab.count !== null && (
-                <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
-                  {tab.count}
+        <div className="flex flex-wrap gap-3 justify-center">
+          {tabs.map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative px-5 py-2.5 rounded-2xl text-sm font-semibold tracking-wide transition-all backdrop-blur-sm border group overflow-hidden ${
+                  active
+                    ? 'border-blue-400/40 text-white bg-gradient-to-r from-blue-500/30 via-indigo-500/20 to-purple-500/20 shadow-[0_4px_24px_-6px_rgba(59,130,246,0.4)]'
+                    : 'border-white/10 text-gray-300 bg-white/5 hover:bg-white/10 hover:border-white/20'
+                }`}
+              >
+                <span className="relative z-10 flex items-center gap-2">
+                  {tab.label}
+                  {tab.count !== null && (
+                    <span className={`ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold tracking-wide ${
+                      active ? 'bg-red-500/90 text-white' : 'bg-red-500/80 text-white'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  )}
                 </span>
-              )}
-            </button>
-          ))}
+                {active && (
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 via-indigo-500/20 to-purple-500/20 opacity-60 group-hover:opacity-80 transition-opacity" />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Content */}

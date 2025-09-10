@@ -7,6 +7,7 @@ import { DiscountService } from '../services/discount.service';
 import { Settings } from '../models/Settings.model';
 import { StockMovement } from '../models/StockMovement.model';
 import mongoose from 'mongoose';
+import { issueWarranty } from '../services/warranty.service';
 import { emit as emitRealtime } from '../services/realtime.service';
 
 const nextInvoiceNo = async (): Promise<string> => {
@@ -101,13 +102,13 @@ async function applySaleStockMovement(params: {
 export class SaleController {
   static async create(req: Request & { user?: any }, res: Response, next: NextFunction) {
     try {
-  const { items, payment, payments, discount = 0, customer, discountCode, currency } = req.body;
+  const { items, payment, payments, discount = 0, customer, discountCode, currency, extendedWarrantySelections } = req.body as any;
       if (!Array.isArray(items) || items.length === 0) {
         return res.status(400).json({ success: false, message: 'No items' });
       }
 
     const productIds = items.map((i) => i.product);
-  const products = await Product.find({ _id: { $in: productIds } }).select('price.cost price.retail stock.current stock.reorderPoint trackInventory allowBackorder isDigital');
+  const products = await Product.find({ _id: { $in: productIds } }).select('price.cost price.retail stock.current stock.reorderPoint trackInventory allowBackorder isDigital warranty');
     // Load inventory snapshots to validate using available/current stock if present
     const inventories = await Inventory.find({ product: { $in: productIds } }).select('product currentStock availableStock');
       const productMap = new Map(products.map((p) => [p._id.toString(), p]));
@@ -129,7 +130,21 @@ export class SaleController {
         }
       }
 
-      const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+      let subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+      // Apply extended warranty upsell charges (simple add-on to subtotal)
+      // extendedWarrantySelections: { [productId]: { optionName?:string; additionalDays:number; fee:number }[] }
+      const upsellSelections = extendedWarrantySelections && typeof extendedWarrantySelections === 'object' ? extendedWarrantySelections : {};
+      const upsellLines: Array<{ product: string; fee: number; additionalDays: number }> = [];
+      for (const key of Object.keys(upsellSelections)) {
+        const arr = Array.isArray(upsellSelections[key]) ? upsellSelections[key] : [];
+        for (const sel of arr) {
+          const fee = Number(sel.fee) || 0;
+          if (fee > 0) {
+            subtotal += fee;
+            upsellLines.push({ product: key, fee, additionalDays: Number(sel.additionalDays)||0 });
+          }
+        }
+      }
       let discountAmount = Number(discount) || 0;
       if (discountCode) {
         try {
@@ -174,7 +189,7 @@ export class SaleController {
           tax: { vat: 0, nbt: 0 },
           total: i.price * i.quantity - (i.discount || 0),
         })),
-        subtotal,
+  subtotal,
   tax: { vat, nbt },
   currency: { code, rateToBase: rate, baseCode },
   discount,
@@ -210,7 +225,7 @@ export class SaleController {
         tax: { vat: 0, nbt: 0 },
         total: i.price * i.quantity - (i.discount || 0),
       })),
-      subtotal,
+  subtotal,
       tax: { vat, nbt },
       currency: { code, rateToBase: rate, baseCode },
       discount,
@@ -283,6 +298,80 @@ export class SaleController {
         } catch {}
       }, 0);
   // inventory.low_stock handled above after inventory save
+    }
+  }
+
+  // Post-creation: automatically issue warranties for eligible items (if customer provided)
+  if (customer && doc?._id) {
+    try {
+      const saleItems = (doc as any).items || [];
+      for (const it of saleItems) {
+        const p = productMap.get(String(it.product)) as any;
+        if (process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console
+          console.log('[warranty.auto] evaluate', {
+            saleId: String(doc._id),
+            invoiceNo: doc.invoiceNo,
+            productId: String(it.product),
+            qty: it.quantity,
+            warrantyEnabled: p?.warranty?.enabled,
+            basePeriodDays: p?.warranty?.periodDays,
+          });
+        }
+        if (!p?.warranty?.enabled || !p?.warranty?.periodDays) {
+          if (process.env.NODE_ENV !== 'production') {
+            // eslint-disable-next-line no-console
+            console.log('[warranty.auto] skip', {
+              reason: 'not_enabled_or_no_period',
+              productId: String(it.product),
+              enabled: p?.warranty?.enabled,
+              periodDays: p?.warranty?.periodDays,
+            });
+          }
+          continue;
+        }
+        const qty = Number(it.quantity) || 0;
+        for (let q = 0; q < qty; q += 1) {
+          try {
+            // Determine if any upsell extra days apply (sum of additionalDays for this product)
+            const extraDays = (Array.isArray(upsellSelections?.[String(it.product)]) ? upsellSelections[String(it.product)] : [])
+              .reduce((s: number, sel: any) => s + (Number(sel.additionalDays) || 0), 0);
+            await issueWarranty({
+              productId: String(it.product),
+              saleId: String(doc._id),
+              saleItemId: String(it._id),
+              customerId: String(customer),
+              issuedBy: String(cashierId),
+              periodDays: (Number(p.warranty.periodDays) || 0) + extraDays,
+              coverage: p.warranty.coverage || [],
+              exclusions: p.warranty.exclusions || [],
+              type: p.warranty.type || 'manufacturer',
+              requiresActivation: Boolean(p.warranty.requiresSerial),
+            });
+            if (process.env.NODE_ENV !== 'production') {
+              // eslint-disable-next-line no-console
+              console.log('[warranty.issue] success', {
+                productId: String(it.product),
+                saleId: String(doc._id),
+                invoiceNo: doc.invoiceNo,
+                periodDays: (Number(p.warranty.periodDays) || 0) + extraDays,
+                extraDays,
+              });
+            }
+          } catch (wErr) {
+            // Non-blocking: collect or log silently
+            if (process.env.NODE_ENV !== 'production') {
+              // eslint-disable-next-line no-console
+              console.warn('[warranty.issue] failed for product', it.product, wErr);
+            }
+          }
+        }
+      }
+    } catch (wAllErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        // eslint-disable-next-line no-console
+        console.warn('[warranty.auto] issuance loop failed', wAllErr);
+      }
     }
   }
 

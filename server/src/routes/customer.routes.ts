@@ -7,7 +7,8 @@ import {
   deleteCustomer,
   updateLoyaltyPoints,
   redeemLoyaltyPoints,
-  getCustomerStats
+  getCustomerStats,
+  lookupCustomerByPhone
 } from '../controllers/customer.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 
@@ -19,6 +20,7 @@ router.use(authenticate);
 // Customer CRUD operations
 router.get('/', authorize('admin', 'sales_rep'), getCustomers);
 router.get('/stats', authorize('admin', 'sales_rep'), getCustomerStats);
+router.get('/lookup/phone', authorize('admin','sales_rep'), lookupCustomerByPhone);
 router.get('/:id', authorize('admin', 'sales_rep'), getCustomerById);
 router.post('/', authorize('admin', 'sales_rep'), createCustomer);
 router.put('/:id', authorize('admin', 'sales_rep'), updateCustomer);

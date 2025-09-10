@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
 
 const menuItems = [
-  // Dashboard: using existing dashboard.png (dashboadrd.png not found)
   { icon: LayoutDashboard, imgSrc: '/dashboard.png', label: 'Dashboard', path: '/dashboard' },
   { icon: ShoppingCart, imgSrc: '/POS.png', label: 'POS', path: '/pos' },
   { icon: Package, imgSrc: '/inventory.png', label: 'Inventory', path: '/inventory' },
@@ -17,7 +16,10 @@ const menuItems = [
   { icon: BarChart3, imgSrc: '/analytics.png', label: 'Analytics', path: '/analytics' },
   { icon: Route, imgSrc: '/deliveries.png', label: 'Deliveries', path: '/deliveries' },
   { icon: AlertTriangle, imgSrc: '/damages.png', label: 'Damages', path: '/damages' },
-  { icon: SettingsIcon, imgSrc: '/settings.png', label: 'Settings', path: '/settings' },
+  { icon: FileText, imgSrc: '/warranty.png', label: 'Warranty', path: '/warranty', adminOnly: true },
+  // Only admin can see Users panel
+  { icon: Users, imgSrc: '/user.png', label: 'Users', path: '/users', adminOnly: true },
+  { icon: SettingsIcon, imgSrc: '/settings.png', label: 'Settings', path: '/settings', adminOnly: true },
 ];
 
 export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
@@ -84,11 +86,10 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
       <motion.nav className="p-4 space-y-2" variants={containerVariants} initial="hidden" animate="show">
         {menuItems
           .filter((item) => {
-            const allowUsers = item.path !== '/users' || role === 'admin';
-            const allowSettings = item.path !== '/settings' || role === 'admin';
-            const allowDeliveries = item.path !== '/deliveries' || (role === 'admin' || role === 'sales_rep');
-            const allowDamages = item.path !== '/damages' || (role === 'admin' || role === 'sales_rep');
-            return allowUsers && allowSettings && allowDeliveries && allowDamages;
+            if (item.adminOnly && role !== 'admin') return false;
+            if (item.path === '/deliveries' && !(role === 'admin' || role === 'sales_rep')) return false;
+            if (item.path === '/damages' && !(role === 'admin' || role === 'sales_rep')) return false;
+            return true;
           })
           .map((item) => {
           const Icon = item.icon;

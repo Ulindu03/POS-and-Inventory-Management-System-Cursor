@@ -18,6 +18,7 @@ import SettingsPage from './pages/Settings';
 import DeliveriesPage from './pages/Deliveries';
 import CategoriesPage from './pages/Categories';
 import DamagesPage from './pages/Damages';
+import WarrantyPage from './pages/Warranty';
 
 function App() {
 	const checkAuth = useAuthStore((s) => s.checkAuth);
@@ -36,6 +37,14 @@ function App() {
 				<Routes>
 					<Route path="/login" element={<LoginPage />} />
 					<Route path="/" element={<LoginPage />} />
+					<Route
+						path="/warranty"
+						element={
+							<ProtectedRoute requiredRoles={['admin','sales_rep']}>
+								<WarrantyPage />
+							</ProtectedRoute>
+						}
+					/>
 					<Route
 						path="/damages"
 						element={

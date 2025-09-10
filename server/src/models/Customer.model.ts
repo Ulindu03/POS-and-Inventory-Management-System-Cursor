@@ -20,8 +20,14 @@ const customerSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: true,
+    required: function(this: any){ return this.type === 'retail'; },
     trim: true
+  },
+  // Normalized phone (digits only, leading 0 local format) for lookup
+  canonicalPhone: {
+    type: String,
+    index: true,
+    sparse: true
   },
   alternatePhone: {
     type: String,
@@ -76,6 +82,13 @@ const customerSchema = new mongoose.Schema({
   taxId: {
     type: String,
     trim: true
+  },
+  // National Identification Number (added for warranty search requirements)
+  nic: {
+    type: String,
+    trim: true,
+    index: true,
+    sparse: true
   },
   birthday: {
     type: Date
@@ -150,3 +163,27 @@ customerSchema.index({ 'address.city': 1 });
 customerSchema.index({ tags: 1 });
 
 export const Customer = mongoose.model('Customer', customerSchema);
+
+// Helper to normalize phone numbers into local 0XXXXXXXXX format (Sri Lanka example) or digits fallback
+function normalizePhone(raw?: string) {
+  if(!raw) return undefined;
+  const digits = String(raw).replace(/\D/g,'');
+  if(!digits) return undefined;
+  if(digits.length === 11 && digits.startsWith('94')) return '0' + digits.slice(2); // +94XXXXXXXXX -> 0XXXXXXXXX
+  if(digits.length === 10 && digits.startsWith('0')) return digits;
+  return digits; // fallback (store as-is)
+}
+
+customerSchema.pre('save', function(next){
+  try {
+    if(this.phone){
+      const norm = normalizePhone(this.phone);
+      if(norm) this.canonicalPhone = norm;
+    }
+    // Enforce phone only for retail
+    if(this.type === 'retail' && !this.phone){
+      return next(new Error('Phone number required for retail customers'));
+    }
+    next();
+  } catch(e:any){ next(e); }
+});

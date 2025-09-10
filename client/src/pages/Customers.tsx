@@ -217,9 +217,9 @@ const handleEditCustomer = (customer: Customer) => {
   
 
   return (
-    <div className="w-full min-h-screen bg-[#1d1d1d]">
-      <AppLayout>
-        <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 bg-[#242424] rounded-2xl border border-[#353945]">
+    <div className="w-full min-h-screen bg-[#242424]">
+      <AppLayout className="bg-[#242424]">
+        <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Enhanced Header */}
           <div className="text-center">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2">

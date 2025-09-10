@@ -43,7 +43,7 @@ export class ProductController {
         Product.find(filters)
           .populate('category', 'name')
           .populate('supplier', 'name supplierCode')
-          .select('sku barcode name description price stock category supplier images brand unit isActive createdAt updatedAt')
+          .select('sku barcode name description price stock category supplier images brand unit isActive createdAt updatedAt warranty')
           .sort({ updatedAt: -1 })
           .skip(skip)
           .limit(take)
@@ -426,6 +426,7 @@ export class ProductController {
   reorderPoint,
   // optional: auto-generate barcodes for a quantity of units right after creation
   generateStickers
+  , warranty
       } = req.body;
 
       // Normalize optional fields
@@ -479,6 +480,15 @@ export class ProductController {
         supplier: (cleanSupplier && mongoose.Types.ObjectId.isValid(cleanSupplier)) ? cleanSupplier : undefined,
         tags: tags || [],
         isActive: true
+        ,
+        warranty: warranty && typeof warranty === 'object' ? {
+          enabled: Boolean(warranty.enabled),
+          periodDays: typeof warranty.periodDays === 'number' ? warranty.periodDays : undefined,
+            type: ['manufacturer','extended','lifetime','none'].includes(warranty.type) ? warranty.type : 'manufacturer',
+          coverage: Array.isArray(warranty.coverage) ? warranty.coverage.filter((c: any)=> typeof c === 'string' && c.trim()).map((c:any)=>c.trim()) : [],
+          exclusions: Array.isArray(warranty.exclusions) ? warranty.exclusions.filter((c: any)=> typeof c === 'string' && c.trim()).map((c:any)=>c.trim()) : [],
+          requiresSerial: Boolean(warranty.requiresSerial)
+        } : undefined
       });
 
       await product.save();
@@ -591,7 +601,18 @@ export class ProductController {
 
       const product = await Product.findByIdAndUpdate(
         id,
-        { ...updateData, updatedAt: new Date() },
+        { 
+          ...updateData,
+          ...(updateData.warranty ? { warranty: {
+            enabled: Boolean(updateData.warranty.enabled),
+            periodDays: typeof updateData.warranty.periodDays === 'number' ? updateData.warranty.periodDays : undefined,
+            type: ['manufacturer','extended','lifetime','none'].includes(updateData.warranty.type) ? updateData.warranty.type : 'manufacturer',
+            coverage: Array.isArray(updateData.warranty.coverage) ? updateData.warranty.coverage.filter((c: any)=> typeof c === 'string' && c.trim()).map((c:any)=>c.trim()) : [],
+            exclusions: Array.isArray(updateData.warranty.exclusions) ? updateData.warranty.exclusions.filter((c: any)=> typeof c === 'string' && c.trim()).map((c:any)=>c.trim()) : [],
+            requiresSerial: Boolean(updateData.warranty.requiresSerial)
+          }} : {}),
+          updatedAt: new Date() 
+        },
         { new: true, runValidators: true }
       )
         .populate('category', 'name color')

@@ -15,6 +15,7 @@ interface AreaChartProps {
   fill?: string;
   height?: number;
   className?: string;
+  cardVariant?: 'default' | 'elevated' | 'subtle' | 'dark' | 'darkSubtle';
 }
 
 export const AreaChart: React.FC<AreaChartProps> = ({
@@ -24,34 +25,35 @@ export const AreaChart: React.FC<AreaChartProps> = ({
   stroke = '#667eea',
   fill = 'url(#colorGradient)',
   height = 300,
-  className = ''
+  className = '',
+  cardVariant = 'darkSubtle'
 }) => {
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <GlassCard variant={cardVariant} className={`p-6 ${className}`}>
       {title && (
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
+        <h3 className="text-lg font-semibold text-gray-100 mb-4 tracking-wide">{title}</h3>
       )}
       
       <ResponsiveContainer width="100%" height={height}>
         <RechartsAreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#667eea" stopOpacity={0.8}/>
-              <stop offset="95%" stopColor="#764ba2" stopOpacity={0.2}/>
+              <stop offset="5%" stopColor={stroke} stopOpacity={0.55}/>
+              <stop offset="95%" stopColor="#242424" stopOpacity={0}/>
             </linearGradient>
           </defs>
           
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.6} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#454545" strokeOpacity={0.5} />
           <XAxis 
             dataKey="name" 
-            stroke="#374151"
+            stroke="#9ca3af"
             fontSize={12}
             fontWeight={500}
             tickLine={false}
             axisLine={false}
           />
           <YAxis 
-            stroke="#374151"
+            stroke="#9ca3af"
             fontSize={12}
             fontWeight={500}
             tickLine={false}
@@ -60,12 +62,13 @@ export const AreaChart: React.FC<AreaChartProps> = ({
           />
           <Tooltip 
             contentStyle={{
-              backgroundColor: 'rgba(255, 255, 255, 0.98)',
-              border: '1px solid rgba(107, 114, 128, 0.2)',
+              backgroundColor: 'rgba(47,47,47,0.95)',
+              border: '1px solid #454545',
               borderRadius: '12px',
-              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxShadow: '0 8px 28px -6px rgba(0,0,0,0.6)',
               fontSize: '12px',
-              fontWeight: '500'
+              fontWeight: 500,
+              color: '#f8f8f8'
             }}
             formatter={(value: any) => [`LKR ${value.toLocaleString()}`, '']}
           />
@@ -73,9 +76,10 @@ export const AreaChart: React.FC<AreaChartProps> = ({
             type="monotone"
             dataKey={dataKey}
             stroke={stroke}
-            strokeWidth={3}
+            strokeWidth={2.5}
             fill={fill}
-            fillOpacity={0.7}
+            fillOpacity={0.9}
+            activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
           />
         </RechartsAreaChart>
       </ResponsiveContainer>

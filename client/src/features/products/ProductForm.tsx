@@ -54,6 +54,14 @@ interface Product {
       type?: string;
     };
   };
+  warranty?: {
+    enabled?: boolean;
+    periodDays?: number;
+    type?: string;
+    requiresSerial?: boolean;
+    coverage?: string[];
+    exclusions?: string[];
+  };
   images?: Array<{
     url: string;
     alt?: string;
@@ -119,6 +127,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       warranty: { duration: 0, type: 'months' }
     },
     images: []
+  ,
+  warranty: { enabled: false, periodDays: 0, type: 'manufacturer', requiresSerial: false, coverage: [], exclusions: [] }
   });
 
   // Load categories and suppliers
@@ -158,6 +168,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           warranty: { duration: 0, type: 'months' }
         },
         images: product.images || []
+  ,
+  warranty: (product as any).warranty || { enabled: false, periodDays: 0, type: 'manufacturer', requiresSerial: false, coverage: [], exclusions: [] }
       });
   setAutoStickers(false); // editing existing product: default off
   setStickersQty(product.stock?.current || 0);
@@ -183,6 +195,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           warranty: { duration: 0, type: 'months' }
         },
         images: []
+  ,
+  warranty: { enabled: false, periodDays: 0, type: 'manufacturer', requiresSerial: false, coverage: [], exclusions: [] }
       });
   setAutoStickers(true);
   setStickersQty(0);
@@ -704,6 +718,81 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Warranty Configuration */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4 flex items-center gap-2">
+              Warranty
+            </h3>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 text-[#F8F8F8]">
+                <input
+                  type="checkbox"
+                  checked={Boolean(formData.warranty?.enabled)}
+                  onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), enabled: e.target.checked } }))}
+                />
+                <span>Enable Warranty for this product</span>
+              </label>
+              {formData.warranty?.enabled && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-[#F8F8F8] mb-2">Period (Days)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={formData.warranty?.periodDays || 0}
+                      onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), periodDays: parseInt(e.target.value)||0 } }))}
+                      className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                      placeholder="e.g. 365"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#F8F8F8] mb-2">Warranty Type</label>
+                    <select
+                      value={formData.warranty?.type || 'manufacturer'}
+                      onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), type: e.target.value } }))}
+                      className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+                    >
+                      <option value="manufacturer">Manufacturer</option>
+                      <option value="extended">Extended</option>
+                      <option value="lifetime">Lifetime</option>
+                      <option value="none">None</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center mt-6 gap-2">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData.warranty?.requiresSerial)}
+                      onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), requiresSerial: e.target.checked } }))}
+                    />
+                    <span className="text-sm text-[#F8F8F8]">Requires Serial Activation</span>
+                  </div>
+                  <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[#F8F8F8] mb-2">Coverage (comma separated)</label>
+                      <input
+                        type="text"
+                        value={(formData.warranty?.coverage||[]).join(', ')}
+                        onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), coverage: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) } }))}
+                        className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                        placeholder="Battery, Speaker"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#F8F8F8] mb-2">Exclusions (comma separated)</label>
+                      <input
+                        type="text"
+                        value={(formData.warranty?.exclusions||[]).join(', ')}
+                        onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), exclusions: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) } }))}
+                        className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                        placeholder="Physical damage, Liquid"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

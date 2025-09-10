@@ -223,6 +223,23 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+  // New structured warranty configuration (Phase 1)
+  warranty: {
+    enabled: { type: Boolean, default: false },
+    periodDays: { type: Number, min: 0 },
+    type: { type: String, enum: ['manufacturer','extended','lifetime','none'], default: 'manufacturer' },
+    coverage: [{ type: String, trim: true }],
+    exclusions: [{ type: String, trim: true }],
+    termsPdfUrl: { type: String, trim: true },
+    allowExtendedUpsell: { type: Boolean, default: false },
+    extendedOptions: [{
+      name: { type: String, trim: true },
+      additionalPeriodDays: { type: Number, min: 1 },
+      price: { type: Number, min: 0 },
+      sku: { type: String, trim: true }
+    }],
+    requiresSerial: { type: Boolean, default: false }
+  },
   createdAt: {
     type: Date,
     default: Date.now

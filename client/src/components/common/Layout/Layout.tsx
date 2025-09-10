@@ -1,16 +1,17 @@
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState } from 'react';
 
-export const AppLayout = ({ children }: { children: React.ReactNode }) => {
-  const location = useLocation();
+interface AppLayoutProps {
+  children: React.ReactNode;
+  className?: string; // allow per-page background / layout overrides
+}
+
+export const AppLayout = ({ children, className = '' }: AppLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
-  // Sidebar stays closed until user toggles
-
   return (
-    <div className="min-h-screen w-full flex bg-black md:bg-transparent relative">
+  <div className={`min-h-screen w-full flex relative ${className}`}>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 min-h-0 flex flex-col">
         <Header onToggleSidebar={() => setSidebarOpen((v) => !v)} sidebarOpen={sidebarOpen} />

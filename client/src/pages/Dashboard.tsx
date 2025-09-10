@@ -7,6 +7,7 @@ import {
   RecentSales,
   QuickActions
 } from '@/features/dashboard';
+import { GlassCard } from '@/components/common/Card';
 import { motion } from 'framer-motion';
 
 const Dashboard = () => {
@@ -73,26 +74,26 @@ const Dashboard = () => {
   ];
 
   return (
-    <AppLayout>
+    <AppLayout className="bg-[#242424]">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="space-y-8 p-6"
+        className="space-y-10 p-6"
       >
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-            Dashboard
-          </h1>
-          <p className="text-gray-300 mt-2">Welcome to VoltZone POS - Your business at a glance</p>
+          <h1 className="text-4xl font-bold text-[#f8f8f8] tracking-tight">Dashboard</h1>
+          <p className="mt-2 text-sm text-gray-400 tracking-wide">Your business at a glance</p>
         </div>
 
         {/* Quick Actions */}
-        <QuickActions />
+        <GlassCard variant="dark" className="p-6">
+          <QuickActions />
+        </GlassCard>
 
-        {/* Stats Cards */}
-        <DashboardStats stats={stats} />
+  {/* Stats Cards (supplier-style) */}
+  <DashboardStats stats={stats} />
 
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

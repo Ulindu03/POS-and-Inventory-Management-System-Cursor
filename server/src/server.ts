@@ -28,6 +28,8 @@ import returnRoutes from './routes/return.routes';
 import promotionRoutes from './routes/promotion.routes';
 import tripRoutes from './routes/trip.routes';
 import damageRoutes from './routes/damage.routes';
+import warrantyRoutes from './routes/warranty.routes';
+import warrantyClaimRoutes from './routes/warrantyClaim.routes';
 import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
@@ -103,6 +105,8 @@ app.use('/api/returns', returnRoutes);
 app.use('/api/promotions', promotionRoutes);
 app.use('/api/trips', tripRoutes);
 app.use('/api/damages', damageRoutes);
+app.use('/api/warranty', warrantyRoutes);
+app.use('/api/warranty-claims', warrantyClaimRoutes);
 
 // Dev seed route for products and categories
 app.get('/api/dev/seed-products', async (_req, res) => {
@@ -418,9 +422,10 @@ const io = new IOServer(httpServer, {
   origin: (_origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
       if ((process.env.NODE_ENV || 'development') !== 'production') {
         return cb(null, true);
+      } else {
+        // if you need strict production origins, replace with an includes check
+        return cb(null, true);
       }
-      // if you need strict production origins, replace with an includes check
-      return cb(null, true);
   },
   credentials: true,
   },

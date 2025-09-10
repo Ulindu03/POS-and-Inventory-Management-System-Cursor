@@ -3,6 +3,8 @@ import { formatLKR } from '@/lib/utils/currency';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { salesApi, PaymentMethod } from '@/lib/api/sales.api';
+import client from '@/lib/api/client';
+import { getAccessToken } from '@/lib/api/token';
 
 interface Props {
   open: boolean;
@@ -19,6 +21,60 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const [promo, setPromo] = useState('');
   const setDiscount = useCartStore((s) => s.setDiscount);
   const [loading, setLoading] = useState(false);
+  const [warrantySelections, setWarrantySelections] = useState<Record<string, { optionName?: string; additionalDays: number; fee: number }[]>>({});
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerNIC, setCustomerNIC] = useState('');
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [customerLookupLoading, setCustomerLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  let customerButtonLabel = 'Save Customer';
+  if (creatingCustomer) customerButtonLabel = 'Saving...';
+  if (customerId) customerButtonLabel = 'Customer Linked';
+  const toggleExtendedOption = (cartItemId: string, opt: any) => {
+    setWarrantySelections(prev => {
+      const list = prev[cartItemId] || [];
+      const exists = list.find(l => l.optionName === opt.name);
+      const nextList = exists ? list.filter(l => l.optionName !== opt.name) : [...list, { optionName: opt.name, additionalDays: opt.additionalPeriodDays || 0, fee: opt.price || 0 }];
+      return { ...prev, [cartItemId]: nextList };
+    });
+  };
+  const completeSale = async () => {
+    setLoading(true);
+    try {
+      const paid = payments.length ? payments : [{ method, amount: total }];
+      const res = await salesApi.create({
+        items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })),
+        discount,
+        payments: paid,
+        discountCode: promo || undefined,
+        extendedWarrantySelections: warrantySelections,
+        customer: customerId || undefined,
+      });
+      const sale = res.data.sale;
+      onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method: paid[0].method as any });
+      toast.success('Sale completed');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message || err?.message || 'Failed to complete sale';
+      if (status === 409) {
+        const data = err?.response?.data;
+        const pId = data?.data?.productId || data?.productId;
+        const avail = data?.data?.available ?? data?.available;
+        const name = items.find((i) => i.id === String(pId))?.name;
+        const msg409 = name ? `Insufficient stock for ${name}. Available: ${avail ?? 0}.` : 'Insufficient stock for one or more items.';
+        toast.error(msg409);
+      } else {
+        toast.error(msg);
+      }
+      return;
+    } finally {
+      setLoading(false);
+    }
+  };
+  // Build list of cart items that have extended warranty options defined on product (assumes product object carries warranty.extendedOptions)
+  const upsellItems = items.filter((i: any) => i.product?.warranty?.enabled && i.product?.warranty?.allowExtendedUpsell && Array.isArray(i.product?.warranty?.extendedOptions) && i.product.warranty.extendedOptions.length > 0);
   if (!open) return null;
 
   return (
@@ -80,48 +136,123 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
           >Apply</button>
         </div>
+        {/* Customer quick capture */}
+        <div className="mb-4 space-y-3">
+          <div className="text-sm font-semibold opacity-90">Customer (optional for warranty)</div>
+          <div className="flex gap-2 text-sm items-end">
+            <div className="flex-1 space-y-1">
+              <label htmlFor="pos-customer-phone" className="block text-[11px] opacity-70">Phone</label>
+              <input id="pos-customer-phone" value={customerPhone} onChange={e=>{ setCustomerPhone(e.target.value); setLookupError(''); }} placeholder="Enter phone" className="w-full bg-white/10 border border-white/10 rounded-lg px-2 py-1" />
+            </div>
+            <button
+              type="button"
+              disabled={!customerPhone || customerLookupLoading}
+              onClick={async ()=>{
+                if(!customerPhone) return;
+                setCustomerLookupLoading(true);
+                setLookupError('');
+                const raw = customerPhone.trim();
+                // Normalize: keep digits only, convert leading country code 94 to 0
+                let normalized = raw.replace(/\D/g,'');
+                if(normalized.startsWith('94') && normalized.length >= 11) normalized = '0' + normalized.slice(2);
+                try {
+                  const token = getAccessToken();
+                  try {
+                    const resp = await client.get('/customers/lookup/phone', { params: { phone: normalized }, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                    const j: any = resp.data;
+                    if(j.success){
+                      setCustomerId(j.data._id);
+                      setCustomerName(j.data.name||'');
+                      toast.success('Customer found & linked');
+                    } else {
+                      setCustomerId(null);
+                      setLookupError('Not found. Provide name to register');
+                    }
+                  } catch (e:any){
+                    if(e?.response?.status === 401){
+                      setLookupError('Unauthorized: please login again');
+                    } else {
+                      setLookupError('Lookup failed');
+                    }
+                  }
+                } catch { setLookupError('Unexpected error'); }
+                finally { setCustomerLookupLoading(false); }
+              }}
+              className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs"
+            >{customerLookupLoading ? 'Searching...' : 'Find'}</button>
+          </div>
+          {!customerId && (
+            <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="col-span-1 space-y-1">
+                <label htmlFor="pos-customer-name" className="block text-[11px] opacity-70">Name</label>
+                <input id="pos-customer-name" value={customerName} onChange={e=>setCustomerName(e.target.value)} placeholder="Name" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
+              </div>
+              <div className="col-span-1 space-y-1">
+                <label htmlFor="pos-customer-nic" className="block text-[11px] opacity-70">NIC</label>
+                <input id="pos-customer-nic" value={customerNIC} onChange={e=>setCustomerNIC(e.target.value)} placeholder="NIC" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
+              </div>
+              <div className="col-span-1 flex items-end">
+                <button
+                  type="button"
+                  disabled={creatingCustomer || !customerPhone || !customerName}
+                  onClick={async ()=>{
+                    if(!customerName || !customerPhone) return;
+                    setCreatingCustomer(true);
+                    try {
+                      const token = getAccessToken();
+                      // Use normalized digits for phone storage
+                      let digits = customerPhone.trim().replace(/\D/g,'');
+                      if(digits.startsWith('94') && digits.length >= 11) digits = '0' + digits.slice(2);
+                      try {
+                        const resp = await client.post('/customers', { name: customerName, phone: digits, email: `${digits}@temp.local`, address:{ street:'-', city:'-', province:'-', postalCode:'-' }, type:'retail', creditLimit:0, loyaltyPoints:0, taxId:'', birthday:'', notes:'', nic: customerNIC }, { headers: token? { Authorization: `Bearer ${token}` } : {} });
+                        const j:any = resp.data;
+                        if(j.success){ toast.success('Customer saved'); setCustomerId(j.data._id); }
+                        else toast.error(j.message||'Failed to save customer');
+                      } catch(e:any){
+                        if(e?.response?.status === 401) toast.error('Unauthorized: login required'); else toast.error('Customer create error');
+                      }
+                    } catch { toast.error('Unexpected error'); } finally { setCreatingCustomer(false); }
+                  }}
+                  className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs w-full"
+                >{customerButtonLabel}</button>
+              </div>
+            </div>
+          )}
+          <div className="text-xs h-4">
+            {customerId && <span className="text-emerald-400">Linked: {customerName||customerPhone}</span>}
+            {!customerId && lookupError && <span className="text-yellow-300">{lookupError}</span>}
+          </div>
+        </div>
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20">Cancel</button>
-          <button
-            disabled={loading}
-            onClick={async () => {
-              setLoading(true);
-              try {
-                const paid = payments.length ? payments : [{ method, amount: total }];
-                const res = await salesApi.create({
-                  items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })),
-                  discount,
-                  payments: paid,
-                  discountCode: promo || undefined,
-                });
-                const sale = res.data.sale; // salesApi.create returns { success, data: { sale } }
-                onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method: paid[0].method as any });
-                toast.success('Sale completed');
-              } catch (err: any) {
-                // Show friendly error when stock is insufficient or any other issue occurs
-                const status = err?.response?.status;
-                const msg = err?.response?.data?.message || err?.message || 'Failed to complete sale';
-                if (status === 409) {
-                  const data = err?.response?.data as any;
-                  const pId = data?.data?.productId || data?.productId;
-                  const avail = data?.data?.available ?? data?.available;
-                  const name = items.find((i) => i.id === String(pId))?.name;
-                  const msg409 = name ? `Insufficient stock for ${name}. Available: ${avail ?? 0}.` : 'Insufficient stock for one or more items.';
-                  toast.error(msg409);
-                } else {
-                  toast.error(msg);
-                }
-                return; // keep modal open for correction
-              } finally {
-                setLoading(false);
-              }
-            }}
-            className="px-4 py-2 rounded-xl font-semibold disabled:opacity-60"
-            style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
-          >
-            {loading ? 'Processing...' : 'Complete Sale'}
-          </button>
+          <button disabled={loading} onClick={completeSale} className="px-4 py-2 rounded-xl font-semibold disabled:opacity-60" style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}>{loading ? 'Processing...' : 'Complete Sale'}</button>
         </div>
+        {upsellItems.length > 0 && (
+          <div className="mt-6 border-t border-white/10 pt-4">
+            <div className="text-sm font-semibold mb-2 opacity-90">Extended Warranty Offers</div>
+            <div className="space-y-3 max-h-56 overflow-auto pr-1">
+              {upsellItems.map((ci:any) => (
+                <div key={ci.id} className="p-2 rounded-lg bg-white/5 border border-white/10">
+                  <div className="text-xs font-medium mb-1 flex justify-between items-center">
+                    <span>{ci.name}</span>
+                    <span className="opacity-60">Qty {ci.qty}</span>
+                  </div>
+                  <div className="grid gap-2">
+                    {ci.product.warranty.extendedOptions.map((opt:any, idx:number) => {
+                      const selected = (warrantySelections[ci.id]||[]).some(s => s.optionName === opt.name);
+                      return (
+                        <button type="button" key={`${ci.id}-opt-${idx}`} onClick={() => toggleExtendedOption(ci.id, opt)} className={`text-left px-3 py-2 rounded-lg border text-xs transition ${selected ? 'bg-yellow-300 text-black border-yellow-200' : 'bg-white/10 hover:bg-white/20 border-white/10 text-[#F8F8F8]'}`}>
+                          <div className="flex justify-between items-center"><span>{opt.name || `+${opt.additionalPeriodDays}d`}</span><span className="font-semibold">+{formatLKR(opt.price || 0)}</span></div>
+                          <div className="opacity-60 mt-0.5">Adds {opt.additionalPeriodDays} days</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
