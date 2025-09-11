@@ -93,7 +93,25 @@ const POS = () => {
             warranties: warranties.map(w => ({ warrantyNo: w.warrantyNo, status: w.status, periodDays: w.periodDays, endDate: w.endDate, requiresActivation: w.status === 'pending_activation' }))
           });
           // Notify other tabs/components (like Warranty page) to refresh
-          try { if (warranties.length) window.dispatchEvent(new Event('warranty:updated')); } catch {}
+          try {
+            if (warranties.length) window.dispatchEvent(new Event('warranty:updated'));
+            // Broadcast sale created with optional customer id to refresh customer purchase history
+            const detail: any = { saleId: sale.id, invoiceNo: sale.invoiceNo, customerId: sale.customerId };
+            window.dispatchEvent(new CustomEvent('sales:created', { detail }));
+            // Cross-tab broadcast via BroadcastChannel and storage event
+            try {
+              const bc = new (window as any).BroadcastChannel ? new BroadcastChannel('sales') : null;
+              if (bc) {
+                bc.postMessage({ type: 'created', ...detail, ts: Date.now() });
+                bc.close();
+              }
+            } catch {}
+            try {
+              localStorage.setItem('sales:lastCreated', JSON.stringify({ ...detail, ts: Date.now() }));
+              // clear shortly after to avoid buildup
+              setTimeout(() => { try { localStorage.removeItem('sales:lastCreated'); } catch {} }, 250);
+            } catch {}
+          } catch {}
           setOpen(false);
           clear();
         }}

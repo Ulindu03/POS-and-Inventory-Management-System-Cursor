@@ -8,6 +8,7 @@ interface CustomerListProps {
 	onAddCustomer: () => void;
 	onEditCustomer: (customer: Customer) => void;
 	onViewCustomer: (customer: Customer) => void;
+	onDeleteCustomer?: (customer: Customer) => void;
 	isLoading?: boolean;
 	tableView?: boolean;
 }
@@ -33,6 +34,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({
 	onAddCustomer,
 	onEditCustomer,
 	onViewCustomer,
+	onDeleteCustomer,
 	isLoading,
 	tableView = false,
 }) => {
@@ -109,19 +111,27 @@ export const CustomerList: React.FC<CustomerListProps> = ({
 									<span className="ml-2 text-yellow-300 font-semibold">{customer.loyaltyPoints?.toLocaleString() || 0} pts</span>
 								</div>
 							</div>
-							<div className="flex gap-2 mt-4">
+							<div className="flex gap-2 mt-4 justify-start flex-wrap">
 								<button
 									onClick={() => onViewCustomer(customer)}
-									className="flex-1 py-1.5 rounded-lg bg-white/10 text-blue-400 font-semibold hover:bg-blue-500/20 hover:text-blue-300 transition"
+									className="inline-flex w-auto px-4 py-1.5 rounded-lg bg-white/10 text-blue-400 font-semibold hover:bg-blue-500/20 hover:text-blue-300 transition shrink-0"
 								>
 									View
 								</button>
 								<button
 									onClick={() => onEditCustomer(customer)}
-									className="flex-1 py-1.5 rounded-lg bg-white/10 text-green-400 font-semibold hover:bg-green-500/20 hover:text-green-300 transition"
+									className="inline-flex w-auto px-4 py-1.5 rounded-lg bg-white/10 text-green-400 font-semibold hover:bg-green-500/20 hover:text-green-300 transition shrink-0"
 								>
 									Edit
 								</button>
+								{onDeleteCustomer && (
+									<button
+										onClick={() => onDeleteCustomer(customer)}
+										className="inline-flex w-auto px-4 py-1.5 rounded-lg bg-white/10 text-red-400 font-semibold hover:bg-red-500/20 hover:text-red-300 transition shrink-0"
+									>
+										Delete
+									</button>
+								)}
 							</div>
 						</motion.div>
 					))}

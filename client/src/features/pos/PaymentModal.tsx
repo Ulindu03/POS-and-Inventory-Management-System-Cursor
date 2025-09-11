@@ -9,7 +9,7 @@ import { getAccessToken } from '@/lib/api/token';
 interface Props {
   open: boolean;
   onClose: () => void;
-  onComplete: (sale: { invoiceNo: string; id: string; method: 'cash' | 'card' | 'digital' }) => void;
+  onComplete: (sale: { invoiceNo: string; id: string; method: 'cash' | 'card' | 'digital'; customerId?: string | null }) => void;
 }
 
 export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
@@ -22,13 +22,18 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const setDiscount = useCartStore((s) => s.setDiscount);
   const [loading, setLoading] = useState(false);
   const [warrantySelections, setWarrantySelections] = useState<Record<string, { optionName?: string; additionalDays: number; fee: number }[]>>({});
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customerNIC, setCustomerNIC] = useState('');
+  // Separate panels: existing lookup vs new retail registration
+  const [lookupPhone, setLookupPhone] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newName, setNewName] = useState('');
+  // Retail quick capture requires only name + phone
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [customerLookupLoading, setCustomerLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [linkedName, setLinkedName] = useState('');
+  const [linkedType, setLinkedType] = useState<string | undefined>(undefined);
+  const [saveHover, setSaveHover] = useState(false);
   let customerButtonLabel = 'Save Customer';
   if (creatingCustomer) customerButtonLabel = 'Saving...';
   if (customerId) customerButtonLabel = 'Customer Linked';
@@ -40,20 +45,66 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
       return { ...prev, [cartItemId]: nextList };
     });
   };
+  async function createRetailCustomerIfNeeded(): Promise<string | null> {
+    if (customerId || !newName || !newPhone) return customerId;
+    setCreatingCustomer(true);
+    try {
+      const token = getAccessToken();
+      // Normalize digits for phone storage
+      let digits = newPhone.trim().replace(/\D/g, '');
+      if (digits.startsWith('94') && digits.length >= 11) digits = '0' + digits.slice(2);
+      try {
+        const resp = await client.post('/customers', {
+          name: newName,
+          phone: digits,
+          email: `${digits}@temp.local`,
+          address: { street: '-', city: '-', province: '-', postalCode: '-' },
+          type: 'retail',
+          creditLimit: 0,
+          loyaltyPoints: 0,
+        }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const j: any = resp.data;
+        if (j.success) {
+          const newId = j.data._id;
+          setCustomerId(newId);
+          setLinkedName(newName);
+          setLinkedType('retail');
+          toast.success('Customer saved');
+          // notify others
+          try { window.dispatchEvent(new CustomEvent('customers:changed', { detail: { type: 'created', id: newId } })); } catch {}
+          try { const bc = (window as any).BroadcastChannel ? new BroadcastChannel('customers') : null; if (bc) { bc.postMessage({ type: 'created', id: newId, ts: Date.now() }); bc.close(); } } catch {}
+          try { localStorage.setItem('customers:lastChanged', JSON.stringify({ type: 'created', id: newId, ts: Date.now() })); setTimeout(() => { try { localStorage.removeItem('customers:lastChanged'); } catch {} }, 250); } catch {}
+          return newId;
+        } else {
+          toast.error(j.message || 'Failed to save customer');
+          return null;
+        }
+      } catch (e: any) {
+        if (e?.response?.status === 401) toast.error('Unauthorized: login required'); else toast.error('Customer create error');
+        return null;
+      }
+    } finally { setCreatingCustomer(false); }
+  }
+
   const completeSale = async () => {
     setLoading(true);
     try {
       const paid = payments.length ? payments : [{ method, amount: total }];
+      // Auto-create retail customer if name + phone provided but not yet linked
+      let customerIdToUse: string | null = customerId;
+      if (!customerIdToUse && newName && newPhone) {
+        customerIdToUse = await createRetailCustomerIfNeeded();
+      }
       const res = await salesApi.create({
         items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })),
         discount,
         payments: paid,
         discountCode: promo || undefined,
         extendedWarrantySelections: warrantySelections,
-        customer: customerId || undefined,
+        customer: customerIdToUse || undefined,
       });
       const sale = res.data.sale;
-      onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method: paid[0].method as any });
+      onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method: paid[0].method as any, customerId: customerIdToUse });
       toast.success('Sale completed');
     } catch (err: any) {
       const status = err?.response?.status;
@@ -136,91 +187,88 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
           >Apply</button>
         </div>
-        {/* Customer quick capture */}
+        {/* Customer section */}
         <div className="mb-4 space-y-3">
-          <div className="text-sm font-semibold opacity-90">Customer (optional for warranty)</div>
-          <div className="flex gap-2 text-sm items-end">
-            <div className="flex-1 space-y-1">
-              <label htmlFor="pos-customer-phone" className="block text-[11px] opacity-70">Phone</label>
-              <input id="pos-customer-phone" value={customerPhone} onChange={e=>{ setCustomerPhone(e.target.value); setLookupError(''); }} placeholder="Enter phone" className="w-full bg-white/10 border border-white/10 rounded-lg px-2 py-1" />
-            </div>
-            <button
-              type="button"
-              disabled={!customerPhone || customerLookupLoading}
-              onClick={async ()=>{
-                if(!customerPhone) return;
-                setCustomerLookupLoading(true);
-                setLookupError('');
-                const raw = customerPhone.trim();
-                // Normalize: keep digits only, convert leading country code 94 to 0
-                let normalized = raw.replace(/\D/g,'');
-                if(normalized.startsWith('94') && normalized.length >= 11) normalized = '0' + normalized.slice(2);
-                try {
-                  const token = getAccessToken();
+          <div className="text-sm font-semibold opacity-90">Customer</div>
+          {/* Existing customer lookup (retail or wholesale) */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs opacity-80 mb-2">Existing customer</div>
+            <div className="flex gap-2 text-sm items-end">
+              <div className="flex-1 space-y-1">
+                <label htmlFor="pos-lookup-phone" className="block text-[11px] opacity-70">Phone</label>
+                <input id="pos-lookup-phone" value={lookupPhone} onChange={e=>{ setLookupPhone(e.target.value); setLookupError(''); }} placeholder="Enter phone" className="w-full bg-white/10 border border-white/10 rounded-lg px-2 py-1" />
+              </div>
+              <button
+                type="button"
+                disabled={!lookupPhone || customerLookupLoading}
+                onClick={async ()=>{
+                  if(!lookupPhone) return;
+                  setCustomerLookupLoading(true);
+                  setLookupError('');
+                  const raw = lookupPhone.trim();
+                  // Normalize: keep digits only, convert leading country code 94 to 0
+                  let normalized = raw.replace(/\D/g,'');
+                  if(normalized.startsWith('94') && normalized.length >= 11) normalized = '0' + normalized.slice(2);
                   try {
-                    const resp = await client.get('/customers/lookup/phone', { params: { phone: normalized }, headers: token ? { Authorization: `Bearer ${token}` } : {} });
-                    const j: any = resp.data;
-                    if(j.success){
-                      setCustomerId(j.data._id);
-                      setCustomerName(j.data.name||'');
-                      toast.success('Customer found & linked');
-                    } else {
-                      setCustomerId(null);
-                      setLookupError('Not found. Provide name to register');
+                    const token = getAccessToken();
+                    try {
+                      const resp = await client.get('/customers/lookup/phone', { params: { phone: normalized }, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                      const j: any = resp.data;
+                      if(j.success){
+                        setCustomerId(j.data._id);
+                        setLinkedName(j.data.name||'');
+                        setLinkedType(j.data.type);
+                        setLookupError('');
+                        toast.success('Customer found & linked');
+                      } else {
+                        setCustomerId(null);
+                        setLinkedName('');
+                        setLinkedType(undefined);
+                        setLookupError('Not found. Use New retail section below');
+                      }
+                    } catch (e:any){
+                      if(e?.response?.status === 401){
+                        setLookupError('Unauthorized: please login again');
+                      } else {
+                        setLookupError('Lookup failed');
+                      }
                     }
-                  } catch (e:any){
-                    if(e?.response?.status === 401){
-                      setLookupError('Unauthorized: please login again');
-                    } else {
-                      setLookupError('Lookup failed');
-                    }
-                  }
-                } catch { setLookupError('Unexpected error'); }
-                finally { setCustomerLookupLoading(false); }
-              }}
-              className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs"
-            >{customerLookupLoading ? 'Searching...' : 'Find'}</button>
+                  } catch { setLookupError('Unexpected error'); }
+                  finally { setCustomerLookupLoading(false); }
+                }}
+                className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs"
+              >{customerLookupLoading ? 'Searching...' : 'Find'}</button>
+            </div>
+            <div className="text-xs h-4">
+              {customerId && <span className="text-emerald-400">Linked: {linkedName || lookupPhone} {linkedType ? `(${linkedType})` : ''}</span>}
+              {!customerId && lookupError && <span className="text-yellow-300">{lookupError}</span>}
+            </div>
           </div>
-          {!customerId && (
-            <div className="grid grid-cols-3 gap-2 text-sm">
+
+          {/* New retail customer registration */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs opacity-80 mb-2">New retail customer</div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="col-span-1 space-y-1">
-                <label htmlFor="pos-customer-name" className="block text-[11px] opacity-70">Name</label>
-                <input id="pos-customer-name" value={customerName} onChange={e=>setCustomerName(e.target.value)} placeholder="Name" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
+                <label htmlFor="pos-new-phone" className="block text-[11px] opacity-70">Phone</label>
+                <input id="pos-new-phone" value={newPhone} onChange={e=>setNewPhone(e.target.value)} placeholder="Enter phone" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
               </div>
               <div className="col-span-1 space-y-1">
-                <label htmlFor="pos-customer-nic" className="block text-[11px] opacity-70">NIC</label>
-                <input id="pos-customer-nic" value={customerNIC} onChange={e=>setCustomerNIC(e.target.value)} placeholder="NIC" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
+                <label htmlFor="pos-new-name" className="block text-[11px] opacity-70">Name</label>
+                <input id="pos-new-name" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Name" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
               </div>
-              <div className="col-span-1 flex items-end">
+              <div className="col-span-2 flex items-end">
                 <button
                   type="button"
-                  disabled={creatingCustomer || !customerPhone || !customerName}
-                  onClick={async ()=>{
-                    if(!customerName || !customerPhone) return;
-                    setCreatingCustomer(true);
-                    try {
-                      const token = getAccessToken();
-                      // Use normalized digits for phone storage
-                      let digits = customerPhone.trim().replace(/\D/g,'');
-                      if(digits.startsWith('94') && digits.length >= 11) digits = '0' + digits.slice(2);
-                      try {
-                        const resp = await client.post('/customers', { name: customerName, phone: digits, email: `${digits}@temp.local`, address:{ street:'-', city:'-', province:'-', postalCode:'-' }, type:'retail', creditLimit:0, loyaltyPoints:0, taxId:'', birthday:'', notes:'', nic: customerNIC }, { headers: token? { Authorization: `Bearer ${token}` } : {} });
-                        const j:any = resp.data;
-                        if(j.success){ toast.success('Customer saved'); setCustomerId(j.data._id); }
-                        else toast.error(j.message||'Failed to save customer');
-                      } catch(e:any){
-                        if(e?.response?.status === 401) toast.error('Unauthorized: login required'); else toast.error('Customer create error');
-                      }
-                    } catch { toast.error('Unexpected error'); } finally { setCreatingCustomer(false); }
-                  }}
-                  className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs w-full"
+                  disabled={creatingCustomer || !newPhone || !newName}
+                  onClick={async ()=>{ await createRetailCustomerIfNeeded(); }}
+                  onMouseEnter={()=>setSaveHover(true)}
+                  onMouseLeave={()=>setSaveHover(false)}
+                  className="px-3 py-2 rounded disabled:opacity-40 text-xs w-full transition-colors"
+                  style={{ backgroundColor: (!creatingCustomer && newPhone && newName) ? (saveHover ? '#97bde1' : 'rgba(255,255,255,0.10)') : 'rgba(255,255,255,0.10)', color: (!creatingCustomer && newPhone && newName && saveHover) ? '#000' : undefined }}
                 >{customerButtonLabel}</button>
               </div>
             </div>
-          )}
-          <div className="text-xs h-4">
-            {customerId && <span className="text-emerald-400">Linked: {customerName||customerPhone}</span>}
-            {!customerId && lookupError && <span className="text-yellow-300">{lookupError}</span>}
           </div>
         </div>
         <div className="flex gap-2 justify-end">

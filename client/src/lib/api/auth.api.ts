@@ -1,3 +1,4 @@
+//functions to call the backend API (server) from your frontend (React)
 import axios from './client';
 import { setAccessToken, clearAccessToken, setRefreshToken, clearRefreshToken, getRefreshToken } from '@/lib/api/token';
 

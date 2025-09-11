@@ -135,8 +135,8 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
       exit={{ opacity: 0, y: -20 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
     >
-      <GlassCard className="w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+      <GlassCard variant="dark" className="w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 text-[#EDEDED]">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
@@ -144,57 +144,58 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
                 {getTypeIcon(customer.type)}
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">{customer.name}</h2>
-                <p className="text-gray-600">{customer.customerCode}</p>
+                <h2 className="text-2xl font-bold" style={{ color: '#F5F5F5' }}>{customer.name}</h2>
+                <p className="" style={{ color: '#BBBBBB' }}>{customer.customerCode}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={onEdit}
-                className="px-4 py-2 bg-purple-100 text-purple-700 rounded-xl hover:bg-purple-200 transition-colors flex items-center gap-2"
+                className="px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
+                style={{ backgroundColor: '#353535', color: '#EDEDED' }}
               >
                 <Edit className="w-4 h-4" />
                 Edit
               </button>
               <button
                 onClick={() => setShowRedemptionModal(true)}
-                className="px-4 py-2 bg-yellow-100 text-yellow-700 rounded-xl hover:bg-yellow-200 transition-colors flex items-center gap-2"
+                className="px-4 py-2 rounded-xl transition-colors flex items-center gap-2"
+                style={{ backgroundColor: '#353535', color: '#FFD966' }}
               >
                 <Gift className="w-4 h-4" />
                 Redeem Points
               </button>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 rounded-lg transition-colors"
+                style={{ color: '#C9C9C9' }}
               >
-                <X className="w-6 h-6 text-gray-600" />
+                <X className="w-6 h-6" />
               </button>
             </div>
           </div>
 
           {/* Customer Type Badge */}
           <div className="mb-6">
-            <span className={`px-3 py-1 rounded-full text-sm font-semibold border ${getTypeColor(customer.type)}`}>
-              <div className="flex items-center gap-2">
-                {getTypeIcon(customer.type)}
-                {customer.type.charAt(0).toUpperCase() + customer.type.slice(1)} Customer
-              </div>
-            </span>
+            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold border ${getTypeColor(customer.type)}`}>
+              {getTypeIcon(customer.type)}
+              {customer.type.charAt(0).toUpperCase() + customer.type.slice(1)} Customer
+            </div>
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-gray-200 mb-6">
+          <div className="flex border-b mb-6" style={{ borderColor: '#353535' }}>
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-6 py-3 border-b-2 font-medium transition-colors flex items-center gap-2 ${
-                    activeTab === tab.id
-                      ? 'border-purple-500 text-purple-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
+                  className={`px-6 py-3 border-b-2 font-medium transition-colors flex items-center gap-2`}
+                  style={{
+                    borderColor: activeTab === tab.id ? '#FFD966' : 'transparent',
+                    color: activeTab === tab.id ? '#FFD966' : '#BBBBBB'
+                  }}
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
@@ -213,30 +214,30 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
               >
                 {/* Basic Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <GlassCard className="p-4">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <User className="w-5 h-5 text-purple-600" />
+                  <GlassCard variant="darkSubtle" className="p-4">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: '#EDEDED' }}>
+                      <User className="w-5 h-5" />
                       Basic Information
                     </h3>
                     <div className="space-y-3">
                       <div className="flex items-center gap-3">
-                        <Mail className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-700">{customer.email}</span>
+                        <Mail className="w-4 h-4" style={{ color: '#9CA3AF' }} />
+                        <span style={{ color: '#E0E0E0' }}>{customer.email}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-700">{customer.phone}</span>
+                        <Phone className="w-4 h-4" style={{ color: '#9CA3AF' }} />
+                        <span style={{ color: '#E0E0E0' }}>{customer.phone}</span>
                       </div>
                       {customer.alternatePhone && (
                         <div className="flex items-center gap-3">
-                          <Phone className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-700">{customer.alternatePhone}</span>
+                          <Phone className="w-4 h-4" style={{ color: '#9CA3AF' }} />
+                          <span style={{ color: '#E0E0E0' }}>{customer.alternatePhone}</span>
                         </div>
                       )}
                       {customer.birthday && (
                         <div className="flex items-center gap-3">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <span className="text-gray-700">
+                          <Calendar className="w-4 h-4" style={{ color: '#9CA3AF' }} />
+                          <span style={{ color: '#E0E0E0' }}>
                             {new Date(customer.birthday).toLocaleDateString()}
                           </span>
                         </div>
@@ -244,12 +245,12 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
                     </div>
                   </GlassCard>
 
-                  <GlassCard className="p-4">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-purple-600" />
+                  <GlassCard variant="darkSubtle" className="p-4">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: '#EDEDED' }}>
+                      <MapPin className="w-5 h-5" />
                       Address
                     </h3>
-                    <div className="space-y-2 text-gray-700">
+                    <div className="space-y-2" style={{ color: '#E0E0E0' }}>
                       <p>{customer.address.street}</p>
                       <p>{customer.address.city}, {customer.address.province}</p>
                       <p>{customer.address.postalCode}</p>
@@ -259,50 +260,50 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
 
                 {/* Statistics Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-xl border border-purple-200">
+                  <div className="p-4 rounded-xl border" style={{ backgroundColor: '#2B2B2B', borderColor: '#353535' }}>
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-100 rounded-lg">
-                        <ShoppingCart className="w-5 h-5 text-purple-600" />
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: '#353535' }}>
+                        <ShoppingCart className="w-5 h-5" style={{ color: '#FFD966' }} />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600">Total Purchases</p>
-                        <p className="text-2xl font-bold text-purple-600">{customer.totalPurchases}</p>
+                        <p className="text-sm" style={{ color: '#BBBBBB' }}>Total Purchases</p>
+                        <p className="text-2xl font-bold" style={{ color: '#FFD966' }}>{customer.totalPurchases}</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-4 rounded-xl border border-blue-200">
+                  <div className="p-4 rounded-xl border" style={{ backgroundColor: '#2B2B2B', borderColor: '#353535' }}>
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <DollarSign className="w-5 h-5 text-blue-600" />
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: '#353535' }}>
+                        <DollarSign className="w-5 h-5" style={{ color: '#86EFAC' }} />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600">Total Spent</p>
-                        <p className="text-2xl font-bold text-blue-600">{formatLKR(customer.totalSpent ?? 0)}</p>
+                        <p className="text-sm" style={{ color: '#BBBBBB' }}>Total Spent</p>
+                        <p className="text-2xl font-bold" style={{ color: '#86EFAC' }}>{formatLKR(customer.totalSpent ?? 0)}</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-4 rounded-xl border border-yellow-200">
+                  <div className="p-4 rounded-xl border" style={{ backgroundColor: '#2B2B2B', borderColor: '#353535' }}>
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-yellow-100 rounded-lg">
-                        <Star className="w-5 h-5 text-yellow-600" />
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: '#353535' }}>
+                        <Star className="w-5 h-5" style={{ color: '#FFD966' }} />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600">Loyalty Points</p>
-                        <p className="text-2xl font-bold text-yellow-600">{customer.loyaltyPoints.toLocaleString()}</p>
+                        <p className="text-sm" style={{ color: '#BBBBBB' }}>Loyalty Points</p>
+                        <p className="text-2xl font-bold" style={{ color: '#FFD966' }}>{customer.loyaltyPoints.toLocaleString()}</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border border-green-200">
+                  <div className="p-4 rounded-xl border" style={{ backgroundColor: '#2B2B2B', borderColor: '#353535' }}>
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <TrendingUp className="w-5 h-5 text-green-600" />
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: '#353535' }}>
+                        <TrendingUp className="w-5 h-5" style={{ color: '#86EFAC' }} />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-600">Member Since</p>
-                        <p className="text-2xl font-bold text-green-600">
+                        <p className="text-sm" style={{ color: '#BBBBBB' }}>Member Since</p>
+                        <p className="text-2xl font-bold" style={{ color: '#86EFAC' }}>
                           {new Date(customer.createdAt).getFullYear()}
                         </p>
                       </div>
@@ -312,27 +313,27 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
 
                 {/* Credit Status */}
                 {customer.creditLimit > 0 && (
-                  <GlassCard className="p-4">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-purple-600" />
+                  <GlassCard variant="darkSubtle" className="p-4">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: '#EDEDED' }}>
+                      <CreditCard className="w-5 h-5" />
                       Credit Status
                     </h3>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Credit Used:</span>
+                        <span style={{ color: '#BBBBBB' }}>Credit Used:</span>
                         <span className="font-semibold">
                           {formatLKR(customer.creditUsed)} / {formatLKR(customer.creditLimit)}
                         </span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div className="w-full rounded-full h-3" style={{ backgroundColor: '#353535' }}>
                         <div 
-                          className="bg-gradient-to-r from-purple-500 to-blue-500 h-3 rounded-full transition-all"
-                          style={{ width: `${Math.min((customer.creditUsed / customer.creditLimit) * 100, 100)}%` }}
-                        ></div>
+                          className="h-3 rounded-full transition-all"
+                          style={{ width: `${Math.min((customer.creditUsed / customer.creditLimit) * 100, 100)}%`, background: 'linear-gradient(90deg,#FFD966,#86EFAC)' }}
+                        />
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-600">Available Credit:</span>
-                        <span className="font-semibold text-green-600">
+                        <span style={{ color: '#BBBBBB' }}>Available Credit:</span>
+                        <span className="font-semibold" style={{ color: '#86EFAC' }}>
                           {formatLKR(customer.creditLimit - customer.creditUsed)}
                         </span>
                       </div>
@@ -347,9 +348,9 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
 
                 {/* Notes */}
                 {customer.notes && (
-                  <GlassCard className="p-4">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Notes</h3>
-                    <p className="text-gray-700">{customer.notes}</p>
+                  <GlassCard variant="darkSubtle" className="p-4">
+                    <h3 className="text-lg font-semibold mb-4" style={{ color: '#EDEDED' }}>Notes</h3>
+                    <p style={{ color: '#E0E0E0' }}>{customer.notes}</p>
                   </GlassCard>
                 )}
               </motion.div>
@@ -362,31 +363,31 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
                 className="space-y-6"
               >
                 {/* Purchase Chart */}
-                <GlassCard className="p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Purchase Trend (Last 7)</h3>
-                  <AreaChart data={purchaseHistoryData} height={200} />
+                <GlassCard variant="darkSubtle" className="p-4">
+                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#EDEDED' }}>Purchase Trend (Last 7)</h3>
+                  <AreaChart data={purchaseHistoryData} height={200} cardVariant="darkSubtle" stroke="#FFD966" />
                 </GlassCard>
 
                 {/* Purchase List */}
-                <GlassCard className="p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Purchases</h3>
+                <GlassCard variant="darkSubtle" className="p-4">
+                  <h3 className="text-lg font-semibold mb-4" style={{ color: '#EDEDED' }}>Recent Purchases</h3>
                   <div className="space-y-3">
                     {purchases.length > 0 ? (
                       purchases.slice(0, 10).map((purchase) => (
-                        <div key={purchase._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={purchase._id} className="flex items-center justify-between p-3 rounded-lg" style={{ backgroundColor: '#2B2B2B' }}>
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                              <ShoppingCart className="w-5 h-5 text-purple-600" />
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#353535' }}>
+                              <ShoppingCart className="w-5 h-5" style={{ color: '#FFD966' }} />
                             </div>
                             <div>
-                              <p className="font-semibold text-gray-900">{purchase.invoiceNo}</p>
-                              <p className="text-sm text-gray-600">
+                              <p className="font-semibold" style={{ color: '#F5F5F5' }}>{purchase.invoiceNo}</p>
+                              <p className="text-sm" style={{ color: '#BBBBBB' }}>
                                 {new Date(purchase.createdAt).toLocaleDateString()}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-semibold text-gray-900">{formatLKR(purchase.total)}</p>
+                            <p className="font-semibold" style={{ color: '#F5F5F5' }}>{formatLKR(purchase.total)}</p>
                             {(() => {
                               const getStatusClass = (status: string) => {
                                 if (status === 'completed') return 'bg-green-100 text-green-700';
@@ -403,7 +404,7 @@ export const CustomerProfile: React.FC<CustomerProfileProps> = ({
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-8 text-gray-500">
+                      <div className="text-center py-8" style={{ color: '#9CA3AF' }}>
                         No purchase history available
                       </div>
                     )}

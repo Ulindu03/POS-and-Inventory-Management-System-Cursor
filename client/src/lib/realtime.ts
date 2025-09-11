@@ -1,3 +1,4 @@
+//functions to manage real-time communication using Socket.IO
 import { io } from 'socket.io-client';
 
 type ClientSocket = {

@@ -12,6 +12,7 @@ import {
   updateCustomer, 
   // deleteCustomer,
   redeemLoyaltyPoints,
+  getCustomerById,
   type Customer,
   type Purchase
 } from '@/lib/api/customers.api';
@@ -20,7 +21,7 @@ import {
 
 const Customers = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [purchases] = useState<Purchase[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -112,6 +113,104 @@ const Customers = () => {
     loadData();
   }, []);
 
+  // When a customer is selected, fetch full details including purchases
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      if (!selectedCustomer) return;
+      try {
+        const res = await getCustomerById(selectedCustomer._id);
+        const details = res.data?.data ?? res.data;
+        const recentPurchases: Purchase[] = res.purchases ?? res.data?.purchases ?? [];
+        setSelectedCustomer(details);
+        setPurchases(recentPurchases);
+      } catch (e) {
+        console.error('Failed to load customer details', e);
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [selectedCustomer?._id]);
+
+  // Listen for sales:created events to refresh purchase list when it belongs to selected customer
+  useEffect(() => {
+    async function refreshForCustomer(customerId: string) {
+      try {
+        const res = await getCustomerById(customerId);
+        const recentPurchases: Purchase[] = res.purchases ?? res.data?.purchases ?? [];
+        setPurchases(recentPurchases);
+        const updated = res.data?.data ?? res.data;
+        setSelectedCustomer(updated);
+        setCustomers(prev => prev.map(c => c._id === updated._id ? { ...c, totalPurchases: updated.totalPurchases, totalSpent: updated.totalSpent, lastPurchase: updated.lastPurchase } : c));
+      } catch (e) {
+        console.error('Failed to refresh purchases', e);
+      }
+    }
+
+    const handler = (ev: Event) => {
+      const e = ev as CustomEvent<any>;
+      const cid = e.detail?.customerId as string | undefined;
+      if (cid && selectedCustomer && cid === selectedCustomer._id) {
+        refreshForCustomer(cid);
+      }
+    };
+    window.addEventListener('sales:created', handler as EventListener);
+    // BroadcastChannel listener
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new (window as any).BroadcastChannel ? new BroadcastChannel('sales') : null;
+      if (bc) {
+        bc.onmessage = (msg: MessageEvent<any>) => {
+          const data = msg.data || {};
+          if (data.type === 'created' && data.customerId && selectedCustomer && data.customerId === selectedCustomer._id) {
+            refreshForCustomer(data.customerId);
+          }
+        };
+      }
+    } catch {}
+    // storage event fallback
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'sales:lastCreated' && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          if (data?.customerId && selectedCustomer && data.customerId === selectedCustomer._id) {
+            refreshForCustomer(data.customerId);
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('sales:created', handler as EventListener);
+  }, [selectedCustomer?._id]);
+
+  // Refresh customer list on create/update from POS
+  useEffect(() => {
+    const refreshCustomers = async () => {
+      try {
+        const resp = await getCustomers({ limit: 50 });
+        setCustomers(resp.data || []);
+      } catch (e) {
+        console.error('Failed to refresh customers list', e);
+      }
+    };
+    const onLocal = () => refreshCustomers();
+    window.addEventListener('customers:changed', onLocal as EventListener);
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new (window as any).BroadcastChannel ? new BroadcastChannel('customers') : null;
+      if (bc) bc.onmessage = () => refreshCustomers();
+    } catch {}
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'customers:lastChanged' && e.newValue) refreshCustomers();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('customers:changed', onLocal as EventListener);
+      window.removeEventListener('storage', onStorage);
+      try { bc?.close(); } catch {}
+    };
+  }, []);
+
   const handleViewCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
     setShowProfile(true);
@@ -184,6 +283,20 @@ const handleAddCustomer = () => {
 const handleEditCustomer = (customer: Customer) => {
   setEditingCustomer(customer);
   setShowForm(true);
+};
+
+const handleDeleteCustomer = async (customer: Customer) => {
+  if (!customer || !customer._id) return;
+  const ok = window.confirm(`Delete customer ${customer.name} (${customer.customerCode})?`);
+  if (!ok) return;
+  try {
+    const { deleteCustomer } = await import('@/lib/api/customers.api');
+    await deleteCustomer(customer._id);
+    setCustomers(prev => prev.filter(c => c._id !== customer._id));
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || 'Failed to delete customer';
+    alert(msg);
+  }
 };
 
   const handleRedeemPoints = async (data: any) => {
@@ -335,6 +448,7 @@ const handleEditCustomer = (customer: Customer) => {
               onAddCustomer={handleAddCustomer}
               onEditCustomer={handleEditCustomer}
               onViewCustomer={handleViewCustomer}
+              onDeleteCustomer={handleDeleteCustomer}
               isLoading={isLoading}
               tableView={false} // Use card view for better design
             />
