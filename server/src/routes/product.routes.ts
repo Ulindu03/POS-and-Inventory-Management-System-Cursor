@@ -20,6 +20,7 @@ router.get('/stickers/batch', authenticate, authorize('admin', 'sales_rep'), Pro
 
 // Protected routes (require authentication)
 router.get('/:id', authenticate, ProductController.getById);
+router.get('/:id/history', authenticate, authorize('admin', 'sales_rep'), ProductController.history);
 
 // Admin/Manager only routes
 router.post('/', authenticate, authorize('admin', 'sales_rep'), ProductController.create);

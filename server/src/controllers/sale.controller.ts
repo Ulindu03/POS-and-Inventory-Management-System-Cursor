@@ -9,12 +9,45 @@ import { StockMovement } from '../models/StockMovement.model';
 import mongoose from 'mongoose';
 import { issueWarranty } from '../services/warranty.service';
 import { emit as emitRealtime } from '../services/realtime.service';
+import { Counter } from '../models/Counter.model';
 
 const nextInvoiceNo = async (): Promise<string> => {
-  const last = await Sale.findOne().sort({ createdAt: -1 }).select('invoiceNo');
-  const n = last?.invoiceNo?.match(/(\d+)$/)?.[1];
-  const next = (n ? parseInt(n, 10) + 1 : 1).toString().padStart(6, '0');
-  return `INV-${next}`;
+  // Determine starting point from last persisted sale
+  const last = await Sale.findOne().sort({ createdAt: -1 }).select('invoiceNo').lean();
+  const lastNum = last?.invoiceNo?.match(/(\d+)$/)?.[1];
+  const base = lastNum ? parseInt(lastNum, 10) : 0;
+
+  // Try incrementing if counter already exists
+  let doc = await Counter.findOneAndUpdate(
+    { key: 'invoice' },
+    { $inc: { seq: 1 } },
+    { new: true }
+  );
+
+  if (!doc) {
+    // Initialize once with base+1; tolerate races with duplicate key protection
+    try {
+      await Counter.create({ key: 'invoice', seq: base + 1 });
+    } catch (e: any) {
+      // Someone else created concurrently; ignore duplicate key errors
+      if (!(e && e.code === 11000)) {
+        throw e;
+      }
+    }
+    // Read current value (do not increment again here)
+    doc = await Counter.findOne({ key: 'invoice' });
+  }
+
+  const seq = (doc?.seq ?? base + 1);
+  // Ensure sequence never goes below base+1 (safety for restored DBs)
+  if (seq < base + 1) {
+    await Counter.updateOne({ key: 'invoice', seq: { $lt: base + 1 } }, { $set: { seq: base + 1 } });
+    const fixed = await Counter.findOne({ key: 'invoice' }).lean();
+    const s = fixed?.seq ?? base + 1;
+    return `INV-${String(s).padStart(6, '0')}`;
+  }
+
+  return `INV-${String(seq).padStart(6, '0')}`;
 };
 
 async function applySaleStockMovement(params: {
@@ -172,8 +205,9 @@ export class SaleController {
   const rate = currency?.rateToBase ?? (s?.currency?.fxRates?.get?.(code) || 1);
   // Try a transaction to keep sale + stock updates consistent; fallback to non-transaction if not supported
   let doc: any;
+  let session: mongoose.ClientSession | null = null;
   try {
-    const session = await mongoose.startSession();
+    session = await mongoose.startSession();
     await session.withTransaction(async () => {
       doc = await Sale.create([
         {
@@ -299,6 +333,10 @@ export class SaleController {
       }, 0);
   // inventory.low_stock handled above after inventory save
     }
+  } finally {
+    if (session) {
+      try { await session.endSession(); } catch {}
+    }
   }
 
   // Post-creation: automatically issue warranties for eligible items (if customer provided)
@@ -375,6 +413,10 @@ export class SaleController {
     }
   }
 
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.log('[sales.create] success', { id: String(doc._id), invoiceNo: doc.invoiceNo, total: doc.total });
+  }
   return res.status(201).json({ success: true, data: { sale: { id: doc._id, invoiceNo: doc.invoiceNo, total: doc.total } } });
     } catch (err) {
   return next(err);

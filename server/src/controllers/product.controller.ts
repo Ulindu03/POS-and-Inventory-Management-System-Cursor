@@ -6,6 +6,8 @@ import { UnitBarcode } from '../models/UnitBarcode.model';
 import { Category } from '../models/Category.model';
 import { Inventory } from '../models/Inventory.model';
 import { StockMovement } from '../models/StockMovement.model';
+import { Sale } from '../models/Sale.model';
+import { PurchaseOrder } from '../models/PurchaseOrder.model';
 import { emit as emitRealtime } from '../services/realtime.service';
 import fs from 'fs';
 import { getPublicUrl } from '../utils/upload';
@@ -402,6 +404,119 @@ export class ProductController {
   return res.json({ success: true, data: { product } });
     } catch (err) {
   return next(err);
+    }
+  }
+
+  // Product purchase & sales history
+  static async history(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params as { id: string };
+      const { startDate, endDate, limit = '50' } = req.query as any;
+      const start = startDate ? new Date(String(startDate)) : new Date(0);
+      const end = endDate ? new Date(String(endDate)) : new Date();
+      const take = Math.min(parseInt(String(limit), 10) || 50, 200);
+
+      // Recent sales containing this product
+      const sales = await Sale.find({
+        'items.product': id,
+        createdAt: { $gte: start, $lte: end },
+      })
+        .select('invoiceNo createdAt items cashier total')
+        .sort({ createdAt: -1 })
+        .limit(take)
+        .lean();
+      // Map sale lines to this product only
+      let saleLines = sales.flatMap((s: any) => (s.items || [])
+        .filter((it: any) => String(it.product) === String(id))
+        .map((it: any) => ({
+          invoiceNo: s.invoiceNo,
+          date: s.createdAt,
+          quantity: it.quantity,
+          unitPrice: it.price,
+          discount: it.discount || 0,
+          lineTotal: it.total,
+        }))
+      );
+
+      // Fallback via stock movements → sale lookup (in case of projection/shape differences)
+      if (saleLines.length === 0) {
+        try {
+          const moves = await StockMovement.find({
+            product: id,
+            type: 'sale',
+            createdAt: { $gte: start, $lte: end },
+          })
+            .select('referenceId reference createdAt quantity')
+            .sort({ createdAt: -1 })
+            .limit(take)
+            .lean();
+          const saleIds = Array.from(new Set((moves || []).map((m: any) => String(m.referenceId)).filter(Boolean)));
+          if (saleIds.length) {
+            const saleDocs = await Sale.find({ _id: { $in: saleIds } })
+              .select('invoiceNo createdAt items')
+              .lean();
+            const byId = new Map(saleDocs.map((d: any) => [String(d._id), d]));
+            saleLines = saleIds.flatMap((sid: string) => {
+              const s = byId.get(sid);
+              if (!s) return [] as any[];
+              return (s.items || [])
+                .filter((it: any) => String(it.product) === String(id))
+                .map((it: any) => ({
+                  invoiceNo: s.invoiceNo,
+                  date: s.createdAt,
+                  quantity: it.quantity,
+                  unitPrice: it.price,
+                  discount: it.discount || 0,
+                  lineTotal: it.total,
+                }));
+            });
+          }
+        } catch {}
+      }
+
+      // Recent purchases (PO items) containing this product
+      const purchases = await PurchaseOrder.find({
+        'items.product': id,
+        orderDate: { $gte: start, $lte: end },
+      })
+        .select('poNumber orderDate items supplier')
+        .populate('supplier', 'name supplierCode')
+        .sort({ orderDate: -1 })
+        .limit(take)
+        .lean();
+      const purchaseLines = purchases.flatMap((p: any) => (p.items || [])
+        .filter((it: any) => String(it.product) === String(id))
+        .map((it: any) => ({
+          poNumber: p.poNumber,
+          date: p.orderDate,
+          supplier: p.supplier,
+          quantity: it.quantity,
+          unitCost: it.unitCost,
+          lineCost: it.totalCost,
+        }))
+      );
+
+      // Summary totals
+      const purchasedQty = purchaseLines.reduce((s, l) => s + (Number(l.quantity) || 0), 0);
+      const purchasedCost = purchaseLines.reduce((s, l) => s + (Number(l.lineCost) || 0), 0);
+      const soldQty = saleLines.reduce((s, l) => s + (Number(l.quantity) || 0), 0);
+      const revenue = saleLines.reduce((s, l) => s + (Number(l.lineTotal) || 0), 0);
+
+      return res.json({
+        success: true,
+        data: {
+          summary: {
+            purchasedQty,
+            purchasedCost,
+            soldQty,
+            revenue,
+          },
+          purchases: purchaseLines,
+          sales: saleLines,
+        },
+      });
+    } catch (err) {
+      return next(err);
     }
   }
 

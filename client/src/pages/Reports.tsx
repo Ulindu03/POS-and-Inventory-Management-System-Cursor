@@ -33,6 +33,7 @@ const Reports = () => {
     endDate: new Date().toISOString().split('T')[0]
   });
   const [reportData, setReportData] = useState<any>(null);
+  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState(false);
 
   const reportCards: ReportCard[] = [
@@ -112,7 +113,7 @@ const Reports = () => {
       let resp: any;
       switch (selectedReport) {
         case 'sales':
-          resp = await reportsApi.sales({ ...params, period: 'monthly' });
+          resp = await reportsApi.sales({ ...params, period });
           break;
         case 'inventory':
           resp = await reportsApi.inventory(params);
@@ -124,7 +125,7 @@ const Reports = () => {
           resp = await reportsApi.suppliers(params);
           break;
         case 'profitloss':
-          resp = await reportsApi.profitLoss({ ...params, period: 'monthly' });
+          resp = await reportsApi.profitLoss({ ...params, period });
           break;
         case 'stock':
           resp = await reportsApi.stockMovements(params);
@@ -215,7 +216,7 @@ const Reports = () => {
                   <h3 className="text-lg font-semibold text-[#F8F8F8]">Report Parameters</h3>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                   <div>
                     <label htmlFor="startDate" className="block text-sm font-medium text-[#F8F8F8] mb-2">
                       Start Date
@@ -246,6 +247,23 @@ const Reports = () => {
                         className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="period" className="block text-sm font-medium text-[#F8F8F8] mb-2">
+                      Period
+                    </label>
+                    <select
+                      id="period"
+                      value={period}
+                      onChange={(e) => setPeriod(e.target.value as any)}
+                      className="w-full px-3 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
                   </div>
 
                   <div className="flex items-end">

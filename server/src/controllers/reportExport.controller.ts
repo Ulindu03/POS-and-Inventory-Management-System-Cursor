@@ -23,7 +23,7 @@ export const exportReport = async (req: Request, res: Response): Promise<void> =
     const ExcelJS = loadModule('exceljs');
     const PDFDocument = loadModule('pdfkit');
     if (!ExcelJS || !PDFDocument) {
-      res.status(503).json({ success: false, message: 'Report export modules not installed. Please run: npm install exceljs pdfkit (in the server folder).', code: 'EXPORT_DEPS_MISSING' });
+      res.status(503).json({ success: false, message: 'Report export modules not installed on server. Please install exceljs and pdfkit.', code: 'EXPORT_DEPS_MISSING' });
       return;
     }
     const { type, format, startDate, endDate } = req.query as any;
@@ -198,23 +198,143 @@ export const exportReport = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // PDF fallback
+    // Elegant PDF
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${fileBase}.pdf`);
-    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const doc = new PDFDocument({ margin: 36, size: 'A4' });
+    doc.on('error', () => { try { res.end(); } catch {} });
     doc.pipe(res);
-    doc.fontSize(18).text(`${capitalize(kind)} Report`, { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(10).text(`Date range: ${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)}`);
-    doc.moveDown();
-    // Simple table header
-    doc.font('Helvetica-Bold');
-    doc.text(columns.map(c => c.header).join('  |  '));
-    doc.font('Helvetica');
-    rows.forEach((r) => {
-      const line = columns.map(c => String(r[c.key] ?? '')).join('  |  ');
-      doc.text(line);
+
+    // Header
+    const title = `${capitalize(kind)} Report`;
+    doc.fillColor('#111111').font('Helvetica-Bold').fontSize(20).text(title, { align: 'left' });
+    doc.moveDown(0.2);
+    doc.font('Helvetica').fontSize(10).fillColor('#666666')
+      .text(`Date range: ${start.toISOString().slice(0, 10)} to ${end.toISOString().slice(0, 10)}`);
+
+    // Divider
+    doc.moveDown(0.6);
+    doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke('#e5e7eb');
+    doc.moveDown(0.6);
+
+    // Optional summary for sales/profitloss kinds
+    if ((kind === 'sales' || kind === 'profitloss') && rows.length > 0) {
+      try {
+        const sum = (key: string) => rows.reduce((s: number, r: any) => s + (Number(r[key]) || 0), 0);
+        const toLKR = (n: number) => `LKR ${Math.round(Number(n || 0)).toLocaleString('en-LK')}`;
+        const summaryPairs: Array<{ label: string; value: string }> = [];
+        if (kind === 'sales') {
+          summaryPairs.push(
+            { label: 'Orders', value: String(rows.length) },
+            { label: 'Revenue', value: toLKR(sum('total')) },
+            { label: 'COGS', value: toLKR(sum('cogs')) },
+            { label: 'Profit', value: toLKR(sum('profit')) },
+          );
+        } else {
+          const get = (label: string) => {
+            const row = rows.find((r: any) => String(r.metric).toLowerCase() === label);
+            return toLKR(row?.amount || 0);
+          };
+          summaryPairs.push(
+            { label: 'Revenue', value: get('revenue') },
+            { label: 'COGS', value: get('cogs') },
+            { label: 'Purchases', value: get('purchases') },
+            { label: 'Gross Profit', value: get('gross profit') },
+          );
+        }
+        // Render summary chips
+        const chipH = 22;
+        const gap = 8;
+        let x = doc.page.margins.left;
+        const y = doc.y;
+        summaryPairs.forEach((p) => {
+          const label = `${p.label}: ${p.value}`;
+          const w = doc.widthOfString(label) + 16;
+          doc.roundedRect(x, y, w, chipH, 6).fillAndStroke('#f3f4f6', '#e5e7eb');
+          doc.fillColor('#111111').font('Helvetica').fontSize(10).text(label, x + 8, y + 6, { width: w - 16, lineBreak: false });
+          x += w + gap;
+        });
+        doc.moveDown(2);
+      } catch {}
+    }
+
+    // Helpers
+    const clipToWidth = (s: string, max: number) => {
+      if (!s) return '';
+      let out = String(s).replace(/\n+/g, ' ');
+      while (doc.widthOfString(out) > max && out.length > 1) {
+        out = out.slice(0, -1);
+      }
+      if (out.length < String(s).length && max > doc.widthOfString('…')) {
+        while (doc.widthOfString(out + '…') > max && out.length > 1) out = out.slice(0, -1);
+        out = out + '…';
+      }
+      return out;
+    };
+    const asDate = (value: any) => {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return String(value ?? '');
+      return d.toISOString().slice(0, 10);
+    };
+
+    // Table renderer
+    const startY = doc.y;
+    const colPadding = 8;
+    const widths = columns.map((c) => Math.max(c.width || 14, Math.ceil(doc.widthOfString(c.header) / 5) * 5));
+    const totalFlex = widths.reduce((a, b) => a + b, 0);
+    const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const scale = pageW / totalFlex;
+    const scaled = widths.map((w) => Math.max(60, w * scale));
+
+    // Header row (fixed height, no wrap)
+    let x = doc.page.margins.left;
+    let y = startY;
+    const headerH = 24;
+    doc.save();
+    doc.fillColor('#111827');
+    doc.roundedRect(x - 1, y - 2, pageW + 2, headerH + 4, 6).fill('#f3f4f6');
+    doc.fillColor('#111111').font('Helvetica-Bold').fontSize(10);
+    columns.forEach((c, i) => {
+      const w = scaled[i] - colPadding * 2;
+      const header = clipToWidth(String(c.header), w);
+      doc.text(header, x + colPadding, y + 6, { width: w, lineBreak: false });
+      x += scaled[i];
     });
+    doc.restore();
+    y += headerH;
+
+    // Body rows with zebra striping
+    doc.font('Helvetica').fontSize(10).fillColor('#111111');
+    rows.forEach((r, rowIdx) => {
+      x = doc.page.margins.left;
+      const rowH = 20;
+      if (rowIdx % 2 === 0) {
+        doc.save();
+        doc.roundedRect(x - 1, y - 2, pageW + 2, rowH + 4, 4).fill('#ffffff');
+        doc.restore();
+      }
+      columns.forEach((c, i) => {
+        const raw = r[c.key];
+        let txt: string;
+        if (c.key === 'date') txt = asDate(raw);
+        else if (typeof raw === 'number') txt = `LKR ${Math.round(raw).toLocaleString('en-LK')}`;
+        else txt = String(raw ?? '');
+        const maxW = scaled[i] - colPadding * 2;
+        const clipped = clipToWidth(txt, maxW);
+        const numeric = typeof raw === 'number' || ['items', 'quantity'].includes(c.key);
+        doc.text(clipped, x + colPadding, y + 5, { width: maxW, align: numeric ? 'right' : 'left', lineBreak: false });
+        x += scaled[i];
+      });
+      y += rowH;
+      if (y > doc.page.height - doc.page.margins.bottom - 40) {
+        doc.addPage();
+        y = doc.page.margins.top;
+      }
+    });
+
+    // Footer
+    doc.moveDown(1);
+    doc.fontSize(8).fillColor('#6b7280').text('Generated by VoltZone POS', { align: 'right' });
     doc.end();
     return;
   } catch (error) {

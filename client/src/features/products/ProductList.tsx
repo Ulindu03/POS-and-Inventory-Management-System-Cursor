@@ -10,6 +10,7 @@ import {
   TrendingDown,
   AlertTriangle
 } from 'lucide-react';
+import { ProductHistoryModal } from './ProductHistoryModal';
 import { formatLKR } from '@/lib/utils/currency';
 import { productsApi, categoriesApi } from '@/lib/api/products.api';
 
@@ -63,6 +64,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
     lowStock: 0,
     outOfStock: 0
   });
+  const [historyProduct, setHistoryProduct] = useState<{ id: string; name: string } | null>(null);
 
   // Load products (backend)
   useEffect(() => {
@@ -371,6 +373,13 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
                             <Edit className="w-4 h-4 text-[#F8F8F8]/70" />
                           </button>
                           <button
+                            onClick={() => setHistoryProduct({ id: product._id, name: product.name.en })}
+                            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                            title="View History"
+                          >
+                            📈
+                          </button>
+                          <button
                             onClick={() => window.dispatchEvent(new CustomEvent('vz-stickers-open', { detail: { product } }))}
                             className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
                             title="Generate Stickers"
@@ -413,6 +422,14 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
           </div>
         )}
       </div>
+      {historyProduct && (
+        <ProductHistoryModal
+          productId={historyProduct.id}
+          productName={historyProduct.name}
+          onClose={() => setHistoryProduct(null)}
+        />
+      )}
     </div>
   );
 };
+

@@ -12,6 +12,18 @@ router.get('/resume/:id', authenticate, authorize('admin', 'cashier', 'sales_rep
 // Listing and viewing sales restricted to staff roles (could be refined later)
 router.get('/', authenticate, authorize('admin', 'cashier', 'sales_rep'), SaleController.list);
 router.get('/:id', authenticate, authorize('admin', 'cashier', 'sales_rep'), SaleController.getById);
+// Debug: latest sale for verification (development only)
+if ((process.env.NODE_ENV || 'development') !== 'production') {
+  router.get('/debug/latest', authenticate, authorize('admin', 'cashier', 'sales_rep'), async (req, res, next) => {
+    try {
+      const { Sale } = await import('../models/Sale.model');
+      const s = await Sale.findOne().sort({ createdAt: -1 }).lean();
+      return res.json({ success: true, data: { sale: s } });
+    } catch (err) {
+      return next(err);
+    }
+  });
+}
 
 // Discount validation available to staff
 router.post('/validate-discount', authenticate, authorize('admin', 'cashier', 'sales_rep'), SaleController.validateDiscount);

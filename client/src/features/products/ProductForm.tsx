@@ -131,6 +131,25 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   warranty: { enabled: false, periodDays: 0, type: 'manufacturer', requiresSerial: false, coverage: [], exclusions: [] }
   });
 
+  // Warranty UI state (store in days on formData; show as value + unit)
+  type WarrantyUnit = 'days' | 'months' | 'years';
+  const [warrantyUnit, setWarrantyUnit] = useState<WarrantyUnit>('days');
+  const [warrantyValue, setWarrantyValue] = useState<number>(0);
+
+  const calcDaysFromUnit = (value: number, unit: WarrantyUnit): number => {
+    const v = Number(value) || 0;
+    if (unit === 'years') return Math.max(0, Math.round(v * 365));
+    if (unit === 'months') return Math.max(0, Math.round(v * 30));
+    return Math.max(0, Math.round(v));
+  };
+
+  const setWarrantyPeriod = (value: number, unit: WarrantyUnit) => {
+    setWarrantyValue(value);
+    setWarrantyUnit(unit);
+    const days = calcDaysFromUnit(value, unit);
+    setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty || {}), periodDays: days } }));
+  };
+
   // Load categories and suppliers
   useEffect(() => {
   const loadData = async () => {
@@ -203,6 +222,26 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     }
   }, [product]);
 
+  // Sync warranty UI from persisted days
+  useEffect(() => {
+    const d = formData.warranty?.periodDays || 0;
+    if (!d) {
+      setWarrantyUnit('days');
+      setWarrantyValue(0);
+      return;
+    }
+    if (d % 365 === 0) {
+      setWarrantyUnit('years');
+      setWarrantyValue(d / 365);
+    } else if (d % 30 === 0) {
+      setWarrantyUnit('months');
+      setWarrantyValue(d / 30);
+    } else {
+      setWarrantyUnit('days');
+      setWarrantyValue(d);
+    }
+  }, [formData.warranty?.periodDays]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -213,11 +252,12 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
     setLoading(true);
     try {
-      // Persist to backend (create or update)
+      // Persist to backend (create or update) with normalized warranty days
+      const payload: any = { ...formData };
+      payload.warranty = { ...(payload.warranty || {}), periodDays: calcDaysFromUnit(warrantyValue, warrantyUnit) };
       if (product?._id) {
-        await productsApi.update(product._id, formData);
+        await productsApi.update(product._id, payload);
       } else {
-        const payload: any = { ...formData };
         if (autoStickers && (stickersQty || formData.stock.current) > 0) {
           payload.generateStickers = {
             quantity: stickersQty > 0 ? stickersQty : formData.stock.current,
@@ -738,19 +778,33 @@ export const ProductForm: React.FC<ProductFormProps> = ({
               {formData.warranty?.enabled && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-[#F8F8F8] mb-2">Period (Days)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={formData.warranty?.periodDays || 0}
-                      onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), periodDays: parseInt(e.target.value)||0 } }))}
-                      className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                      placeholder="e.g. 365"
-                    />
+                    <label htmlFor="warranty_value" className="block text-sm font-medium text-[#F8F8F8] mb-2">Period</label>
+                    <div className="flex gap-2">
+                      <input
+                        id="warranty_value"
+                        type="number"
+                        min={0}
+                        value={warrantyValue}
+                        onChange={(e) => setWarrantyPeriod(parseInt(e.target.value)||0, warrantyUnit)}
+                        className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                        placeholder="e.g. 12"
+                      />
+                      <select
+                        id="warranty_unit"
+                        value={warrantyUnit}
+                        onChange={(e) => setWarrantyPeriod(warrantyValue, e.target.value as WarrantyUnit)}
+                        className="px-3 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none"
+                      >
+                        <option value="days">Days</option>
+                        <option value="months">Months</option>
+                        <option value="years">Years</option>
+                      </select>
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[#F8F8F8] mb-2">Warranty Type</label>
+                    <label htmlFor="warranty_type" className="block text-sm font-medium text-[#F8F8F8] mb-2">Warranty Type</label>
                     <select
+                      id="warranty_type"
                       value={formData.warranty?.type || 'manufacturer'}
                       onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), type: e.target.value } }))}
                       className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
@@ -771,8 +825,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                   </div>
                   <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#F8F8F8] mb-2">Coverage (comma separated)</label>
+                      <label htmlFor="warranty_coverage" className="block text-sm font-medium text-[#F8F8F8] mb-2">Coverage (comma separated)</label>
                       <input
+                        id="warranty_coverage"
                         type="text"
                         value={(formData.warranty?.coverage||[]).join(', ')}
                         onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), coverage: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) } }))}
@@ -781,8 +836,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-[#F8F8F8] mb-2">Exclusions (comma separated)</label>
+                      <label htmlFor="warranty_exclusions" className="block text-sm font-medium text-[#F8F8F8] mb-2">Exclusions (comma separated)</label>
                       <input
+                        id="warranty_exclusions"
                         type="text"
                         value={(formData.warranty?.exclusions||[]).join(', ')}
                         onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), exclusions: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) } }))}

@@ -30,6 +30,10 @@ export const productsApi = {
     const { data } = await client.put(`/products/${id}`, payload);
     return data as { success: boolean; message: string; data: { product: any } };
   },
+  getHistory: async (id: string, params?: { startDate?: string; endDate?: string; limit?: number }) => {
+    const { data } = await client.get(`/products/${id}/history`, { params });
+    return data as { success: true; data: { summary: { purchasedQty: number; purchasedCost: number; soldQty: number; revenue: number }; purchases: any[]; sales: any[] } };
+  },
   delete: async (id: string) => {
     const { data } = await client.delete(`/products/${id}`);
     return data as { success: boolean; message: string; data: { product: any } };

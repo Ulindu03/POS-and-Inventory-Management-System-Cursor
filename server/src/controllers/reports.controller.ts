@@ -44,7 +44,7 @@ export const getSalesReport = async (req: Request, res: Response) => {
     const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
     // Group by period
-    const groupedSales = groupSalesByPeriod(sales, period as string);
+    const groupedSales = groupSalesByPeriod(sales, (period as string) || 'monthly');
 
     res.json({
       success: true,

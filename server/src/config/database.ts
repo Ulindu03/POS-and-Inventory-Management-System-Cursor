@@ -12,8 +12,8 @@ const connectDB = async () => {
 
     // Connect to MongoDB
     await mongoose.connect(connectionString);
-    
-  console.log('✅ MongoDB connected');
+    const dbName = mongoose.connection.name || (mongoose.connection as any).db?.databaseName || '(unknown)';
+    console.log(`✅ MongoDB connected (db: ${dbName})`);
     
   } catch (error) {
     console.error('❌ MongoDB Connection Error:', error);
