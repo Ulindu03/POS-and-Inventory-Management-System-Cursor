@@ -106,6 +106,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   // Auto unit-barcode generation controls
   const [autoStickers, setAutoStickers] = useState<boolean>(true);
   const [stickersQty, setStickersQty] = useState<number>(0);
+  // New state for SKU generation
+  const [generatingSku, setGeneratingSku] = useState(false);
   const [formData, setFormData] = useState<Product>({
     sku: '',
     barcode: '',
@@ -362,6 +364,60 @@ export const ProductForm: React.FC<ProductFormProps> = ({
     }
   };
 
+  const handleGenerateSku = async () => {
+    if (!formData.name.en.trim()) {
+      alert('Enter product name first');
+      return;
+    }
+    setGeneratingSku(true);
+    try {
+      // Base acronym: take alphanumeric words, use first 3 letters of first two words or full if short
+      const words = formData.name.en
+        .toUpperCase()
+        .replace(/[^A-Z0-9 ]+/g, ' ') // remove special chars
+        .split(/\s+/)
+        .filter(Boolean);
+      let base = '';
+      if (words.length === 1) {
+        base = words[0].slice(0, 5); // up to 5 chars for single word
+      } else {
+        base = words.slice(0, 2).map(w => w.slice(0, 3)).join('-');
+      }
+      if (!base) base = 'ITEM';
+
+      // Fetch existing SKUs that start with base
+      // We'll paginate first few pages until no more or limit; backend list supports q filter
+      const existing: string[] = [];
+      for (let page = 1; page <= 3; page++) { // limit pages for performance
+        try {
+          const res: any = await productsApi.list({ q: base, page, limit: 100 });
+          const items = res.data.items || [];
+          if (!items.length) break;
+          for (const it of items) existing.push(it.sku.toUpperCase());
+          if (items.length < 100) break; // last page
+        } catch {
+          break; // fail silently
+        }
+      }
+      // Determine next numeric suffix
+      const pattern = new RegExp('^' + base.replace(/-/g, '-').replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '-?(\\d+)$');
+      let maxNum = 0;
+      existing.forEach(sku => {
+        if (sku === base) maxNum = Math.max(maxNum, 0);
+        const m = pattern.exec(sku);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          if (!isNaN(n)) maxNum = Math.max(maxNum, n);
+        }
+      });
+      const next = maxNum + 1;
+      const candidate = maxNum === 0 && !existing.includes(base) ? base : `${base}-${String(next).padStart(3, '0')}`;
+      setFormData(prev => ({ ...prev, sku: candidate }));
+    } finally {
+      setGeneratingSku(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
@@ -449,17 +505,28 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                 <label htmlFor="sku" className="block text-sm font-medium text-[#F8F8F8] mb-2">
                   SKU *
                 </label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
-                  <input
-                    type="text"
-                    required
-                    id="sku"
-                    value={formData.sku}
-                    onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value.toUpperCase() }))}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                    placeholder="LED-001"
-                  />
+                <div className="relative flex gap-2">
+                  <div className="relative flex-1">
+                    <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
+                    <input
+                      type="text"
+                      required
+                      id="sku"
+                      value={formData.sku}
+                      onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value.toUpperCase() }))}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                      placeholder="LED-001"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGenerateSku}
+                    disabled={generatingSku}
+                    className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Generate SKU from product name"
+                  >
+                    {generatingSku ? '...' : 'Generate'}
+                  </button>
                 </div>
               </div>
 

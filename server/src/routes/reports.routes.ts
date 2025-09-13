@@ -19,18 +19,18 @@ const router = express.Router();
 // Apply authentication middleware to all routes
 router.use(authenticate);
 
-// Reports routes
-router.get('/sales', authorize('admin', 'sales_rep'), getSalesReport);
-router.get('/inventory', authorize('admin', 'sales_rep'), getInventoryReport);
-router.get('/customers', authorize('admin', 'sales_rep'), getCustomerReport);
-router.get('/suppliers', authorize('admin', 'sales_rep'), getSupplierReport);
-router.get('/profit-loss', authorize('admin', 'sales_rep'), getProfitLossReport);
-router.get('/stock-movements', authorize('admin', 'sales_rep'), getStockMovementReport);
-router.get('/top-products', authorize('admin', 'sales_rep'), getTopProductsReport);
-router.get('/staff-performance', authorize('admin', 'sales_rep'), getStaffPerformanceReport);
-router.get('/delivery-performance', authorize('admin', 'sales_rep'), getDeliveryPerformanceReport);
-router.get('/inventory-turnover', authorize('admin', 'sales_rep'), getInventoryTurnoverReport);
+// Reports routes (admin only per RBAC matrix)
+router.get('/sales', authorize('admin'), getSalesReport);
+router.get('/inventory', authorize('admin'), getInventoryReport);
+router.get('/customers', authorize('admin'), getCustomerReport);
+router.get('/suppliers', authorize('admin'), getSupplierReport);
+router.get('/profit-loss', authorize('admin'), getProfitLossReport);
+router.get('/stock-movements', authorize('admin'), getStockMovementReport);
+router.get('/top-products', authorize('admin'), getTopProductsReport);
+router.get('/staff-performance', authorize('admin'), getStaffPerformanceReport);
+router.get('/delivery-performance', authorize('admin'), getDeliveryPerformanceReport);
+router.get('/inventory-turnover', authorize('admin'), getInventoryTurnoverReport);
 // Export (excel/pdf)
-router.get('/export', authorize('admin', 'sales_rep'), exportReport);
+router.get('/export', authorize('admin'), exportReport);
 
 export default router;

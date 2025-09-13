@@ -28,8 +28,8 @@ if ((process.env.NODE_ENV || 'development') !== 'production') {
 // Discount validation available to staff
 router.post('/validate-discount', authenticate, authorize('admin', 'cashier', 'sales_rep'), SaleController.validateDiscount);
 
-// Refunds restricted to admin and sales_rep (no cashier)
-router.post('/:id/refund', authenticate, authorize('admin', 'sales_rep'), SaleController.refund);
+// Refunds: admin always; cashier/sales_rep only if permission checked in controller
+router.post('/:id/refund', authenticate, authorize('admin', 'cashier', 'sales_rep'), SaleController.refund);
 
 export default router;
 

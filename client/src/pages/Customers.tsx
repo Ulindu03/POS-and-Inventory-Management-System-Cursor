@@ -33,22 +33,23 @@ const Customers = () => {
   // Load customers and stats from API
   useEffect(() => {
     const loadData = async () => {
+      setIsLoading(true);
       try {
-        setIsLoading(true);
-        const [customersResponse, statsResponse] = await Promise.all([
-          getCustomers({ limit: 50 }),
-          getCustomerStats()
-        ]);
-        
-        setCustomers(customersResponse.data || []);
-        setStats(statsResponse.data);
+        const customersResponse = await getCustomers({ limit: 50 });
+        setCustomers((customersResponse as any).data || customersResponse || []);
       } catch (error) {
-        console.error('Error loading customers:', error);
-        // Fallback to sample data if API fails
+        console.error('Error loading customers list:', error);
+        // Only use sample data if the list endpoint fails
         loadSampleData();
-      } finally {
-        setIsLoading(false);
       }
+      // Stats are admin-only now; fetch them opportunistically and ignore errors
+      try {
+        const statsResponse = await getCustomerStats();
+        setStats((statsResponse as any).data || statsResponse || null);
+      } catch (error) {
+        setStats(null);
+      }
+      setIsLoading(false);
     };
 
     const loadSampleData = () => {

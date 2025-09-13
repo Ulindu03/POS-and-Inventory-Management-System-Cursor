@@ -43,7 +43,7 @@ export const AreaChart: React.FC<AreaChartProps> = ({
             </linearGradient>
           </defs>
           
-          <CartesianGrid strokeDasharray="3 3" stroke="#454545" strokeOpacity={0.5} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#5a5a5a" strokeOpacity={0.35} />
           <XAxis 
             dataKey="name" 
             stroke="#9ca3af"
@@ -76,9 +76,9 @@ export const AreaChart: React.FC<AreaChartProps> = ({
             type="monotone"
             dataKey={dataKey}
             stroke={stroke}
-            strokeWidth={2.5}
+            strokeWidth={3}
             fill={fill}
-            fillOpacity={0.9}
+            fillOpacity={0.85}
             activeDot={{ r: 5, stroke: '#fff', strokeWidth: 2 }}
           />
         </RechartsAreaChart>

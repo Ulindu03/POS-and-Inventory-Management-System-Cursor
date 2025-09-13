@@ -16,6 +16,7 @@ interface RecentSalesProps {
 }
 
 export const RecentSales: React.FC<RecentSalesProps> = ({ sales }) => {
+  const items = Array.isArray(sales) ? sales.slice(0, 5) : [];
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30';
@@ -30,7 +31,7 @@ export const RecentSales: React.FC<RecentSalesProps> = ({ sales }) => {
       <h3 className="text-lg font-semibold text-gray-100 mb-4 tracking-wide">Recent Sales</h3>
       
       <div className="space-y-3">
-        {sales.map((sale, index) => (
+        {items.map((sale, index) => (
           <motion.div
             key={sale.id}
             initial={{ opacity: 0, x: -20 }}

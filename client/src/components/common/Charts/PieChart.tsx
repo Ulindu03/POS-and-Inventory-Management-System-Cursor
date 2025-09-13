@@ -40,7 +40,9 @@ export const PieChart: React.FC<PieChartProps> = ({
             cy="50%"
             labelLine={false}
             label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-            outerRadius={80}
+            outerRadius={100}
+            innerRadius={55}
+            paddingAngle={2}
             fill="#8884d8"
             dataKey="value"
           >

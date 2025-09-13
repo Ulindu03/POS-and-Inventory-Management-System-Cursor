@@ -10,6 +10,8 @@ import mongoose from 'mongoose';
 import { issueWarranty } from '../services/warranty.service';
 import { emit as emitRealtime } from '../services/realtime.service';
 import { Counter } from '../models/Counter.model';
+import { Customer } from '../models/Customer.model';
+import { sendEmail, buildSaleReceiptEmail } from '../services/notify.service';
 
 const nextInvoiceNo = async (): Promise<string> => {
   // Determine starting point from last persisted sale
@@ -179,6 +181,10 @@ export class SaleController {
         }
       }
       let discountAmount = Number(discount) || 0;
+      // Enforce role-based discount permission: only admin can apply manual discount
+      if ((discountAmount || 0) > 0 && req.user?.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Forbidden: discount not allowed for your role' });
+      }
       if (discountCode) {
         try {
           const result = await DiscountService.validateCode({ code: String(discountCode), subtotal, customerId: customer || undefined });
@@ -417,6 +423,32 @@ export class SaleController {
     // eslint-disable-next-line no-console
     console.log('[sales.create] success', { id: String(doc._id), invoiceNo: doc.invoiceNo, total: doc.total });
   }
+  // Non-blocking e-receipt email
+  if (doc?.customer) {
+    setTimeout(async () => {
+      try {
+        const cust = await Customer.findById(doc.customer).select('name email');
+        const email = (cust as any)?.email;
+        if (email) {
+          try {
+            // Enrich items with product names and warranty details for email
+            const saleWithDetails = await Sale.findById(doc._id)
+              .populate('items.product', 'name warranty')
+              .lean();
+            const enriched = saleWithDetails || doc;
+            const { subject, text, html } = buildSaleReceiptEmail(enriched, cust);
+            await sendEmail(subject, email, text, html);
+          } catch (e: any) {
+            console.error('[email][sale_receipt][error]', doc.invoiceNo, e?.message || e);
+          }
+        } else {
+          console.log('[email][sale_receipt][skipped][no_email]', doc.invoiceNo);
+        }
+      } catch (e) {
+        console.error('[email][sale_receipt][error_fetch_customer]', doc.invoiceNo, e);
+      }
+    }, 0);
+  }
   return res.status(201).json({ success: true, data: { sale: { id: doc._id, invoiceNo: doc.invoiceNo, total: doc.total } } });
     } catch (err) {
   return next(err);
@@ -528,6 +560,11 @@ export class SaleController {
   static async refund(req: Request & { user?: any }, res: Response, next: NextFunction) {
     try {
       const { id } = req.params as { id: string };
+      // Role check: admin always, sales_rep allowed, cashier denied
+      const role = req.user?.role;
+      if (role !== 'admin' && role !== 'sales_rep') {
+        return res.status(403).json({ success: false, message: 'Forbidden: returns not allowed for your role' });
+      }
       const { items, method, reference } = req.body as { items: Array<{ product: string; quantity: number; amount: number }>; method: 'cash' | 'card' | 'bank_transfer' | 'digital' | 'credit'; reference?: string };
       const sale = await Sale.findById(id);
       if (!sale) return res.status(404).json({ success: false, message: 'Sale not found' });

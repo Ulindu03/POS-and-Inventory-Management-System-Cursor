@@ -16,7 +16,16 @@ const customerSchema = new mongoose.Schema({
   email: {
     type: String,
     trim: true,
-    lowercase: true
+    lowercase: true,
+    validate: {
+      validator: function(v: any) {
+        if (v === undefined || v === null) return true;
+        const s = String(v).trim();
+        if (s === '') return true; // allow empty which will be sanitized away in controllers
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+      },
+      message: 'Invalid email format'
+    }
   },
   phone: {
     type: String,
@@ -156,7 +165,8 @@ const customerSchema = new mongoose.Schema({
 
 // Indexes for efficient queries (excluding customerCode which is already indexed by unique: true)
 customerSchema.index({ phone: 1 });
-customerSchema.index({ email: 1 });
+// Email may be missing for many customers; use sparse index
+customerSchema.index({ email: 1 }, { sparse: true });
 customerSchema.index({ type: 1, isActive: 1 });
 customerSchema.index({ assignedSalesRep: 1 });
 customerSchema.index({ 'address.city': 1 });

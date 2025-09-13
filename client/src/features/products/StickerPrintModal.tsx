@@ -180,25 +180,25 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
               <div className="text-sm mb-1">Quantity</div>
               <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value || '1', 10))} className="w-full bg-white/10 rounded px-3 py-2" />
             </label>
-            <label className="block">
+            <label className="block relative z-50">
               <div className="text-sm mb-1">Template</div>
-              <select value={template} onChange={(e) => setTemplate(e.target.value as any)} className="w-full bg-white/10 rounded px-3 py-2">
+              <select value={template} onChange={(e) => setTemplate(e.target.value as any)} className="w-full bg-white/10 rounded px-3 py-2 vz-select">
                 <option value="simple">Simple</option>
                 <option value="bag_label">Retail bag label</option>
                 <option value="electronics">Electronics (name + price + barcode)</option>
               </select>
             </label>
-            <label className="block">
+            <label className="block relative z-40">
               <div className="text-sm mb-1">Barcode Mode</div>
-              <select value={mode} onChange={(e) => setMode(e.target.value as any)} className="w-full bg-white/10 rounded px-3 py-2">
+              <select value={mode} onChange={(e) => setMode(e.target.value as any)} className="w-full bg-white/10 rounded px-3 py-2 vz-select">
                 <option value="reuse_product_barcode">Reuse product barcode</option>
                 <option value="unique_per_unit">Unique per unit</option>
               </select>
             </label>
             <div className="grid grid-cols-2 gap-2">
-              <label className="block">
+              <label className="block relative z-30">
                 <div className="text-sm mb-1">Label size</div>
-                <select value={labelSize} onChange={(e) => setLabelSize(e.target.value as any)} className="w-full bg-white/10 rounded px-3 py-2">
+                <select value={labelSize} onChange={(e) => setLabelSize(e.target.value as any)} className="w-full bg-white/10 rounded px-3 py-2 vz-select">
                   <option value="50x25">50 x 25 mm</option>
                   <option value="50x30">50 x 30 mm</option>
                   <option value="50x35">50 x 35 mm</option>
@@ -208,9 +208,9 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
                   )}
                 </select>
               </label>
-              <label className="block">
+              <label className="block relative z-30">
                 <div className="text-sm mb-1">Media</div>
-                <select value={sheetType} onChange={(e) => setSheetType(e.target.value as any)} className="w-full bg-white/10 rounded px-3 py-2">
+                <select value={sheetType} onChange={(e) => setSheetType(e.target.value as any)} className="w-full bg-white/10 rounded px-3 py-2 vz-select">
                   <option value="roll">Roll (continuous)</option>
                   <option value="a4">A4 sheet</option>
                 </select>

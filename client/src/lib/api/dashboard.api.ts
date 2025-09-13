@@ -57,7 +57,7 @@ export const dashboardApi = {
     return data.data;
   },
 
-  getRecentSales: async (limit: number = 10): Promise<RecentSale[]> => {
+  getRecentSales: async (limit: number = 5): Promise<RecentSale[]> => {
     const { data } = await client.get('/dashboard/recent-sales', { params: { limit } });
     return data.data;
   }

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Customer } from '../models/Customer.model';
 import { Sale } from '../models/Sale.model';
+import { Counter } from '../models/Counter.model';
 
 // Quick lookup by phone (exact match)
 export const lookupCustomerByPhone = async (req: Request, res: Response) => {
@@ -215,14 +216,36 @@ export const getCustomerById = async (req: Request, res: Response) => {
 export const createCustomer = async (req: Request, res: Response) => {
   try {
     const customerData = req.body;
+    if (typeof customerData.email === 'string' && customerData.email.trim() === '') {
+      delete customerData.email;
+    }
 
-    // Generate customer code if not provided
+    // Generate robust sequential customer code using Counter collection (atomic)
     if (!customerData.customerCode) {
-      const lastCustomer = await Customer.findOne().sort({ customerCode: -1 });
-      const lastNumber = lastCustomer 
-        ? parseInt(lastCustomer.customerCode.split('-')[1]) 
-        : 0;
-      customerData.customerCode = `CUST-${String(lastNumber + 1).padStart(3, '0')}`;
+      // Determine a safe base from latest existing record (best-effort)
+      const last = await Customer.findOne().sort({ createdAt: -1 }).select('customerCode').lean();
+      const lastNum = last?.customerCode?.match(/(\d+)$/)?.[1];
+      const base = lastNum ? parseInt(lastNum, 10) : 0;
+
+      let seqDoc = await Counter.findOneAndUpdate(
+        { key: 'customer_code' },
+        { $inc: { seq: 1 } },
+        { new: true }
+      );
+      if (!seqDoc) {
+        try {
+          await Counter.create({ key: 'customer_code', seq: base + 1 });
+        } catch (e: any) {
+          if (!(e && e.code === 11000)) throw e;
+        }
+        seqDoc = await Counter.findOne({ key: 'customer_code' }).lean() as any;
+      }
+      const seq = (seqDoc?.seq ?? base + 1);
+      const safeSeq = seq < base + 1 ? (base + 1) : seq;
+      if (seq < base + 1) {
+        try { await Counter.updateOne({ key: 'customer_code', seq: { $lt: base + 1 } }, { $set: { seq: base + 1 } }); } catch {}
+      }
+      customerData.customerCode = `CUST-${String(safeSeq).padStart(3, '0')}`;
     }
 
     // Check if customer code already exists
@@ -260,6 +283,9 @@ export const updateCustomer = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
+    if (updateData && Object.prototype.hasOwnProperty.call(updateData, 'email')) {
+      if (typeof updateData.email === 'string' && updateData.email.trim() === '') updateData.email = undefined;
+    }
 
     // Remove fields that shouldn't be updated
     delete updateData.customerCode;

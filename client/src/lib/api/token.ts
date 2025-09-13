@@ -19,4 +19,9 @@ export const getRefreshToken = (): string | null => storage.get(REFRESH_TOKEN_KE
 export const setRefreshToken = (token: string) => storage.set(REFRESH_TOKEN_KEY, token);
 export const clearRefreshToken = () => storage.remove(REFRESH_TOKEN_KEY);
 
+export const clearAllTokens = () => {
+	clearAccessToken();
+	clearRefreshToken();
+};
+
 

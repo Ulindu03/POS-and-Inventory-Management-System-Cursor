@@ -26,8 +26,9 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const [lookupPhone, setLookupPhone] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newName, setNewName] = useState('');
-  // Retail quick capture requires only name + phone
+  // Retail quick capture now supports optional email
   const [customerId, setCustomerId] = useState<string | null>(null);
+  const [newEmail, setNewEmail] = useState('');
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [customerLookupLoading, setCustomerLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
@@ -57,7 +58,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         const resp = await client.post('/customers', {
           name: newName,
           phone: digits,
-          email: `${digits}@temp.local`,
+          ...(newEmail ? { email: newEmail } : {}),
           address: { street: '-', city: '-', province: '-', postalCode: '-' },
           type: 'retail',
           creditLimit: 0,
@@ -65,11 +66,13 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const j: any = resp.data;
         if (j.success) {
-          const newId = j.data._id;
+          const newId = j.data._id || j.data.id;
           setCustomerId(newId);
           setLinkedName(newName);
           setLinkedType('retail');
           toast.success('Customer saved');
+          // Clear quick-capture inputs to avoid confusion
+          try { setNewPhone(''); setNewName(''); setNewEmail(''); } catch {}
           // notify others
           try { window.dispatchEvent(new CustomEvent('customers:changed', { detail: { type: 'created', id: newId } })); } catch {}
           try { const bc = (window as any).BroadcastChannel ? new BroadcastChannel('customers') : null; if (bc) { bc.postMessage({ type: 'created', id: newId, ts: Date.now() }); bc.close(); } } catch {}
@@ -258,13 +261,17 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
                 <input id="pos-new-name" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Name" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
               </div>
               <div className="col-span-2 flex items-end">
+                <div className="flex-1 mr-2 space-y-1">
+                  <label htmlFor="pos-new-email" className="block text-[11px] opacity-70">Email (optional)</label>
+                  <input id="pos-new-email" type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="customer@example.com" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
+                </div>
                 <button
                   type="button"
                   disabled={creatingCustomer || !newPhone || !newName}
                   onClick={async ()=>{ await createRetailCustomerIfNeeded(); }}
                   onMouseEnter={()=>setSaveHover(true)}
                   onMouseLeave={()=>setSaveHover(false)}
-                  className="px-3 py-2 rounded disabled:opacity-40 text-xs w-full transition-colors"
+                  className="px-3 py-2 rounded disabled:opacity-40 text-xs w-40 transition-colors"
                   style={{ backgroundColor: (!creatingCustomer && newPhone && newName) ? (saveHover ? '#97bde1' : 'rgba(255,255,255,0.10)') : 'rgba(255,255,255,0.10)', color: (!creatingCustomer && newPhone && newName && saveHover) ? '#000' : undefined }}
                 >{customerButtonLabel}</button>
               </div>

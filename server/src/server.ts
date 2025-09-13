@@ -30,6 +30,7 @@ import tripRoutes from './routes/trip.routes';
 import damageRoutes from './routes/damage.routes';
 import warrantyRoutes from './routes/warranty.routes';
 import warrantyClaimRoutes from './routes/warrantyClaim.routes';
+import dashboardRoutes from './routes/dashboard.routes';
 import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
@@ -107,6 +108,7 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/damages', damageRoutes);
 app.use('/api/warranty', warrantyRoutes);
 app.use('/api/warranty-claims', warrantyClaimRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Dev seed route for products and categories
 app.get('/api/dev/seed-products', async (_req, res) => {

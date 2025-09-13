@@ -1,5 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
-import { getAccessToken, setAccessToken, getRefreshToken, setRefreshToken, clearAccessToken, clearRefreshToken } from '@/lib/api/token';
+import { getAccessToken, setAccessToken, getRefreshToken, setRefreshToken, clearAccessToken, clearRefreshToken, clearAllTokens } from '@/lib/api/token';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -97,8 +97,9 @@ client.interceptors.response.use(
           return client(originalRequest);
         }
       } catch (refreshErr) {
-        clearAccessToken();
-        clearRefreshToken();
+        clearAllTokens();
+        // Redirect to login or clear auth state
+        window.dispatchEvent(new CustomEvent('auth:token-expired'));
         return Promise.reject(refreshErr instanceof Error ? refreshErr : new Error('Token refresh failed'));
       } finally {
         isRefreshing = false;

@@ -84,39 +84,49 @@ export default function UsersPage() {
 
   return (
     <AppLayout>
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Users</h1>
-        <button
-          className="px-3 py-2 rounded bg-white/10 hover:bg-white/20"
-          onClick={() => setCreateOpen(true)}
-        >
-          Add User
-        </button>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent">Users</h1>
+            <p className="text-gray-400">Manage access, roles and activity</p>
+          </div>
+          <button
+            className="px-4 py-2 rounded-xl font-semibold bg-gradient-to-r from-yellow-300 to-amber-300 text-black hover:shadow-[0_6px_24px_-6px_rgba(234,179,8,0.6)]"
+            onClick={() => setCreateOpen(true)}
+          >
+            Add User
+          </button>
+        </div>
       </div>
       {loading ? (
-        <div>Loading...</div>
+        <div className="mt-6 grid gap-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-12 rounded-xl bg-white/5 animate-pulse" />
+          ))}
+        </div>
       ) : (
-  <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+        <div className="mt-4 overflow-x-auto">
+          <div className="rounded-2xl border border-white/10 overflow-hidden bg-white/5">
+          <table className="min-w-full text-sm border-separate border-spacing-0 table-first-col-pad">
             <thead>
-              <tr className="text-left text-gray-400">
-                <th className="py-2 pr-4">Username</th>
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Email</th>
-                <th className="py-2 pr-4">Role</th>
-                <th className="py-2 pr-4">Active</th>
-                <th className="py-2 pr-4" aria-label="Actions">Actions</th>
+              <tr className="text-left text-gray-300 bg-white/5">
+                <th className="py-3 pl-4 pr-4 sticky top-0 bg-white/5">Username</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5">Name</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5">Email</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5">Role</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5">Active</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5" aria-label="Actions">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u._id} className="border-t border-white/10">
-                  <td className="py-2 pr-4">{u.username}</td>
+                <tr key={u._id} className="border-t border-white/10 hover:bg-white/10 transition-colors">
+                  <td className="py-2 pl-4 pr-4">{u.username}</td>
                   <td className="py-2 pr-4">{u.firstName} {u.lastName}</td>
-                  <td className="py-2 pr-4">{u.email}</td>
+                  <td className="py-2 pr-4 break-words">{u.email}</td>
                   <td className="py-2 pr-4 capitalize">
                     <select
-                      className="bg-transparent border border-white/10 rounded px-2 py-1"
+                      className="bg-transparent border border-white/10 rounded px-2 py-1 vz-select"
                       value={u.role}
                       onChange={(e) => changeRole(u, e.target.value as any)}
                     >
@@ -129,7 +139,7 @@ export default function UsersPage() {
                   </td>
                   <td className="py-2 pr-4">
                     <button
-                      className={`px-2 py-1 rounded ${u.isActive ? 'bg-green-600/70' : 'bg-white/10'}`}
+                      className={`px-2 py-1 rounded text-xs font-semibold border ${u.isActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' : 'bg-white/5 text-gray-300 border-white/10'}`}
                       onClick={() => toggleActive(u)}
                       title={u.isActive ? 'Deactivate' : 'Activate'}
                     >
@@ -138,18 +148,19 @@ export default function UsersPage() {
                   </td>
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-2">
-                      <button className="px-2 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => setEditUser(u)}>Edit</button>
-                      <button className="px-2 py-1 rounded bg-red-600/80 hover:bg-red-600" onClick={() => handleDelete(u._id)}>Delete</button>
+                      <button className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs" onClick={() => setEditUser(u)}>Edit</button>
+                      <button className="px-3 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-xs" onClick={() => handleDelete(u._id)}>Delete</button>
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="mt-3 flex items-center gap-2">
-            <button className="px-3 py-1 rounded bg-white/10 disabled:opacity-50" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
+          </div>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <button className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
             <div className="opacity-70">Page {page}</div>
-            <button className="px-3 py-1 rounded bg-white/10" onClick={() => setPage((p) => p + 1)}>Next</button>
+            <button className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20" onClick={() => setPage((p) => p + 1)}>Next</button>
           </div>
         </div>
       )}
@@ -177,7 +188,7 @@ export default function UsersPage() {
                   firstName: str(data.get('firstName')),
                   lastName: str(data.get('lastName')),
                   role: (str(data.get('role')) as Role) || 'cashier',
-                  language: (str(data.get('language')) as Lang) || 'en',
+                  language: (str(data.get('language')) as Lang ) || 'en',
                 };
                 handleCreate(payload);
               }}
@@ -194,17 +205,19 @@ export default function UsersPage() {
             <label className="text-sm">First Name<input name="firstName" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
             <label className="text-sm">Last Name<input name="lastName" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
             <label className="text-sm">Password<input type="password" name="password" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-            <label className="text-sm" htmlFor="create-role">Role</label>
-            <select id="create-role" name="role" className="mt-1 w-full rounded bg-white/10 px-2 py-1">
-              {roles.map((r) => (
-                <option key={r} value={r} className="text-black">{r}</option>
-              ))}
-            </select>
-            <label className="text-sm" htmlFor="create-language">Language</label>
-            <select id="create-language" name="language" className="mt-1 w-full rounded bg-white/10 px-2 py-1">
-              <option value="en" className="text-black">English</option>
-              <option value="si" className="text-black">සිංහල</option>
-            </select>
+            <label className="text-sm block">Role
+              <select name="role" className="mt-1 w-full rounded bg-white/10 px-2 py-1">
+                {roles.map((r) => (
+                  <option key={r} value={r} className="text-black">{r}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm block">Language
+              <select name="language" className="mt-1 w-full rounded bg-white/10 px-2 py-1">
+                <option value="en" className="text-black">English</option>
+                <option value="si" className="text-black">සිංහල</option>
+              </select>
+            </label>
           </div>
         </form>
       </FormModal>

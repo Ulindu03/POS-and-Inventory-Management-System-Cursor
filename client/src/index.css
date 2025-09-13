@@ -75,3 +75,9 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Ensure native select dropdown options are readable on dark UI */
+.vz-select { color: #F8F8F8; }
+.vz-select option { color: #111 !important; background-color: #ffffff !important; }
+/* Prevent clipping against rounded card edges for first column */
+.table-first-col-pad td:first-child, .table-first-col-pad th:first-child { padding-left: 1rem; }

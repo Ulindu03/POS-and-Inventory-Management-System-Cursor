@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { authApi } from '@/lib/api/auth.api';
-import { getAccessToken, setAccessToken, clearAccessToken } from '@/lib/api/token';
+import { getAccessToken, setAccessToken, clearAccessToken, clearAllTokens } from '@/lib/api/token';
 
 interface UserInfo {
 	id: string;
@@ -22,6 +22,7 @@ interface AuthState {
 	logout: () => Promise<void>;
 	refreshToken: () => Promise<void>;
 	checkAuth: () => Promise<void>;
+	clearAuth: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -40,9 +41,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 		try {
 			await authApi.logout();
 		} finally {
-			clearAccessToken();
+			clearAllTokens();
 			set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
 		}
+	},
+
+	clearAuth: () => {
+		clearAllTokens();
+		set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
 	},
 
 	refreshToken: async () => {
@@ -74,7 +80,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 							set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
 						}
 			} catch {
-				clearAccessToken();
+				clearAllTokens();
 				set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
 			}
 		}

@@ -70,12 +70,12 @@ const Analytics: React.FC = () => {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#F8F8F8]">Analytics</h1>
-            <p className="text-[#F8F8F8]/70">Key trends and performance insights</p>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent">Analytics</h1>
+            <p className="text-gray-400">Key trends and performance insights</p>
           </div>
           <div className="flex gap-3 items-end">
             <div className="flex items-center gap-2">
@@ -102,7 +102,7 @@ const Analytics: React.FC = () => {
             <button
               onClick={fetchAll}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-300 text-black font-semibold disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-300 to-amber-300 text-black font-semibold disabled:opacity-60 hover:shadow-[0_6px_24px_-6px_rgba(234,179,8,0.6)]"
             >
               <RefreshCcw className="w-4 h-4" /> {loading ? 'Refreshing...' : 'Refresh'}
             </button>
@@ -110,7 +110,7 @@ const Analytics: React.FC = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
             title="Revenue"
             value={Math.round(sales?.summary?.totalRevenue || 0).toLocaleString()}
@@ -118,21 +118,25 @@ const Analytics: React.FC = () => {
             change={Math.round(sales?.summary?.profitMargin || 0)}
             trend={(sales?.summary?.profitMargin || 0) >= 0 ? 'up' : 'down'}
             icon={<TrendingUp className="w-6 h-6" />}
+            cardVariant="darkSubtle"
           />
           <StatsCard
             title="Orders"
             value={(sales?.summary?.totalSales || 0).toLocaleString()}
             icon={<Users className="w-6 h-6" />}
+            cardVariant="darkSubtle"
           />
           <StatsCard
             title="Products"
             value={(inventory?.summary?.totalProducts || 0).toLocaleString()}
             icon={<Package className="w-6 h-6" />}
+            cardVariant="darkSubtle"
           />
           <StatsCard
             title="Low/Out of Stock"
             value={`${inventory?.summary?.lowStockCount || 0} / ${inventory?.summary?.outOfStockCount || 0}`}
             icon={<Package className="w-6 h-6" />}
+            cardVariant="darkSubtle"
           />
         </div>
 
@@ -142,20 +146,20 @@ const Analytics: React.FC = () => {
             data={salesTrend}
             title="Revenue Trend"
             dataKey="revenue"
-            height={340}
+            height={360}
           />
           <BarChart
             data={topProductsData}
             title="Top Products by Revenue"
             dataKey="revenue"
-            height={340}
+            height={360}
           />
         </div>
 
         {/* Charts Row 2 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <PieChart data={categoryPie} title="Inventory Value by Category" height={340} />
-          <BarChart data={staffRevenueBars} title="Staff Revenue" dataKey="revenue" height={340} />
+          <PieChart data={categoryPie} title="Inventory Value by Category" height={360} />
+          <BarChart data={staffRevenueBars} title="Staff Revenue" dataKey="revenue" height={360} />
         </div>
 
         {/* Delivery Summary */}

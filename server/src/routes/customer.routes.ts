@@ -18,16 +18,16 @@ const router = express.Router();
 router.use(authenticate);
 
 // Customer CRUD operations
-router.get('/', authorize('admin', 'sales_rep'), getCustomers);
-router.get('/stats', authorize('admin', 'sales_rep'), getCustomerStats);
-router.get('/lookup/phone', authorize('admin','sales_rep'), lookupCustomerByPhone);
-router.get('/:id', authorize('admin', 'sales_rep'), getCustomerById);
-router.post('/', authorize('admin', 'sales_rep'), createCustomer);
-router.put('/:id', authorize('admin', 'sales_rep'), updateCustomer);
+router.get('/', authorize('admin', 'sales_rep', 'cashier'), getCustomers);
+router.get('/stats', authorize('admin'), getCustomerStats);
+router.get('/lookup/phone', authorize('admin','sales_rep','cashier'), lookupCustomerByPhone);
+router.get('/:id', authorize('admin', 'sales_rep', 'cashier'), getCustomerById);
+router.post('/', authorize('admin', 'sales_rep','cashier'), createCustomer);
+router.put('/:id', authorize('admin', 'sales_rep', 'cashier'), updateCustomer);
 router.delete('/:id', authorize('admin'), deleteCustomer);
 
 // Loyalty points management
-router.patch('/:id/loyalty-points', authorize('admin', 'sales_rep'), updateLoyaltyPoints);
-router.post('/:id/redeem-points', authorize('admin', 'sales_rep'), redeemLoyaltyPoints);
+router.patch('/:id/loyalty-points', authorize('admin', 'sales_rep', 'cashier'), updateLoyaltyPoints);
+router.post('/:id/redeem-points', authorize('admin', 'sales_rep', 'cashier'), redeemLoyaltyPoints);
 
 export default router;

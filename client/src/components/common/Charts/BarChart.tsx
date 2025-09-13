@@ -43,7 +43,7 @@ export const BarChart: React.FC<BarChartProps> = ({
             </linearGradient>
           </defs>
           
-          <CartesianGrid strokeDasharray="3 3" stroke="#454545" strokeOpacity={0.5} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#5a5a5a" strokeOpacity={0.35} />
           <XAxis 
             dataKey="name" 
             stroke="#9ca3af"
@@ -51,6 +51,11 @@ export const BarChart: React.FC<BarChartProps> = ({
             fontWeight={500}
             tickLine={false}
             axisLine={false}
+            interval={0}
+            tick={{ fill: '#9ca3af' }}
+            tickMargin={14}
+            angle={-20}
+            height={56}
           />
           <YAxis 
             stroke="#9ca3af"
@@ -75,8 +80,8 @@ export const BarChart: React.FC<BarChartProps> = ({
           <Bar 
             dataKey={dataKey} 
             fill="url(#barGradient)"
-            radius={[6, 6, 0, 0]}
-            maxBarSize={38}
+            radius={[8, 8, 0, 0]}
+            maxBarSize={44}
           />
         </RechartsBarChart>
       </ResponsiveContainer>

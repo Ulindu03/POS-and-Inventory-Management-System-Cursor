@@ -6,7 +6,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', authorize('admin', 'cashier', 'sales_rep'), getSettings);
+router.get('/', authorize('admin'), getSettings);
 router.put('/', authorize('admin'), updateSettings);
 
 export default router;

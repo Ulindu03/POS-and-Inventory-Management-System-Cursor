@@ -22,11 +22,11 @@ router.get('/stickers/batch', authenticate, authorize('admin', 'sales_rep'), Pro
 router.get('/:id', authenticate, ProductController.getById);
 router.get('/:id/history', authenticate, authorize('admin', 'sales_rep'), ProductController.history);
 
-// Admin/Manager only routes
-router.post('/', authenticate, authorize('admin', 'sales_rep'), ProductController.create);
-router.put('/:id', authenticate, authorize('admin', 'sales_rep'), ProductController.update);
+// Admin-only product management per RBAC
+router.post('/', authenticate, authorize('admin'), ProductController.create);
+router.put('/:id', authenticate, authorize('admin'), ProductController.update);
 router.delete('/:id', authenticate, authorize('admin'), ProductController.delete);
-router.patch('/:id/stock', authenticate, authorize('admin', 'sales_rep'), ProductController.updateStock);
+router.patch('/:id/stock', authenticate, authorize('admin'), ProductController.updateStock);
 
 export default router;
 
