@@ -3,6 +3,8 @@ import { AppLayout } from '@/components/common/Layout/Layout';
 import { usersApi, type UserInput } from '@/lib/api/users.api';
 import { useRealtime } from '@/hooks/useRealtime';
 import FormModal from '@/components/ui/FormModal';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { toast } from 'sonner';
 
 type Role = 'admin' | 'cashier' | 'sales_rep';
 type Lang = 'en' | 'si';
@@ -65,10 +67,32 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this user? This action cannot be undone.')) return;
-    await usersApi.delete(id);
-    fetchPage();
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async (user: AdminUser) => {
+    setDeleteTarget(user);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const user = deleteTarget;
+    setDeleting(true);
+    // Optimistic update
+    const prev = users;
+    setUsers(u => u.filter(x => x._id !== user._id));
+    try {
+      await usersApi.delete(user._id);
+      toast.success(`User ${user.username} deleted`);
+      fetchPage();
+    } catch (err) {
+      console.error(err); // eslint-disable-line no-console
+      setUsers(prev);
+      toast.error('Delete failed');
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
   };
 
   const toggleActive = async (u: AdminUser) => {
@@ -83,6 +107,7 @@ export default function UsersPage() {
   };
 
   return (
+    <>
     <AppLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -100,8 +125,8 @@ export default function UsersPage() {
       </div>
       {loading ? (
         <div className="mt-6 grid gap-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-12 rounded-xl bg-white/5 animate-pulse" />
+          {['a','b','c','d','e','f'].map(id => (
+            <div key={`skeleton-${id}`} className="h-12 rounded-xl bg-white/5 animate-pulse" />
           ))}
         </div>
       ) : (
@@ -149,7 +174,7 @@ export default function UsersPage() {
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-2">
                       <button className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs" onClick={() => setEditUser(u)}>Edit</button>
-                      <button className="px-3 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-xs" onClick={() => handleDelete(u._id)}>Delete</button>
+                      <button className="px-3 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-xs" onClick={() => handleDelete(u)}>Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -181,10 +206,16 @@ export default function UsersPage() {
                 if (!form) return;
                 const data = new FormData(form);
                 const str = (v: FormDataEntryValue | null) => typeof v === 'string' ? v : '';
+                const pwd = str(data.get('password'));
+                const confirm = str(data.get('confirmPassword'));
+                if (pwd !== confirm) {
+                  alert('Passwords do not match');
+                  return;
+                }
                 const payload: UserInput = {
                   username: str(data.get('username')),
                   email: str(data.get('email')),
-                  password: str(data.get('password')),
+                  password: pwd,
                   firstName: str(data.get('firstName')),
                   lastName: str(data.get('lastName')),
                   role: (str(data.get('role')) as Role) || 'cashier',
@@ -205,18 +236,23 @@ export default function UsersPage() {
             <label className="text-sm">First Name<input name="firstName" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
             <label className="text-sm">Last Name<input name="lastName" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
             <label className="text-sm">Password<input type="password" name="password" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+            <label className="text-sm">Confirm Password<input type="password" name="confirmPassword" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
             <label className="text-sm block">Role
+              <div>
               <select name="role" className="mt-1 w-full rounded bg-white/10 px-2 py-1">
                 {roles.map((r) => (
                   <option key={r} value={r} className="text-black">{r}</option>
                 ))}
               </select>
+              </div>
             </label>
             <label className="text-sm block">Language
+              <div>
               <select name="language" className="mt-1 w-full rounded bg-white/10 px-2 py-1">
                 <option value="en" className="text-black">English</option>
                 <option value="si" className="text-black">සිංහල</option>
               </select>
+              </div>
             </label>
           </div>
         </form>
@@ -267,6 +303,17 @@ export default function UsersPage() {
           </form>
         )}
       </FormModal>
-    </AppLayout>
+  </AppLayout>
+    <ConfirmDialog
+      open={Boolean(deleteTarget)}
+      title="Delete user?"
+      description={deleteTarget ? `Are you sure you want to permanently delete user "${deleteTarget.username}"? This cannot be undone.` : ''}
+      confirmLabel="Delete User"
+      tone="danger"
+      loading={deleting}
+      onClose={() => { if (!deleting) setDeleteTarget(null); }}
+      onConfirm={confirmDelete}
+    />
+  </>
   );
 }

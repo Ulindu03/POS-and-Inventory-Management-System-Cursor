@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/User.model';
 import { JWTService } from '../services/jwt.service';
 import crypto from 'crypto';
-import { sendPasswordResetEmail } from '../services/email.service';
+import { sendPasswordResetEmail, sendOtpEmail } from '../services/email.service';
 
 export class AuthController {
   // Register new user
@@ -112,17 +112,32 @@ export class AuthController {
         });
       }
 
-      // Update last login
+      // If admin, enforce OTP step before issuing tokens
+      if (user.role === 'admin') {
+        const needsNewOtp = !user.otpCode || !user.otpExpires || user.otpExpires.getTime() < Date.now();
+        let emailResult: any = null;
+        if (needsNewOtp) {
+          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+          user.otpCode = otp;
+          user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+          user.otpAttempts = (user.otpAttempts || 0) + 1;
+          await user.save();
+          emailResult = await sendOtpEmail(user.email, user.otpCode);
+          // eslint-disable-next-line no-console
+          console.log('[auth] Admin OTP generated', { user: user.username, sent: emailResult.ok, email: user.email, otp: process.env.DEBUG_SHOW_OTP ? otp : 'hidden', error: emailResult.ok ? undefined : emailResult.error });
+        }
+        return res.json({
+          success: true,
+          message: 'OTP required',
+          data: { requiresOtp: true, user: { id: user._id, username: user.username, role: user.role }, emailSent: Boolean(emailResult?.ok), emailError: emailResult?.error, emailPreviewUrl: emailResult?.preview, ...(process.env.DEBUG_SHOW_OTP ? { debugOtp: user.otpCode } : {}) }
+        });
+      }
+
+      // Non-admin: proceed normally
       user.lastLogin = new Date();
-
-      // Generate tokens
       const { accessToken, refreshToken } = JWTService.generateTokenPair(user);
-
-      // Save refresh token to database
       user.refreshToken = refreshToken;
       await user.save();
-
-      // Set refresh token in httpOnly cookie
       const cookieMaxAge = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
@@ -130,24 +145,10 @@ export class AuthController {
         sameSite: 'strict',
         maxAge: cookieMaxAge,
       });
-
-  return res.json({
+      return res.json({
         success: true,
         message: 'Login successful',
-        data: {
-          user: {
-            id: user._id,
-            username: user.username,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-            language: user.language,
-            avatar: user.avatar,
-          },
-          accessToken,
-          refreshToken,
-        },
+        data: { user: { id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, language: user.language, avatar: user.avatar }, accessToken, refreshToken }
       });
     } catch (error) {
       return next(error);
@@ -328,6 +329,72 @@ export class AuthController {
       });
     } catch (error) {
       return next(error);
+    }
+  }
+
+  // Admin login phase 1: verify credentials and send OTP
+  static async adminLoginInitiate(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { username, password } = req.body;
+      const user = await User.findOne({ $or: [{ username }, { email: username }] });
+      if (!user || user.role !== 'admin' || !user.isActive) {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      }
+      const valid = await user.comparePassword(password);
+      if (!valid) {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      }
+      // Rate-limit OTP requests: lock if >5 in 30mins
+      if (user.otpAttempts && user.otpAttempts >= 5 && user.otpExpires && user.otpExpires.getTime() > Date.now()) {
+        return res.status(429).json({ success: false, message: 'Too many OTP requests. Please wait until current code expires.' });
+      }
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      user.otpCode = otp;
+      user.otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+      user.otpAttempts = (user.otpAttempts || 0) + 1;
+      await user.save();
+      const sent = await sendOtpEmail(user.email, otp);
+      return res.json({ success: true, message: sent.ok ? 'OTP sent' : 'OTP generated', data: { requiresOtp: true } });
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  // Admin login phase 2: verify OTP and issue tokens
+  static async adminLoginVerify(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { username, otp, rememberMe } = req.body;
+      const user = await User.findOne({ $or: [{ username }, { email: username }] });
+      if (!user || user.role !== 'admin' || !user.otpCode || !user.otpExpires) {
+        return res.status(400).json({ success: false, message: 'OTP not requested' });
+      }
+      if (user.otpExpires.getTime() < Date.now()) {
+        user.otpCode = undefined;
+        user.otpExpires = undefined;
+        await user.save();
+        return res.status(400).json({ success: false, message: 'OTP expired' });
+      }
+      if (otp !== user.otpCode) {
+        return res.status(401).json({ success: false, message: 'Invalid OTP' });
+      }
+      // success -> clear OTP and login
+      user.otpCode = undefined;
+      user.otpExpires = undefined;
+      user.otpAttempts = 0;
+      user.lastLogin = new Date();
+      const { accessToken, refreshToken } = JWTService.generateTokenPair(user);
+      user.refreshToken = refreshToken;
+      await user.save();
+      const cookieMaxAge = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: cookieMaxAge,
+      });
+      return res.json({ success: true, message: 'Admin login successful', data: { user: { id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role }, accessToken, refreshToken } });
+    } catch (err) {
+      return next(err);
     }
   }
 }

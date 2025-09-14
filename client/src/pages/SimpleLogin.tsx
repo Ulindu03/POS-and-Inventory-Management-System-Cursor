@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useAuthStore } from '@/store/auth.store';
+// useAuthStore not needed for this simple login component
 import { authApi } from '@/lib/api/auth.api';
 import { 
   User, 
@@ -20,6 +20,8 @@ const SimpleLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState('en');
   const [rememberMe, setRememberMe] = useState(false);
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState('');
 
   // Stable particle data (avoids using array index as key and re-randomizing every render)
   const particles = useMemo(
@@ -64,11 +66,20 @@ const SimpleLogin = () => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await authApi.login({ username, password, rememberMe });
-      toast.success('Login successful');
-      // Optionally redirect
+      if (!otpStep) {
+        const res: any = await authApi.login({ username, password, rememberMe });
+        if (res?.requiresOtp) {
+          setOtpStep(true);
+          toast.message('OTP sent to admin email');
+          return;
+        }
+        toast.success('Login successful');
+      } else {
+        await authApi.adminLoginVerify({ username, otp, rememberMe });
+        toast.success('Login successful');
+      }
     } catch (err:any){
-      const msg = err?.response?.data?.message || 'Invalid credentials';
+      const msg = err?.response?.data?.message || 'Login failed';
       toast.error(msg);
     } finally {
       setIsLoading(false);
@@ -155,31 +166,55 @@ const SimpleLogin = () => {
               </div>
             </div>
 
-            {/* Password field */}
-            <div>
-              <label className="block text-sm font-medium text-purple-200 mb-2 tracking-wide">
-                {t.password}
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-300" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-12 py-3.5 bg-white/10 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all text-base"
-                  placeholder="••••••••"
-                  aria-label={t.password}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-300 hover:text-white transition-colors focus:outline-none"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
+            {!otpStep && (
+              <div>
+                <label className="block text-sm font-medium text-purple-200 mb-2 tracking-wide">
+                  {t.password}
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-300" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-11 pr-12 py-3.5 bg-white/10 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all text-base"
+                    placeholder="••••••••"
+                    aria-label={t.password}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-300 hover:text-white transition-colors focus:outline-none"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
+
+            {otpStep && (
+              <div>
+                <label htmlFor="otp" className="block text-sm font-medium text-purple-200 mb-2 tracking-wide">Enter OTP</label>
+                <input
+                  id="otp"
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0,6))}
+                  className="w-full px-4 py-3.5 bg-white/10 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all text-base tracking-widest"
+                  placeholder="123456"
+                  aria-label="OTP"
+                  inputMode="numeric"
+                />
+                <p className="text-xs text-purple-300 mt-2">We sent a 6-digit code to the admin email. It expires in 5 minutes.</p>
+                <button type="button" className="mt-2 text-xs text-yellow-300 hover:text-white" onClick={async ()=> {
+                  try {
+                    setIsLoading(true);
+                    await authApi.adminLoginInit({ username, password, rememberMe });
+                    toast.message('OTP re-sent');
+                  } catch { toast.error('Resend failed'); } finally { setIsLoading(false);} }}>Resend OTP</button>
+              </div>
+            )}
 
             {/* Remember me and Forgot password */}
             <div className="flex items-center justify-between text-sm flex-wrap gap-4">
@@ -210,7 +245,7 @@ const SimpleLogin = () => {
                 </>
               ) : (
                 <>
-                  {t.loginButton}
+                  {otpStep ? 'Verify OTP' : t.loginButton}
                   <ChevronRight className="w-5 h-5" />
                 </>
               )}

@@ -5,11 +5,12 @@ import { setAccessToken, clearAccessToken, setRefreshToken, clearRefreshToken, g
 export const authApi = {
   login: async (credentials: { username: string; password: string; rememberMe?: boolean }) => {
     const response = await axios.post('/auth/login', credentials);
-    const payload = (response.data as any)?.data || {};
-  const { accessToken, refreshToken } = payload;
-  if (accessToken) setAccessToken(accessToken);
-  if (refreshToken) setRefreshToken(refreshToken);
-    return payload as { user: any; accessToken: string };
+  const payload = response.data?.data || {};
+    const { accessToken, refreshToken } = payload;
+  if (payload.requiresOtp) return payload; // no tokens yet
+    if (accessToken) setAccessToken(accessToken);
+    if (refreshToken) setRefreshToken(refreshToken);
+  return payload;
   },
 
   register: async (userData: any) => {
@@ -21,7 +22,7 @@ export const authApi = {
     const response = await axios.post('/auth/logout');
   clearAccessToken();
   clearRefreshToken();
-    return (response.data as any);
+  return response.data;
   },
 
   refreshToken: async () => {
@@ -33,31 +34,43 @@ export const authApi = {
       body.refreshToken = stored;
     }
     const response = await axios.post('/auth/refresh-token', body, { headers });
-    const payload = (response.data as any)?.data || {};
+  const payload = response.data?.data || {};
     const { accessToken, refreshToken } = payload;
     if (accessToken) setAccessToken(accessToken);
     if (refreshToken) setRefreshToken(refreshToken);
-    return payload as { accessToken: string; refreshToken?: string };
+  return payload;
   },
 
   forgotPassword: async (email: string) => {
     const response = await axios.post('/auth/forgot-password', { email });
-    return (response.data as any);
+  return response.data;
   },
 
   resetPassword: async (token: string, password: string) => {
     const response = await axios.post(`/auth/reset-password/${token}`, { password });
-    return (response.data as any);
+  return response.data;
   },
 
   getCurrentUser: async () => {
     const response = await axios.get('/auth/me');
-    const payload = (response.data as any)?.data || {};
-    return payload as { user: any };
+  const payload = response.data?.data || {};
+  return payload;
   },
 
   updateLanguage: async (language: 'en' | 'si') => {
     const response = await axios.patch('/auth/language', { language });
-    return (response.data as any);
+  return response.data;
   },
+  adminLoginInit: async (credentials: { username: string; password: string; rememberMe?: boolean }) => {
+    const res = await axios.post('/auth/admin/login/init', credentials);
+    return (res.data as any);
+  },
+  adminLoginVerify: async (data: { username: string; otp: string; rememberMe?: boolean }) => {
+    const res = await axios.post('/auth/admin/login/verify', data);
+    const payload = (res.data as any)?.data || {};
+    const { accessToken, refreshToken } = payload;
+    if (accessToken) setAccessToken(accessToken);
+    if (refreshToken) setRefreshToken(refreshToken);
+    return payload as { user: any; accessToken: string };
+  }
 };

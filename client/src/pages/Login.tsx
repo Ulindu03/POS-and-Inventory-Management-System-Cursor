@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User,
@@ -15,6 +15,7 @@ import {
 import { toast, Toaster } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
+import { authApi } from '@/lib/api/auth.api';
 
 // VoltZone Logo (use public/logo.jpg)
 const VoltZoneLogo = ({ className = "w-20 h-20" }: { className?: string }) => (
@@ -157,8 +158,8 @@ const LoginView = ({ t, formData, showPassword, setShowPassword, handleInputChan
     <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8F8F8' }}>{t.welcome}</h2>
     <p className="text-sm mb-6" style={{ color: '#F8F8F8B3' }}>{t.description}</p>
 
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Username */}
+  <form onSubmit={handleSubmit} className="space-y-5">
+  {/* Username */}
       <motion.div initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.4 }}>
         <label className="block text-sm font-medium mb-2" style={{ color: '#F8F8F8B3' }}>{t.username}</label>
         <div className="relative">
@@ -288,47 +289,45 @@ const LoginPage = () => {
     email: '',
     rememberMe: false
   });
+  const [emailSent, setEmailSent] = useState<boolean | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
+  const otpRequired = useAuthStore((s) => s.otpRequired);
+  const verifyAdminOtp = useAuthStore((s) => s.verifyAdminOtp);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const t = buildText(language);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (currentView === 'login') {
-      if (!formData.username || !formData.password) {
-        toast.error(t.fillFields);
+    if (currentView === 'forgot') {
+      if (!formData.email) { toast.error(t.fillFields); return; }
+      setIsLoading(true);
+      setTimeout(() => { setIsLoading(false); toast.success(t.resetSent); setCurrentView('login'); }, 1500);
+      return;
+    }
+    if (otpRequired) return; // OTP stage handled by separate form
+    if (!formData.username || !formData.password) { toast.error(t.fillFields); return; }
+    setIsLoading(true);
+    try {
+      const res = await login({ username: formData.username, password: formData.password, rememberMe: formData.rememberMe });
+      if (res?.requiresOtp) {
+        setEmailSent(res.emailSent ?? null);
+        setEmailError(res.emailError || null);
+        setEmailPreviewUrl(res.emailPreviewUrl || null);
+        toast.message(res.emailSent ? 'OTP sent to admin email' : 'OTP generated (email not sent)');
         return;
       }
-      
-      setIsLoading(true);
-      try {
-        await login({ username: formData.username, password: formData.password, rememberMe: formData.rememberMe });
-        toast.success(t.loginSuccess);
-  navigate('/dashboard', { replace: true });
-      } catch (err) {
-        // Log the error so we properly handle it for diagnostics
-        // and still provide a friendly toast to the user
-        // eslint-disable-next-line no-console
-        console.error(err);
-        toast.error(t.loginError);
-      } finally {
-        setIsLoading(false);
-      }
-    } else if (currentView === 'forgot') {
-      if (!formData.email) {
-        toast.error(t.fillFields);
-        return;
-      }
-      
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
-        toast.success(t.resetSent);
-        setCurrentView('login');
-      }, 1500);
+      toast.success(t.loginSuccess);
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      console.error(err); // eslint-disable-line no-console
+      toast.error(t.loginError);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -339,6 +338,47 @@ const LoginPage = () => {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+
+  const [otp, setOtp] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  // countdown timer for resend
+  useEffect(() => {
+    if (!resendCooldown) return;
+    const id = setInterval(() => setResendCooldown(c => (c > 0 ? c - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [resendCooldown]);
+
+  const handleOtpVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp || otp.length !== 6) {
+      toast.error('Enter 6-digit OTP');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await verifyAdminOtp({ otp, rememberMe: formData.rememberMe });
+      toast.success(t.loginSuccess);
+      // Navigation handled by isAuthenticated effect; avoid intermediate login flash
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(err);
+      toast.error('Invalid OTP');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Redirect once authenticated (covers both direct login and OTP flow) without flashing login panel
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  // Prevent UI flash: while authenticated but before navigation, render minimal placeholder
+  if (isAuthenticated) {
+    return <div className="min-h-screen flex items-center justify-center bg-black text-white">Redirecting...</div>;
+  }
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={{ backgroundColor: '#000000' }}>
@@ -367,12 +407,11 @@ const LoginPage = () => {
         <Aurora />
       </div>
 
-      {/* Floating particles */}
-      {React.useMemo(() =>
-        Array.from({ length: 10 }).map((_, i) => {
-          const key = `p-${i}-${Math.random().toString(36).slice(2)}`;
-          return <FloatingParticle key={key} delay={i * 1.3} />;
-        }), [])}
+      {/* Floating particles (no hooks to avoid conditional hook rule); random keys stable enough for decorative elements */}
+      {Array.from({ length: 10 }).map((_, i) => {
+        const key = `particle-${i + 1}`; // deterministic non-index-like id
+        return <FloatingParticle key={key} delay={i * 1.3} />;
+      })}
 
       {/* Main content: split layout */}
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 min-h-screen">
@@ -427,16 +466,72 @@ const LoginPage = () => {
             <AnimatePresence mode="wait">
               {currentView === 'login' ? (
                 <motion.div key="login" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>
-                  <LoginView
-                    t={t}
-                    formData={{ username: formData.username, password: formData.password, rememberMe: formData.rememberMe }}
-                    showPassword={showPassword}
-                    setShowPassword={setShowPassword}
-                    handleInputChange={handleInputChange}
-                    handleSubmit={handleSubmit}
-                    isLoading={isLoading}
-                    setCurrentView={(v) => setCurrentView(v)}
-                  />
+                  {!otpRequired && (
+                    <>
+                      {/* Render password inside this block so it disappears during OTP stage */}
+                      <LoginView
+                        t={t}
+                        formData={{ username: formData.username, password: formData.password, rememberMe: formData.rememberMe }}
+                        showPassword={showPassword}
+                        setShowPassword={setShowPassword}
+                        handleInputChange={handleInputChange}
+                        handleSubmit={handleSubmit}
+                        isLoading={isLoading}
+                        setCurrentView={(v) => setCurrentView(v)}
+                      />
+                    </>
+                  )}
+                  {otpRequired && (
+                    <form onSubmit={handleOtpVerify} className="space-y-5">
+                      <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8F8F8' }}>Enter OTP</h2>
+                      <p className="text-sm mb-6" style={{ color: '#F8F8F8B3' }}>
+                        {emailSent ? 'A 6-digit code was sent to the admin email. It expires in 5 minutes.' : 'Email not sent (SMTP not configured). Use the development OTP below to proceed.'}
+                      </p>
+                      {/* Dev OTP display removed for production security */}
+                      {emailPreviewUrl && (
+                        <p className="text-xs mb-4"><a href={emailPreviewUrl} target="_blank" rel="noreferrer" style={{ color: '#FFE100' }}>Open Email Preview</a></p>
+                      )}
+                      {emailError && (
+                        <p className="text-xs mb-4" style={{ color: '#ff6961' }}>Email error: {emailError}</p>
+                      )}
+                      <motion.div initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.2 }}>
+                        <label htmlFor="otp" className="block text-sm font-medium mb-2" style={{ color: '#F8F8F8B3' }}>OTP Code</label>
+                        <div className="relative">
+                          <input id="otp" type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))} className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 tracking-widest pr-28" style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }} placeholder="123456" inputMode="numeric"/>
+                          <button
+                            type="button"
+                            disabled={isLoading || resendCooldown > 0}
+                            onClick={async () => {
+                              if (resendCooldown > 0) return;
+                              try {
+                                setIsLoading(true);
+                                await authApi.adminLoginInit({ username: formData.username, password: formData.password, rememberMe: formData.rememberMe });
+                                setResendCooldown(30); // 30s cooldown
+                                toast.success('OTP sent again');
+                              } catch {
+                                toast.error('Could not resend OTP');
+                              } finally {
+                                setIsLoading(false);
+                              }
+                            }}
+                            className="absolute top-1/2 -translate-y-1/2 right-1 text-[11px] font-medium px-3 py-1 rounded-lg shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{
+                              background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                              color: '#F8F8F8',
+                              border: '1px solid rgba(255,225,0,0.25)'
+                            }}
+                          >
+                            {resendCooldown > 0 ? `Wait ${resendCooldown}s` : 'Resend'}
+                          </button>
+                        </div>
+                      </motion.div>
+                      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.3 }}>
+                        <button type="submit" disabled={isLoading} className="w-full py-3 px-4 font-semibold rounded-xl shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg, #FFE100 0%, #FFD100 100%)', color: '#000000' }}>
+                          {isLoading ? (<><Loader2 className="w-5 h-5 animate-spin" /> Verifying...</>) : (<>Verify OTP<ChevronRight className="w-5 h-5" /></>)}
+                        </button>
+                      </motion.div>
+                    </form>
+                  )}
                 </motion.div>
               ) : (
                 <motion.div key="forgot" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}>

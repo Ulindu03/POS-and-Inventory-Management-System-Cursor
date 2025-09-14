@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
+import { isSmtpConfigured, verifySmtpConnection, smtpDiagnostics } from '../services/email.service';
 import { authenticate } from '../middleware/auth.middleware';
 
 // Optional: add validation if available later
@@ -59,8 +60,22 @@ router.post('/register', validateRequest(authValidation?.register), AuthControll
  *         description: Invalid credentials
  */
 router.post('/login', validateRequest(authValidation?.login), AuthController.login);
+router.post('/admin/login/init', AuthController.adminLoginInitiate);
+router.post('/admin/login/verify', AuthController.adminLoginVerify);
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', AuthController.logout);
+router.get('/smtp-status', async (_req, res) => {
+	const configured = isSmtpConfigured();
+	const verify = configured ? await verifySmtpConnection() : { ok: false, error: 'not configured' };
+	return res.json({ success: true, data: { configured, verify, diagnostics: smtpDiagnostics() } });
+});
+
+// Force a re-evaluation of transporter (useful after adding env vars without restart in some dev setups)
+router.post('/smtp-reload', async (_req, res) => {
+	const configured = isSmtpConfigured();
+	const verify = configured ? await verifySmtpConnection() : { ok: false, error: 'not configured' };
+	return res.json({ success: true, message: 'SMTP reloaded', data: { configured, verify, diagnostics: smtpDiagnostics() } });
+});
 
 /**
  * @swagger

@@ -18,6 +18,9 @@ export interface IUser extends Document {
 	resetPasswordExpires?: Date;
 	twoFactorEnabled?: boolean;
 	permissions: string[];
+	otpCode?: string;
+	otpExpires?: Date;
+	otpAttempts?: number;
 	comparePassword(candidate: string): Promise<boolean>;
 }
 
@@ -85,6 +88,16 @@ const userSchema = new Schema<IUser>({
 	permissions: [{
 		type: String
 	}],
+	otpCode: {
+		type: String
+	},
+	otpExpires: {
+		type: Date
+	},
+	otpAttempts: {
+		type: Number,
+		default: 0
+	},
 	resetPasswordToken: {
 		type: String
 	},
