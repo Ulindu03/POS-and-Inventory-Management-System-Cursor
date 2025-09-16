@@ -1,8 +1,11 @@
-//functions to call the backend API (server) from your frontend (React)
+// Thin wrapper around the backend auth endpoints.
+// Each function calls the server and returns the parsed data.
 import axios from './client';
 import { setAccessToken, clearAccessToken, setRefreshToken, clearRefreshToken, getRefreshToken } from '@/lib/api/token';
 
 export const authApi = {
+  // POST /auth/login with username+password.
+  // On success, server may return access and refresh tokens.
   login: async (credentials: { username: string; password: string; rememberMe?: boolean }) => {
     const response = await axios.post('/auth/login', credentials);
   const payload = response.data?.data || {};
@@ -18,6 +21,7 @@ export const authApi = {
     return response.data;
   },
 
+  // POST /auth/logout to invalidate server-side tokens/cookies if any.
   logout: async () => {
     const response = await axios.post('/auth/logout');
   clearAccessToken();
@@ -25,6 +29,7 @@ export const authApi = {
   return response.data;
   },
 
+  // POST /auth/refresh-token to get a new access token (and possibly a rotated refresh token).
   refreshToken: async () => {
     const stored = getRefreshToken();
     const headers: Record<string, string> = {};
@@ -51,6 +56,7 @@ export const authApi = {
   return response.data;
   },
 
+  // GET /auth/me to validate current token and fetch user profile
   getCurrentUser: async () => {
     const response = await axios.get('/auth/me');
   const payload = response.data?.data || {};
@@ -61,10 +67,12 @@ export const authApi = {
     const response = await axios.patch('/auth/language', { language });
   return response.data;
   },
+  // Admin login step 1: request that an OTP be sent/created
   adminLoginInit: async (credentials: { username: string; password: string; rememberMe?: boolean }) => {
     const res = await axios.post('/auth/admin/login/init', credentials);
     return (res.data as any);
   },
+  // Admin login step 2: verify the OTP; server returns tokens and user
   adminLoginVerify: async (data: { username: string; otp: string; rememberMe?: boolean }) => {
     const res = await axios.post('/auth/admin/login/verify', data);
     const payload = (res.data as any)?.data || {};

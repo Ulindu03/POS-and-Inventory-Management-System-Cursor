@@ -1,17 +1,21 @@
+// This file configures a single Axios instance for all API calls.
+// It adds the access token to each request and tries to refresh the token
+// once when a request fails with 401 (unauthorized).
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { getAccessToken, setAccessToken, getRefreshToken, setRefreshToken, clearAccessToken, clearRefreshToken, clearAllTokens } from '@/lib/api/token';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'; // Backend base URL
 
 const client = axios.create({
   baseURL: API_URL,
-  withCredentials: true, // Important for cookies
+  withCredentials: true, // Allow cookies (if backend uses them)
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 // Request interceptor to add auth token
+// Before each request, attach the access token if we have one.
 client.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = getAccessToken();
@@ -26,6 +30,8 @@ client.interceptors.request.use(
 );
 
 // Keep response interceptor simple; refresh handled in store
+// We keep track if a refresh is already happening, and queue other requests
+// so we only hit the refresh endpoint once.
 let isRefreshing = false;
 let refreshQueue: Array<(token: string) => void> = [];
 
@@ -34,6 +40,8 @@ const processQueue = (token: string) => {
   refreshQueue = [];
 };
 
+// Ask the backend for a new access token using refresh token.
+// It first tries cookie-based flow, then falls back to header/body mode.
 async function tryRefreshToken(): Promise<string | null> {
   // Cookie-based attempt
   let resp = await axios.post(
@@ -44,11 +52,11 @@ async function tryRefreshToken(): Promise<string | null> {
   let data: any = resp.data;
   let token: string | null = (data?.data && data.data.accessToken) || data?.accessToken || null;
   const newRefreshCookie: string | null = (data?.data && data.data.refreshToken) || data?.refreshToken || null;
-  if (newRefreshCookie) setRefreshToken(newRefreshCookie);
+  if (newRefreshCookie) setRefreshToken(newRefreshCookie); // rotate stored refresh token if provided
   if (token) return token;
 
   // Header/body fallback (dev);
-  const storedRefresh = getRefreshToken();
+  const storedRefresh = getRefreshToken(); // read from storage (local or session)
   if (!storedRefresh) return null;
   resp = await axios.post(
     `${API_URL}/auth/refresh-token`,
@@ -62,6 +70,7 @@ async function tryRefreshToken(): Promise<string | null> {
   return token;
 }
 
+// If a response comes back with 401 we try one refresh cycle, then retry the failed request.
 client.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -97,8 +106,8 @@ client.interceptors.response.use(
           return client(originalRequest);
         }
       } catch (refreshErr) {
-        clearAllTokens();
-        // Redirect to login or clear auth state
+        clearAllTokens(); // clean local/session storage
+        // Notify the app so it can redirect to login
         window.dispatchEvent(new CustomEvent('auth:token-expired'));
         return Promise.reject(refreshErr instanceof Error ? refreshErr : new Error('Token refresh failed'));
       } finally {

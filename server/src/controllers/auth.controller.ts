@@ -1,3 +1,4 @@
+// Controller functions for authentication endpoints.
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/User.model';
 import { JWTService } from '../services/jwt.service';
@@ -22,7 +23,7 @@ export class AuthController {
         });
       }
 
-      // Create new user
+  // Create new user
       const user = new User({
         username,
         email,
@@ -112,7 +113,7 @@ export class AuthController {
         });
       }
 
-      // If admin, enforce OTP step before issuing tokens
+  // If admin, enforce OTP step before issuing tokens
       if (user.role === 'admin') {
         const needsNewOtp = !user.otpCode || !user.otpExpires || user.otpExpires.getTime() < Date.now();
         let emailResult: any = null;
@@ -138,7 +139,8 @@ export class AuthController {
       const { accessToken, refreshToken } = JWTService.generateTokenPair(user);
       user.refreshToken = refreshToken;
       await user.save();
-      const cookieMaxAge = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+  // Choose cookie lifetime based on Remember Me
+  const cookieMaxAge = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -184,14 +186,14 @@ export class AuthController {
         });
       }
 
-      // Generate new tokens
+  // Generate new tokens
       const { accessToken, refreshToken: newRefreshToken } = JWTService.generateTokenPair(user);
 
       // Update refresh token in database
       user.refreshToken = newRefreshToken;
       await user.save();
 
-      // Set new refresh token in cookie
+  // Set new refresh token in cookie
       res.cookie('refreshToken', newRefreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -224,7 +226,7 @@ export class AuthController {
         );
       }
 
-      // Clear cookie
+  // Clear cookie
       res.clearCookie('refreshToken');
 
       return res.json({
@@ -249,7 +251,7 @@ export class AuthController {
         });
       }
 
-      // Generate reset token
+  // Generate reset token
       const resetToken = crypto.randomBytes(32).toString('hex');
       const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
 

@@ -1,3 +1,4 @@
+// Point of Sale (POS) system page for processing customer transactions
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { ProductGrid } from '@/features/pos/ProductGrid';
 import { Cart } from '@/features/pos/Cart';
@@ -14,7 +15,9 @@ import { salesApi } from '@/lib/api/sales.api';
 // Replaced lucide icons with custom FS.png from public
 
 const POS = () => {
+  // State for payment modal visibility
   const [open, setOpen] = useState(false);
+  // State for receipt data after successful payment
   const [receipt, setReceipt] = useState<{
     invoiceNo: string;
   saleId: string;
@@ -25,7 +28,10 @@ const POS = () => {
     total: number;
   warranties?: Array<{ warrantyNo: string; status: string; periodDays: number; endDate?: string; requiresActivation?: boolean }>;
   } | null>(null);
+  // State for damage reporting modal
   const [openDamage, setOpenDamage] = useState(false);
+  
+  // Get cart state and actions from store
   const clear = useCartStore((s) => s.clear);
   const items = useCartStore((s) => s.items);
   const subtotal = useCartStore((s) => s.subtotal());
@@ -33,24 +39,32 @@ const POS = () => {
   const tax = useCartStore((s) => s.tax());
   const total = useCartStore((s) => s.total());
   const setHold = useCartStore((s) => s.setHold);
+  
+  // Get current user info for receipt
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
   return (
     <AppLayout>
+      {/* Main POS layout with product grid and cart */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-h-0 h-[calc(100vh-3.5rem-1.5rem)] md:h-[calc(100vh-3.5rem-1.5rem)]">
+        {/* Left side: Product selection area */}
         <div className="md:col-span-1 lg:col-span-2 space-y-4 min-h-0 overflow-auto">
           <div className="mb-3 font-semibold flex items-center justify-between gap-2">
             <span>{t('pos.productsHeader')}</span>
             <div className="flex items-center gap-2 text-xs">
+              {/* Quick access to warranty management */}
               <Link to="/warranty" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[#F8F8F8] transition" title={t('pos.warrantyTooltip')}>
                 <img src="/warranty.png" alt="Warranty" className="w-4 h-4" />
                 <span className="hidden sm:inline">{t('pos.warrantyButton')}</span>
               </Link>
             </div>
           </div>
+          {/* Product grid for selecting items */}
           <ProductGrid />
+          {/* Barcode scanner for quick product lookup */}
           <BarcodeScanner />
         </div>
+        {/* Right side: Shopping cart and checkout */}
         <div className="md:col-span-1 lg:col-span-1 flex flex-col min-h-0">
           <div className="flex-1 min-h-0">
             <Cart
@@ -58,6 +72,7 @@ const POS = () => {
               onClear={clear}
               onDamage={() => setOpenDamage(true)}
               onHold={async () => {
+                // Save current cart as a hold ticket for later retrieval
                 const payload = { items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })), discount };
                 const res = await salesApi.hold(payload);
                 setHold(res.data.ticket);
@@ -67,7 +82,11 @@ const POS = () => {
         </div>
       </div>
   {/* Fullscreen UI removed per request */}
+      
+      {/* Damage reporting modal */}
       <QuickDamageModal open={openDamage} onClose={() => setOpenDamage(false)} />
+      
+      {/* Payment processing modal */}
       <PaymentModal
         open={open}
         onClose={() => setOpen(false)}
@@ -118,6 +137,8 @@ const POS = () => {
           clear();
         }}
       />
+      
+      {/* Receipt printing modal */}
       <ReceiptModal
         open={Boolean(receipt)}
         onClose={() => setReceipt(null)}

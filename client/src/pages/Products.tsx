@@ -1,3 +1,4 @@
+// Products management page for creating, editing, and organizing inventory items
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppLayout } from '@/components/common/Layout/Layout';
@@ -12,12 +13,18 @@ type ProductTab = 'list' | 'categories';
 type ProductModal = 'create' | 'edit' | 'category' | null;
 
 const Products = () => {
+  // State for active tab (products list or categories)
   const [activeTab, setActiveTab] = useState<ProductTab>('list');
+  // State for which modal is currently open
   const [activeModal, setActiveModal] = useState<ProductModal>(null);
+  // State for product being edited
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  // State for product being deleted
   const [deletingProduct, setDeletingProduct] = useState<any>(null);
+  // State for product sticker printing
   const [stickerProduct, setStickerProduct] = useState<any>(null); // null allowed implicitly
 
+  // Listen for sticker printing events from other components
   useEffect(() => {
     const handler = (e: any) => setStickerProduct(e.detail.product);
     window.addEventListener('vz-stickers-open', handler as any);
@@ -26,16 +33,19 @@ const Products = () => {
 
   const { t } = useTranslation();
 
+  // Tab configuration for switching between products and categories
   const tabs = [
     { id: 'list' as const, label: t('productsPage.tabs.products'), icon: '📦' },
     { id: 'categories' as const, label: t('productsPage.tabs.categories'), icon: '🏷️' },
   ];
 
+  // Open edit modal for existing product
   const handleEditProduct = (product: any) => {
     setSelectedProduct(product);
     setActiveModal('edit');
   };
 
+  // Open create modal for new product
   const handleCreateProduct = () => {
     setSelectedProduct(null);
     setActiveModal('create');
@@ -43,11 +53,13 @@ const Products = () => {
 
   // Deletion dialog trigger now handled inline where needed; removed unused handler
 
+  // Close any open modal and reset state
   const handleCloseModal = () => {
     setActiveModal(null);
     setSelectedProduct(null);
   };
 
+  // Export all products to CSV file
   const handleExport = async () => {
     try {
       const blob = await productsApi.bulkExport();
@@ -65,6 +77,7 @@ const Products = () => {
     }
   };
 
+  // Import products from CSV file
   const handleImport = async (file: File | null) => {
     if (!file) return;
     try {
@@ -80,7 +93,7 @@ const Products = () => {
   return (
     <AppLayout className="bg-[#242424]">
       <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+        {/* Page header with title and action buttons */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="text-center lg:text-left flex-1">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2 tracking-tight">
@@ -90,6 +103,7 @@ const Products = () => {
               {t('productsPage.subtitle')}
             </p>
           </div>
+          {/* Action buttons for product management */}
           <div className="flex flex-wrap gap-3 justify-center lg:justify-end">
             <button
               onClick={handleCreateProduct}
@@ -121,7 +135,7 @@ const Products = () => {
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tab navigation for switching between products and categories */}
         <div className="flex flex-wrap gap-3">
           {tabs.map((tab) => {
             const active = activeTab === tab.id;
@@ -147,7 +161,7 @@ const Products = () => {
           })}
         </div>
 
-        {/* Content */}
+        {/* Main content area showing either products list or category manager */}
         <div className="min-h-[600px]">
           {activeTab === 'list' && (
             <ProductList 
@@ -161,7 +175,7 @@ const Products = () => {
         </div>
   </div>
 
-      {/* Modals */}
+      {/* Modal dialogs for product management */}
       {(activeModal === 'create' || activeModal === 'edit') && (
         <ProductForm
           product={selectedProduct}
@@ -178,9 +192,11 @@ const Products = () => {
           }}
         />
       )}
+      {/* Sticker printing modal */}
       {stickerProduct && (
         <StickerPrintModal product={stickerProduct} onClose={() => setStickerProduct(null)} />
       )}
+      {/* Product deletion confirmation dialog */}
       {deletingProduct && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">

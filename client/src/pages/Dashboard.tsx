@@ -1,3 +1,4 @@
+// Main dashboard page showing business overview with charts and statistics
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { 
   DashboardStats, 
@@ -14,6 +15,7 @@ import { dashboardApi, type DashboardStats as StatsType, type SalesData, type To
 import { useTranslation } from 'react-i18next';
 
 const Dashboard = () => {
+  // State for dashboard statistics (sales, orders, products, customers)
   const [stats, setStats] = useState<StatsType>({
     totalSales: 0,
     totalOrders: 0,
@@ -23,6 +25,7 @@ const Dashboard = () => {
     averageOrderValue: 0
   });
 
+  // Load dashboard statistics on component mount
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -36,14 +39,13 @@ const Dashboard = () => {
     return () => { mounted = false; };
   }, []);
 
+  // State for various chart data
   const [salesData, setSalesData] = useState<SalesData[]>([]);
-
   const [topProductsData, setTopProductsData] = useState<TopProduct[]>([]);
-
   const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
-
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
 
+  // Load all chart data in parallel for better performance
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -66,6 +68,7 @@ const Dashboard = () => {
     return () => { mounted = false; };
   }, []);
 
+  // Get translation function for multi-language support
   const { t } = useTranslation();
 
   return (
@@ -76,27 +79,27 @@ const Dashboard = () => {
         transition={{ duration: 0.5 }}
         className="space-y-10 p-6"
       >
-        {/* Header */}
+        {/* Page header with title and subtitle */}
         <div className="text-center">
           <h1 className="text-4xl font-bold text-[#f8f8f8] tracking-tight">{t('dashboard.title')}</h1>
           <p className="mt-2 text-sm text-gray-400 tracking-wide">{t('dashboard.subtitle')}</p>
         </div>
 
-        {/* Quick Actions */}
+        {/* Quick action buttons for common tasks */}
         <GlassCard variant="dark" className="p-6">
           <QuickActions />
         </GlassCard>
 
-  {/* Stats Cards (supplier-style) */}
-  <DashboardStats stats={stats} />
+        {/* Statistics cards showing key business metrics */}
+        <DashboardStats stats={stats} />
 
-        {/* Charts Row 1 */}
+        {/* First row of charts: Sales trend and top products */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <SalesChart data={salesData} />
           <TopProducts data={topProductsData} />
         </div>
 
-        {/* Charts Row 2 */}
+        {/* Second row of charts: Category distribution and recent sales */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <CategoryDistribution data={categoryData} />
           <RecentSales sales={recentSales} />

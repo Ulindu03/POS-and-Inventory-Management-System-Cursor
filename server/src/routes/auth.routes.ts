@@ -1,3 +1,4 @@
+// Defines all /auth endpoints.
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { isSmtpConfigured, verifySmtpConnection, smtpDiagnostics } from '../services/email.service';
@@ -59,11 +60,14 @@ router.post('/register', validateRequest(authValidation?.register), AuthControll
  *       401:
  *         description: Invalid credentials
  */
+// Basic login and admin OTP flow
 router.post('/login', validateRequest(authValidation?.login), AuthController.login);
 router.post('/admin/login/init', AuthController.adminLoginInitiate);
 router.post('/admin/login/verify', AuthController.adminLoginVerify);
+// Token utilities
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', AuthController.logout);
+// Helper endpoints to check SMTP health in dev
 router.get('/smtp-status', async (_req, res) => {
 	const configured = isSmtpConfigured();
 	const verify = configured ? await verifySmtpConnection() : { ok: false, error: 'not configured' };

@@ -1,3 +1,4 @@
+// Glass morphism card component with different visual variants
 interface GlassCardProps {
   children: React.ReactNode;
   className?: string;
@@ -9,6 +10,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
   className = '', 
   variant = 'default' 
 }) => {
+  // Base glass morphism styles with backdrop blur and transparency
   const baseClasses = `
     relative overflow-hidden rounded-2xl
     backdrop-blur-xl backdrop-saturate-150
@@ -16,6 +18,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
     hover:shadow-2xl transition-all duration-300
   `;
 
+  // Different color schemes for light and dark themes
   const variantClasses: Record<string,string> = {
     default: 'bg-white/95 border-white/30 shadow-xl',
     elevated: 'bg-white/98 border-white/40 shadow-2xl',
@@ -26,11 +29,13 @@ export const GlassCard: React.FC<GlassCardProps> = ({
 
   return (
     <div className={`${baseClasses} ${variantClasses[variant]} ${className}`}>
+      {/* Gradient overlay for enhanced glass effect */}
       {variant.startsWith('dark') ? (
         <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/0 to-transparent" />
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-white/60 via-white/0 to-transparent" />
       )}
+      {/* Content container with proper z-index */}
       <div className="relative z-10">
         {children}
       </div>

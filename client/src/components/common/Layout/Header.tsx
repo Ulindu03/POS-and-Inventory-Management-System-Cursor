@@ -1,3 +1,4 @@
+// Top header component with navigation controls, user info, and utility buttons
 import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '@/store/auth.store';
 import { BrandLogo } from '@/components/common/BrandLogo';
@@ -5,11 +6,15 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () => void; sidebarOpen?: boolean }) => {
+  // Get current user info and logout function from auth store
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  // Track fullscreen state for the fullscreen toggle button
   const [isFs, setIsFs] = useState<boolean>(Boolean(document.fullscreenElement));
+  // Get translation functions for multi-language support
   const { i18n, t } = useTranslation();
 
+  // Function to toggle fullscreen mode
   const toggleFs = useCallback(async () => {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
@@ -17,6 +22,7 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
     } catch {}
   }, []);
 
+  // Listen for fullscreen changes and ESC key to exit fullscreen
   useEffect(() => {
     const onChange = () => setIsFs(Boolean(document.fullscreenElement));
     const onKey = (e: KeyboardEvent) => {
@@ -34,7 +40,9 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
 
   return (
     <header className="h-12 md:h-14 w-full bg-black/20 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-3 md:px-4 text-[#F8F8F8]">
+      {/* Left side: Menu button, logo, and welcome message */}
       <div className="flex items-center gap-2">
+        {/* Mobile menu toggle button */}
         <button
           type="button"
           onClick={onToggleSidebar}
@@ -44,11 +52,14 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
         >
           <img src="/sidebar.png" alt="menu" className="w-5 h-5 object-contain" />
         </button>
+        {/* Company logo */}
         <BrandLogo size={32} rounded="xl" />
+        {/* Welcome message with user's name */}
   <div className="font-semibold hidden sm:block">{t('common.welcomeUser', { name: user?.firstName || user?.username || '' })}</div>
       </div>
+      {/* Right side: POS link, fullscreen toggle, language switcher, and logout */}
       <div className="flex items-center gap-2">
-        {/* POS panel indicator left of fullscreen, larger and clickable */}
+        {/* Quick access to POS system */}
         <Link
           to="/pos"
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-base font-semibold hover:bg-white/20 transition"
@@ -57,6 +68,7 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
           <img src="/POS.png" alt="POS" className="w-6 h-6 object-contain" draggable={false} />
           <span className="hidden sm:inline text-white">POS</span>
         </Link>
+        {/* Fullscreen toggle button */}
         <button
           type="button"
           onClick={toggleFs}
@@ -72,6 +84,7 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
           />
           <span className="hidden sm:inline">{isFs ? 'Exit' : 'Fullscreen'}</span>
         </button>
+        {/* Language switcher (English/Sinhala) */}
         <button
           type="button"
           onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'si' : 'en')}
@@ -82,6 +95,7 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
           <img src="/lan.png" alt="lang" className="w-5 h-5 object-contain" />
           <span className="hidden md:inline text-xs font-medium">{i18n.language === 'en' ? 'සිංහල' : 'English'}</span>
         </button>
+        {/* Logout button */}
         <button
           onClick={logout}
           className="px-3 py-1.5 rounded-lg text-sm"

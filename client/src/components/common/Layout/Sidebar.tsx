@@ -1,3 +1,4 @@
+// Sidebar navigation component with role-based menu items and smooth animations
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ShoppingCart, Users, Package, Truck, FileText, Settings as SettingsIcon, Route, AlertTriangle, BarChart3 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
@@ -5,6 +6,7 @@ import { BrandLogo } from '@/components/common/BrandLogo';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
 
+// Define all navigation menu items with their permissions
 const menuItems = [
   { icon: LayoutDashboard, imgSrc: '/dashboard.png', label: 'Dashboard', path: '/dashboard', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
   { icon: ShoppingCart, imgSrc: '/POS.png', label: 'POS', path: '/pos', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
@@ -24,9 +26,11 @@ const menuItems = [
 ];
 
 export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+  // Get current page location and user role for filtering menu items
   const location = useLocation();
   const role = useAuthStore((s) => s.user?.role);
 
+  // Animation variants for staggered menu item appearance
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
@@ -40,6 +44,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
     show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 400, damping: 32 } }
   };
 
+  // Listen for ESC key to close sidebar
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && open) onClose();
@@ -50,7 +55,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
 
   return (
     <>
-      {/* Scrim overlay */}
+      {/* Dark overlay that appears when sidebar is open */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -65,7 +70,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
         )}
       </AnimatePresence>
 
-      {/* Off-canvas panel */}
+      {/* Main sidebar panel that slides in from the left */}
       <motion.aside
         key="sidebar-panel"
         className="fixed left-0 top-0 bottom-0 z-50 w-56 lg:w-64 bg-black/30 backdrop-blur-xl border-r border-white/10 text-[#F8F8F8] flex flex-col"
@@ -74,6 +79,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
   aria-label="Navigation"
       >
+      {/* Company logo and branding section */}
       <motion.div className="px-5 py-6 border-b border-white/10" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
         <div className="flex items-center gap-3">
           <BrandLogo size={48} rounded="xl" />
@@ -84,9 +90,11 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
       </motion.div>
 
+      {/* Navigation menu with role-based filtering */}
       <motion.nav className="p-4 space-y-2" variants={containerVariants} initial="hidden" animate="show">
         {menuItems
           .filter((item: any) => {
+            // Filter menu items based on user role permissions
             if (item.allowedRoles) {
               return role ? item.allowedRoles.includes(role) : false;
             }
@@ -109,6 +117,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
                 )}
               </AnimatePresence>
 
+              {/* Navigation link with icon and label */}
               <Link
                 to={item.path}
                 className={`relative flex items-center gap-3 px-3 py-2 rounded-xl transition-colors group ${
@@ -116,6 +125,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
                 }`}
               >
         <motion.span whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }} className="flex items-center gap-3">
+                  {/* Use custom image if available, otherwise use Lucide icon */}
                   {item.imgSrc ? (
                     <img
                       src={item.imgSrc}

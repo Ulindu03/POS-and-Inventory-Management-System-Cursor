@@ -1,3 +1,5 @@
+// Login page with optional admin OTP step.
+// It shows a form, sends credentials to the store, and navigates to dashboard on success.
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -294,13 +296,14 @@ const LoginPage = () => {
   const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | null>(null);
 
   const navigate = useNavigate();
-  const login = useAuthStore((s) => s.login);
-  const otpRequired = useAuthStore((s) => s.otpRequired);
-  const verifyAdminOtp = useAuthStore((s) => s.verifyAdminOtp);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const login = useAuthStore((s) => s.login);                 // action to login with username/password
+  const otpRequired = useAuthStore((s) => s.otpRequired);     // true when backend asked for OTP
+  const verifyAdminOtp = useAuthStore((s) => s.verifyAdminOtp); // action to verify the OTP
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated); // user login state
 
   const t = buildText(language);
 
+  // Handle submit for both: login form and forgot password view.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (currentView === 'forgot') {
@@ -309,16 +312,21 @@ const LoginPage = () => {
       setTimeout(() => { setIsLoading(false); toast.success(t.resetSent); setCurrentView('login'); }, 1500);
       return;
     }
-    if (otpRequired) return; // OTP stage handled by separate form
+    if (otpRequired) return; // If we are on the OTP step, ignore the login form submit
     if (!formData.username || !formData.password) { toast.error(t.fillFields); return; }
     setIsLoading(true);
     try {
+      // Ask the store to perform login; rememberMe tells where to store tokens
       const res = await login({ username: formData.username, password: formData.password, rememberMe: formData.rememberMe });
       if (res?.requiresOtp) {
+        // Backend wants an OTP; show the OTP UI
         setEmailSent(res.emailSent ?? null);
         setEmailError(res.emailError || null);
         setEmailPreviewUrl(res.emailPreviewUrl || null);
-        toast.message(res.emailSent ? 'OTP sent to admin email' : 'OTP generated (email not sent)');
+        toast.success(res.emailSent ? '🔐 OTP sent to admin email' : '🔐 OTP generated (email not sent)', {
+          description: res.emailSent ? 'Check your email for the 6-digit verification code' : 'Use the development OTP to proceed',
+          duration: 5000,
+        });
         return;
       }
       toast.success(t.loginSuccess);
@@ -331,6 +339,7 @@ const LoginPage = () => {
     }
   };
 
+  // Keep form state in sync with inputs
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -348,6 +357,7 @@ const LoginPage = () => {
     return () => clearInterval(id);
   }, [resendCooldown]);
 
+  // Submit the OTP for admin login
   const handleOtpVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otp || otp.length !== 6) {
@@ -356,7 +366,7 @@ const LoginPage = () => {
     }
     setIsLoading(true);
     try {
-      await verifyAdminOtp({ otp, rememberMe: formData.rememberMe });
+      await verifyAdminOtp({ otp, rememberMe: formData.rememberMe }); // store handles saving tokens
       toast.success(t.loginSuccess);
       // Navigation handled by isAuthenticated effect; avoid intermediate login flash
     } catch (err) {
@@ -369,6 +379,7 @@ const LoginPage = () => {
   };
 
   // Redirect once authenticated (covers both direct login and OTP flow) without flashing login panel
+  // Once logged in (either normal login or after OTP), go to dashboard.
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/dashboard', { replace: true });
@@ -483,21 +494,98 @@ const LoginPage = () => {
                   )}
                   {otpRequired && (
                     <form onSubmit={handleOtpVerify} className="space-y-5">
-                      <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8F8F8' }}>Enter OTP</h2>
+                      <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8F8F8' }}>Two-Factor Authentication</h2>
                       <p className="text-sm mb-6" style={{ color: '#F8F8F8B3' }}>
-                        {emailSent ? 'A 6-digit code was sent to the admin email. It expires in 5 minutes.' : 'Email not sent (SMTP not configured). Use the development OTP below to proceed.'}
+                        {emailSent ? 'We\'ve sent a 6-digit code to your admin email' : 'Development mode: OTP generated locally'}
                       </p>
-                      {/* Dev OTP display removed for production security */}
+
+                      {/* Status Messages */}
+                      {emailSent && (
+                        <motion.div 
+                          initial={{ y: -10, opacity: 0 }} 
+                          animate={{ y: 0, opacity: 1 }} 
+                          transition={{ duration: 0.4, delay: 0.1 }}
+                          className="flex items-center gap-3 p-3 rounded-xl mb-4" 
+                          style={{ 
+                            background: 'rgba(34, 197, 94, 0.1)', 
+                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                            color: '#22c55e'
+                          }}
+                        >
+                          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">Code sent successfully</p>
+                            <p className="text-xs opacity-80">Check your email and enter the 6-digit code below</p>
+                          </div>
+                        </motion.div>
+                      )}
+
                       {emailPreviewUrl && (
-                        <p className="text-xs mb-4"><a href={emailPreviewUrl} target="_blank" rel="noreferrer" style={{ color: '#FFE100' }}>Open Email Preview</a></p>
+                        <motion.div 
+                          initial={{ y: -10, opacity: 0 }} 
+                          animate={{ y: 0, opacity: 1 }} 
+                          transition={{ duration: 0.4, delay: 0.2 }}
+                          className="text-center mb-4"
+                        >
+                          <a 
+                            href={emailPreviewUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105"
+                            style={{ 
+                              background: 'rgba(255, 225, 0, 0.1)', 
+                              color: '#FFE100',
+                              border: '1px solid rgba(255, 225, 0, 0.3)'
+                            }}
+                          >
+                            📧 Open Email Preview
+                          </a>
+                        </motion.div>
                       )}
+
                       {emailError && (
-                        <p className="text-xs mb-4" style={{ color: '#ff6961' }}>Email error: {emailError}</p>
+                        <motion.div 
+                          initial={{ y: -10, opacity: 0 }} 
+                          animate={{ y: 0, opacity: 1 }} 
+                          transition={{ duration: 0.4, delay: 0.1 }}
+                          className="flex items-center gap-3 p-3 rounded-xl mb-4" 
+                          style={{ 
+                            background: 'rgba(239, 68, 68, 0.1)', 
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#ef4444'
+                          }}
+                        >
+                          <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">Email delivery failed</p>
+                            <p className="text-xs opacity-80">{emailError}</p>
+                          </div>
+                        </motion.div>
                       )}
-                      <motion.div initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.2 }}>
+
+                      {/* OTP Input Field */}
+                      <motion.div initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.4 }}>
                         <label htmlFor="otp" className="block text-sm font-medium mb-2" style={{ color: '#F8F8F8B3' }}>OTP Code</label>
                         <div className="relative">
-                          <input id="otp" type="text" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))} className="w-full px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 tracking-widest pr-28" style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }} placeholder="123456" inputMode="numeric"/>
+                          <input 
+                            id="otp" 
+                            type="text" 
+                            value={otp} 
+                            onChange={(e) => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))} 
+                            className="w-full pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black" 
+                            style={{ 
+                              backgroundColor: '#EEEEEE', 
+                              border: '1px solid #EEEEEE', 
+                              color: '#000000', 
+                              caretColor: '#000000' 
+                            }} 
+                            placeholder="123456" 
+                            inputMode="numeric"
+                            maxLength={6}
+                          />
+                          <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                            <img src="/twofac.png" alt="OTP" className="w-5 h-5 object-contain" />
+                          </div>
                           <button
                             type="button"
                             disabled={isLoading || resendCooldown > 0}
@@ -507,16 +595,21 @@ const LoginPage = () => {
                                 setIsLoading(true);
                                 await authApi.adminLoginInit({ username: formData.username, password: formData.password, rememberMe: formData.rememberMe });
                                 setResendCooldown(30); // 30s cooldown
-                                toast.success('OTP sent again');
+                                toast.success('🔄 OTP sent again', {
+                                  description: 'Check your email for the new verification code',
+                                  duration: 4000,
+                                });
                               } catch {
-                                toast.error('Could not resend OTP');
+                                toast.error('❌ Could not resend OTP');
                               } finally {
                                 setIsLoading(false);
                               }
                             }}
-                            className="absolute top-1/2 -translate-y-1/2 right-1 text-[11px] font-medium px-3 py-1 rounded-lg shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium px-3 py-1 rounded-lg shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{
-                              background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                              background: resendCooldown > 0 
+                                ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                                : 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
                               color: '#F8F8F8',
                               border: '1px solid rgba(255,225,0,0.25)'
                             }}
@@ -525,9 +618,31 @@ const LoginPage = () => {
                           </button>
                         </div>
                       </motion.div>
-                      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.3 }}>
-                        <button type="submit" disabled={isLoading} className="w-full py-3 px-4 font-semibold rounded-xl shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2" style={{ background: 'linear-gradient(135deg, #FFE100 0%, #FFD100 100%)', color: '#000000' }}>
-                          {isLoading ? (<><Loader2 className="w-5 h-5 animate-spin" /> Verifying...</>) : (<>Verify OTP<ChevronRight className="w-5 h-5" /></>)}
+
+                      {/* Verify Button */}
+                      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.7 }}>
+                        <button 
+                          type="submit" 
+                          disabled={isLoading || otp.length !== 6} 
+                          className="w-full py-3 px-4 font-semibold rounded-xl shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 group" 
+                          style={{ 
+                            background: otp.length === 6 
+                              ? 'linear-gradient(135deg, #FFE100 0%, #FFD100 100%)' 
+                              : 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)', 
+                            color: '#000000' 
+                          }}
+                        >
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              <span>Verifying...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Verify OTP</span>
+                              <ChevronRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-0.5" />
+                            </>
+                          )}
                         </button>
                       </motion.div>
                     </form>
