@@ -11,6 +11,7 @@ import { GlassCard } from '@/components/common/Card';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { dashboardApi, type DashboardStats as StatsType, type SalesData, type TopProduct, type CategoryData, type RecentSale } from '@/lib/api/dashboard.api';
+import { useTranslation } from 'react-i18next';
 
 const Dashboard = () => {
   const [stats, setStats] = useState<StatsType>({
@@ -28,8 +29,8 @@ const Dashboard = () => {
       try {
         const s = await dashboardApi.getStats();
         if (mounted) setStats(s);
-      } catch (_e) {
-        // leave defaults on error; optionally log in dev
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn('Dashboard stats load failed', e);
       }
     })();
     return () => { mounted = false; };
@@ -58,12 +59,14 @@ const Dashboard = () => {
         setTopProductsData(topProducts);
         setCategoryData(catDist);
         setRecentSales(Array.isArray(recents) ? recents.slice(0, 5) : []);
-      } catch (_e) {
-        // ignore and keep defaults; optionally log in dev
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn('Dashboard charts load failed', e);
       }
     })();
     return () => { mounted = false; };
   }, []);
+
+  const { t } = useTranslation();
 
   return (
     <AppLayout className="bg-[#242424]">
@@ -75,8 +78,8 @@ const Dashboard = () => {
       >
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-[#f8f8f8] tracking-tight">Dashboard</h1>
-          <p className="mt-2 text-sm text-gray-400 tracking-wide">Your business at a glance</p>
+          <h1 className="text-4xl font-bold text-[#f8f8f8] tracking-tight">{t('dashboard.title')}</h1>
+          <p className="mt-2 text-sm text-gray-400 tracking-wide">{t('dashboard.subtitle')}</p>
         </div>
 
         {/* Quick Actions */}

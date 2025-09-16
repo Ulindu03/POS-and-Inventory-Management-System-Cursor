@@ -10,6 +10,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 interface QuickAction {
   title: string;
@@ -19,9 +20,11 @@ interface QuickAction {
   color: string;
 }
 
-const quickActions: (QuickAction & { allowedRoles?: string[] })[] = [
+const quickActions: (QuickAction & { allowedRoles?: string[]; titleKey: string; descKey: string })[] = [
   {
     title: 'New Sale',
+    titleKey: 'dashboard.action_newSale_title',
+    descKey: 'dashboard.action_newSale_desc',
     description: 'Start a new POS transaction',
     icon: <Plus className="w-6 h-6" />,
     href: '/pos',
@@ -30,6 +33,8 @@ const quickActions: (QuickAction & { allowedRoles?: string[] })[] = [
   },
   {
     title: 'Add Product',
+    titleKey: 'dashboard.action_addProduct_title',
+    descKey: 'dashboard.action_addProduct_desc',
     description: 'Add new product to inventory',
     icon: <Package className="w-6 h-6" />,
     href: '/products',
@@ -38,6 +43,8 @@ const quickActions: (QuickAction & { allowedRoles?: string[] })[] = [
   },
   {
     title: 'New Customer',
+    titleKey: 'dashboard.action_newCustomer_title',
+    descKey: 'dashboard.action_newCustomer_desc',
     description: 'Register a new customer',
     icon: <Users className="w-6 h-6" />,
     href: '/customers',
@@ -46,6 +53,8 @@ const quickActions: (QuickAction & { allowedRoles?: string[] })[] = [
   },
   {
     title: 'View Reports',
+    titleKey: 'dashboard.action_viewReports_title',
+    descKey: 'dashboard.action_viewReports_desc',
     description: 'Generate business reports',
     icon: <FileText className="w-6 h-6" />,
     href: '/reports',
@@ -54,6 +63,8 @@ const quickActions: (QuickAction & { allowedRoles?: string[] })[] = [
   },
   {
     title: 'Analytics',
+    titleKey: 'dashboard.action_analytics_title',
+    descKey: 'dashboard.action_analytics_desc',
     description: 'Detailed business insights',
   icon: <BarChart3 className="w-6 h-6" />,
     href: '/analytics',
@@ -62,6 +73,8 @@ const quickActions: (QuickAction & { allowedRoles?: string[] })[] = [
   },
   {
     title: 'Settings',
+    titleKey: 'dashboard.action_settings_title',
+    descKey: 'dashboard.action_settings_desc',
     description: 'Configure system settings',
     icon: <Settings className="w-6 h-6" />,
     href: '/settings',
@@ -71,14 +84,19 @@ const quickActions: (QuickAction & { allowedRoles?: string[] })[] = [
 ];
 
 export const QuickActions: React.FC = () => {
+  const { t } = useTranslation();
   const role = useAuthStore((s) => s.user?.role);
-  const visibleActions = quickActions.filter((a) => (a.allowedRoles ? (role ? a.allowedRoles.includes(role) : false) : true));
+  const visibleActions = quickActions.filter(a => {
+    if (!a.allowedRoles) return true;
+    if (!role) return false;
+    return a.allowedRoles.includes(role);
+  });
   const gridCols = visibleActions.length <= 2
     ? 'grid-cols-1 sm:grid-cols-2 max-w-[1000px] mx-auto'
     : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3';
   return (
     <div className="p-6 rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl">
-      <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">Quick Actions</h3>
+  <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">{t('dashboard.quickActions')}</h3>
 
       <div className={`grid ${gridCols} gap-4`}>
         {visibleActions.map((action, index) => (
@@ -98,8 +116,8 @@ export const QuickActions: React.FC = () => {
                 <div className="mb-2">
                   {action.icon}
                 </div>
-                <h4 className="font-semibold text-sm mb-1">{action.title}</h4>
-                <p className="text-xs opacity-90 font-medium">{action.description}</p>
+                <h4 className="font-semibold text-sm mb-1">{t(action.titleKey)}</h4>
+                <p className="text-xs opacity-90 font-medium">{t(action.descKey)}</p>
               </div>
             </Link>
           </motion.div>

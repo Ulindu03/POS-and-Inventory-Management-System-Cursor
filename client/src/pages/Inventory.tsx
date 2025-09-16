@@ -6,12 +6,14 @@ import { LowStockAlert } from "@/features/inventory/LowStockAlert";
 import { StockMovementHistory } from "@/features/inventory/StockMovementHistory";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { inventoryApi } from '@/lib/api/inventory.api';
+import { useTranslation } from 'react-i18next';
 import { useRealtime } from '@/hooks/useRealtime';
 
 type InventoryTab = 'stock' | 'adjust' | 'alerts' | 'history';
 
 const Inventory = () => {
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
+  const { t } = useTranslation();
   const [lowCount, setLowCount] = useState<number | null>(null);
 
   const loadLowCount = useCallback(async () => {
@@ -33,11 +35,11 @@ const Inventory = () => {
   });
 
   const tabs = useMemo(() => ([
-    { id: 'stock' as const, label: 'Stock List', count: null },
-    { id: 'adjust' as const, label: 'Adjust Stock', count: null },
-    { id: 'alerts' as const, label: 'Low Stock', count: lowCount },
-    { id: 'history' as const, label: 'Stock History', count: null },
-  ]), [lowCount]);
+    { id: 'stock' as const, label: t('inventoryPage.tabs.stockList'), count: null },
+    { id: 'adjust' as const, label: t('inventoryPage.tabs.adjustStock'), count: null },
+    { id: 'alerts' as const, label: t('inventoryPage.tabs.lowStock'), count: lowCount },
+    { id: 'history' as const, label: t('inventoryPage.tabs.stockHistory'), count: null },
+  ]), [lowCount, t]);
 
   return (
     <AppLayout className="bg-[#242424]">
@@ -45,9 +47,9 @@ const Inventory = () => {
         {/* Header */}
         <div className="text-center">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2">
-            Inventory Management
+            {t('inventoryPage.title')}
           </h1>
-          <p className="text-gray-400 text-lg">Track stock levels & movement across your store</p>
+          <p className="text-gray-400 text-lg">{t('inventoryPage.subtitle')}</p>
         </div>
 
         {/* Tabs */}

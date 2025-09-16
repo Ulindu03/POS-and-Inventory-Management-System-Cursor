@@ -5,6 +5,7 @@ import { useRealtime } from '@/hooks/useRealtime';
 import FormModal from '@/components/ui/FormModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 type Role = 'admin' | 'cashier' | 'sales_rep';
 type Lang = 'en' | 'si';
@@ -20,6 +21,7 @@ interface AdminUser {
 }
 
 export default function UsersPage() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -83,12 +85,12 @@ export default function UsersPage() {
     setUsers(u => u.filter(x => x._id !== user._id));
     try {
       await usersApi.delete(user._id);
-      toast.success(`User ${user.username} deleted`);
+  toast.success(t('users.deleteSuccess', { username: user.username }));
       fetchPage();
     } catch (err) {
       console.error(err); // eslint-disable-line no-console
       setUsers(prev);
-      toast.error('Delete failed');
+  toast.error(t('users.deleteFailed'));
     } finally {
       setDeleting(false);
       setDeleteTarget(null);
@@ -112,14 +114,14 @@ export default function UsersPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent">Users</h1>
-            <p className="text-gray-400">Manage access, roles and activity</p>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent">{t('users.title')}</h1>
+            <p className="text-gray-400">{t('users.subtitle')}</p>
           </div>
           <button
             className="px-4 py-2 rounded-xl font-semibold bg-gradient-to-r from-yellow-300 to-amber-300 text-black hover:shadow-[0_6px_24px_-6px_rgba(234,179,8,0.6)]"
             onClick={() => setCreateOpen(true)}
           >
-            Add User
+            {t('users.addUser')}
           </button>
         </div>
       </div>
@@ -135,12 +137,12 @@ export default function UsersPage() {
           <table className="min-w-full text-sm border-separate border-spacing-0 table-first-col-pad">
             <thead>
               <tr className="text-left text-gray-300 bg-white/5">
-                <th className="py-3 pl-4 pr-4 sticky top-0 bg-white/5">Username</th>
-                <th className="py-3 pr-4 sticky top-0 bg-white/5">Name</th>
-                <th className="py-3 pr-4 sticky top-0 bg-white/5">Email</th>
-                <th className="py-3 pr-4 sticky top-0 bg-white/5">Role</th>
-                <th className="py-3 pr-4 sticky top-0 bg-white/5">Active</th>
-                <th className="py-3 pr-4 sticky top-0 bg-white/5" aria-label="Actions">Actions</th>
+                <th className="py-3 pl-4 pr-4 sticky top-0 bg-white/5">{t('users.username')}</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5">{t('users.name')}</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5">{t('users.email')}</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5">{t('users.role')}</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5">{t('users.active')}</th>
+                <th className="py-3 pr-4 sticky top-0 bg-white/5" aria-label="Actions">{t('users.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,15 +168,15 @@ export default function UsersPage() {
                     <button
                       className={`px-2 py-1 rounded text-xs font-semibold border ${u.isActive ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' : 'bg-white/5 text-gray-300 border-white/10'}`}
                       onClick={() => toggleActive(u)}
-                      title={u.isActive ? 'Deactivate' : 'Activate'}
+                      title={u.isActive ? t('users.deactivate') : t('users.activate')}
                     >
-                      {u.isActive ? 'Active' : 'Inactive'}
+                      {u.isActive ? t('users.active') : t('users.inactive')}
                     </button>
                   </td>
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-2">
-                      <button className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs" onClick={() => setEditUser(u)}>Edit</button>
-                      <button className="px-3 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-xs" onClick={() => handleDelete(u)}>Delete</button>
+                      <button className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs" onClick={() => setEditUser(u)}>{t('users.edit')}</button>
+                      <button className="px-3 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-xs" onClick={() => handleDelete(u)}>{t('users.delete')}</button>
                     </div>
                   </td>
                 </tr>
@@ -183,9 +185,9 @@ export default function UsersPage() {
           </table>
           </div>
           <div className="mt-4 flex items-center justify-center gap-3">
-            <button className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
-            <div className="opacity-70">Page {page}</div>
-            <button className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20" onClick={() => setPage((p) => p + 1)}>Next</button>
+            <button className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>{t('users.prev')}</button>
+            <div className="opacity-70">{t('users.page', { page })}</div>
+            <button className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20" onClick={() => setPage((p) => p + 1)}>{t('users.next')}</button>
           </div>
         </div>
       )}
@@ -193,11 +195,11 @@ export default function UsersPage() {
       {/* Create User */}
       <FormModal
         isOpen={createOpen}
-        title="Create User"
+  title={t('users.createUserTitle')}
         onClose={() => setCreateOpen(false)}
         footer={
           <div className="flex justify-end gap-2">
-            <button className="px-3 py-2 rounded bg-white/10" onClick={() => setCreateOpen(false)}>Cancel</button>
+            <button className="px-3 py-2 rounded bg-white/10" onClick={() => setCreateOpen(false)}>{t('users.cancel')}</button>
             <button
               className="px-3 py-2 rounded bg-indigo-500 text-white disabled:opacity-50"
               disabled={saving}
@@ -209,7 +211,7 @@ export default function UsersPage() {
                 const pwd = str(data.get('password'));
                 const confirm = str(data.get('confirmPassword'));
                 if (pwd !== confirm) {
-                  alert('Passwords do not match');
+                  alert(t('users.passwordsNoMatch'));
                   return;
                 }
                 const payload: UserInput = {
@@ -224,29 +226,29 @@ export default function UsersPage() {
                 handleCreate(payload);
               }}
             >
-              {saving ? 'Saving…' : 'Create'}
+      {saving ? t('users.saving') : t('users.create')}
             </button>
           </div>
         }
       >
         <form id="create-user-form" className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm">Username<input name="username" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-            <label className="text-sm">Email<input type="email" name="email" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-            <label className="text-sm">First Name<input name="firstName" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-            <label className="text-sm">Last Name<input name="lastName" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-            <label className="text-sm">Password<input type="password" name="password" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-            <label className="text-sm">Confirm Password<input type="password" name="confirmPassword" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-            <label className="text-sm block">Role
+    <label className="text-sm">{t('users.username')}<input name="username" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+    <label className="text-sm">{t('users.email')}<input type="email" name="email" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+    <label className="text-sm">{t('users.firstName')}<input name="firstName" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+    <label className="text-sm">{t('users.lastName')}<input name="lastName" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+    <label className="text-sm">{t('users.password')}<input type="password" name="password" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+    <label className="text-sm">{t('users.confirmPassword')}<input type="password" name="confirmPassword" className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+    <label className="text-sm block">{t('users.role')}
               <div>
               <select name="role" className="mt-1 w-full rounded bg-white/10 px-2 py-1">
                 {roles.map((r) => (
-                  <option key={r} value={r} className="text-black">{r}</option>
+      <option key={r} value={r} className="text-black">{t(`users.role_${r}`)}</option>
                 ))}
               </select>
               </div>
             </label>
-            <label className="text-sm block">Language
+    <label className="text-sm block">{t('users.language')}
               <div>
               <select name="language" className="mt-1 w-full rounded bg-white/10 px-2 py-1">
                 <option value="en" className="text-black">English</option>
@@ -261,11 +263,11 @@ export default function UsersPage() {
       {/* Edit User */}
       <FormModal
         isOpen={Boolean(editUser)}
-        title={editUser ? `Edit ${editUser.username}` : 'Edit User'}
+  title={editUser ? t('users.editUserTitle', { username: editUser.username }) : t('users.edit')}
         onClose={() => setEditUser(null)}
         footer={
           <div className="flex justify-end gap-2">
-            <button className="px-3 py-2 rounded bg-white/10" onClick={() => setEditUser(null)}>Cancel</button>
+            <button className="px-3 py-2 rounded bg-white/10" onClick={() => setEditUser(null)}>{t('users.cancel')}</button>
             <button
               className="px-3 py-2 rounded bg-indigo-500 text-white disabled:opacity-50"
               disabled={saving}
@@ -283,7 +285,7 @@ export default function UsersPage() {
                 handleUpdate(editUser._id, payload);
               }}
             >
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('users.saving') : t('users.save')}
             </button>
           </div>
         }
@@ -291,10 +293,10 @@ export default function UsersPage() {
         {editUser && (
           <form id="edit-user-form" className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm">First Name<input name="firstName" defaultValue={editUser.firstName} className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-              <label className="text-sm">Last Name<input name="lastName" defaultValue={editUser.lastName} className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-              <label className="text-sm">Email<input type="email" name="email" defaultValue={editUser.email} className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
-              <label className="text-sm" htmlFor="edit-language">Language</label>
+              <label className="text-sm">{t('users.firstName')}<input name="firstName" defaultValue={editUser.firstName} className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+              <label className="text-sm">{t('users.lastName')}<input name="lastName" defaultValue={editUser.lastName} className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+              <label className="text-sm">{t('users.email')}<input type="email" name="email" defaultValue={editUser.email} className="mt-1 w-full rounded bg-white/10 px-2 py-1" required /></label>
+              <label className="text-sm" htmlFor="edit-language">{t('users.language')}</label>
               <select id="edit-language" name="language" defaultValue={editUser.language || 'en'} className="mt-1 w-full rounded bg-white/10 px-2 py-1">
                 <option value="en" className="text-black">English</option>
                 <option value="si" className="text-black">සිංහල</option>
@@ -306,9 +308,9 @@ export default function UsersPage() {
   </AppLayout>
     <ConfirmDialog
       open={Boolean(deleteTarget)}
-      title="Delete user?"
-      description={deleteTarget ? `Are you sure you want to permanently delete user "${deleteTarget.username}"? This cannot be undone.` : ''}
-      confirmLabel="Delete User"
+      title={t('users.deleteDialogTitle')}
+      description={deleteTarget ? t('users.deleteDialogDescription', { username: deleteTarget.username }) : ''}
+      confirmLabel={t('users.deleteDialogConfirm')}
       tone="danger"
       loading={deleting}
       onClose={() => { if (!deleting) setDeleteTarget(null); }}

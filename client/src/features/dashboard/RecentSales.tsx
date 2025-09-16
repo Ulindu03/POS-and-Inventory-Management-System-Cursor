@@ -1,6 +1,7 @@
 import { GlassCard } from '@/components/common/Card';
 import { motion } from 'framer-motion';
 import { formatLKR } from '@/lib/utils/currency';
+import { useTranslation } from 'react-i18next';
 
 interface Sale {
   id: string;
@@ -16,6 +17,7 @@ interface RecentSalesProps {
 }
 
 export const RecentSales: React.FC<RecentSalesProps> = ({ sales }) => {
+  const { t } = useTranslation();
   const items = Array.isArray(sales) ? sales.slice(0, 5) : [];
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -28,7 +30,7 @@ export const RecentSales: React.FC<RecentSalesProps> = ({ sales }) => {
 
   return (
     <GlassCard variant="darkSubtle" className="p-6">
-      <h3 className="text-lg font-semibold text-gray-100 mb-4 tracking-wide">Recent Sales</h3>
+      <h3 className="text-lg font-semibold text-gray-100 mb-4 tracking-wide">{t('dashboard.recentSales')}</h3>
       
       <div className="space-y-3">
         {items.map((sale, index) => (
@@ -59,7 +61,7 @@ export const RecentSales: React.FC<RecentSalesProps> = ({ sales }) => {
       
       {sales.length === 0 && (
         <div className="text-center py-8 text-gray-500">
-          No recent sales to display
+          {t('dashboard.noRecentSales')}
         </div>
       )}
     </GlassCard>

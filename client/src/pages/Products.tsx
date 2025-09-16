@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { ProductList } from '@/features/products/ProductList';
 import { ProductForm } from '@/features/products/ProductForm';
@@ -15,7 +16,7 @@ const Products = () => {
   const [activeModal, setActiveModal] = useState<ProductModal>(null);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [deletingProduct, setDeletingProduct] = useState<any>(null);
-  const [stickerProduct, setStickerProduct] = useState<any | null>(null);
+  const [stickerProduct, setStickerProduct] = useState<any>(null); // null allowed implicitly
 
   useEffect(() => {
     const handler = (e: any) => setStickerProduct(e.detail.product);
@@ -23,9 +24,11 @@ const Products = () => {
     return () => window.removeEventListener('vz-stickers-open', handler as any);
   }, []);
 
+  const { t } = useTranslation();
+
   const tabs = [
-    { id: 'list' as const, label: 'Products', icon: '📦' },
-    { id: 'categories' as const, label: 'Categories', icon: '🏷️' },
+    { id: 'list' as const, label: t('productsPage.tabs.products'), icon: '📦' },
+    { id: 'categories' as const, label: t('productsPage.tabs.categories'), icon: '🏷️' },
   ];
 
   const handleEditProduct = (product: any) => {
@@ -38,9 +41,7 @@ const Products = () => {
     setActiveModal('create');
   };
 
-  const handleDeleteProduct = (product: any) => {
-    setDeletingProduct(product);
-  };
+  // Deletion dialog trigger now handled inline where needed; removed unused handler
 
   const handleCloseModal = () => {
     setActiveModal(null);
@@ -83,10 +84,10 @@ const Products = () => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="text-center lg:text-left flex-1">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2 tracking-tight">
-              Product Management
+              {t('productsPage.title')}
             </h1>
             <p className="text-gray-400 text-lg max-w-xl mx-auto lg:mx-0">
-              Manage products, categories & bulk operations with ease
+              {t('productsPage.subtitle')}
             </p>
           </div>
           <div className="flex flex-wrap gap-3 justify-center lg:justify-end">
@@ -94,22 +95,22 @@ const Products = () => {
               onClick={handleCreateProduct}
               className="relative group px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide flex items-center gap-2 text-black shadow hover:shadow-lg transition-all bg-gradient-to-br from-amber-300 via-yellow-300 to-amber-200 hover:from-amber-200 hover:via-yellow-200 hover:to-amber-100"
             >
-              <span className="drop-shadow-sm">➕ Add Product</span>
+              <span className="drop-shadow-sm">➕ {t('productsPage.addProduct')}</span>
             </button>
             <button
               onClick={() => setActiveModal('category')}
               className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all"
             >
-              🏷️ Manage Categories
+              🏷️ {t('productsPage.manageCategories')}
             </button>
             <button
               onClick={handleExport}
               className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all"
             >
-              ⬇️ Export CSV
+              ⬇️ {t('productsPage.exportCsv')}
             </button>
             <label className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all cursor-pointer">
-              <span>⬆️ Import CSV</span>
+              <span>⬆️ {t('productsPage.importCsv')}</span>
               <input
                 type="file"
                 accept=".csv"

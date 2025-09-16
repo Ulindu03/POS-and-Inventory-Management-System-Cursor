@@ -5,6 +5,7 @@ import { PaymentModal } from '@/features/pos/PaymentModal';
 import { ReceiptModal } from '@/features/pos/ReceiptModal';
 import { BarcodeScanner } from '@/features/pos/BarcodeScanner';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
 import QuickDamageModal from '@/features/damage/QuickDamageModal';
@@ -33,16 +34,17 @@ const POS = () => {
   const total = useCartStore((s) => s.total());
   const setHold = useCartStore((s) => s.setHold);
   const user = useAuthStore((s) => s.user);
+  const { t } = useTranslation();
   return (
     <AppLayout>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-h-0 h-[calc(100vh-3.5rem-1.5rem)] md:h-[calc(100vh-3.5rem-1.5rem)]">
         <div className="md:col-span-1 lg:col-span-2 space-y-4 min-h-0 overflow-auto">
           <div className="mb-3 font-semibold flex items-center justify-between gap-2">
-            <span>Products</span>
+            <span>{t('pos.productsHeader')}</span>
             <div className="flex items-center gap-2 text-xs">
-              <Link to="/warranty" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[#F8F8F8] transition" title="Open Warranty Manager">
+              <Link to="/warranty" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[#F8F8F8] transition" title={t('pos.warrantyTooltip')}>
                 <img src="/warranty.png" alt="Warranty" className="w-4 h-4" />
-                <span className="hidden sm:inline">Warranty</span>
+                <span className="hidden sm:inline">{t('pos.warrantyButton')}</span>
               </Link>
             </div>
           </div>
@@ -126,7 +128,8 @@ const POS = () => {
         discount={receipt?.discount ?? 0}
         tax={receipt?.tax ?? 0}
         total={receipt?.total ?? 0}
-        method="cash"
+      // method prop passes an internal payment method key; display components should localize label via something like t('pos.paymentMethod.cash')
+      method="cash"
         cashierName={user?.firstName || user?.username}
         paperWidth={80}
       />

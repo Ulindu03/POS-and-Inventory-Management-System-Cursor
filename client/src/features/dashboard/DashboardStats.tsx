@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { TrendingUp, ShoppingCart, Package, Users, DollarSign, Activity } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface DashboardStatsProps {
   stats: {
@@ -13,6 +14,7 @@ interface DashboardStatsProps {
 }
 
 export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
+  const { t } = useTranslation();
   // Simple progress ratios (mocked for UI feel)
   const ratios = {
     sales: Math.min(1, stats.totalSales / 2000000),
@@ -28,7 +30,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
   const cards = [
     {
       key: 'sales',
-      title: 'Total Sales',
+      title: t('dashboard.stat_totalSales'),
       value: `LKR ${stats.totalSales.toLocaleString()}`,
       color: 'indigo',
       ratio: ratios.sales,
@@ -40,7 +42,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
     },
     {
       key: 'orders',
-      title: 'Total Orders',
+      title: t('dashboard.stat_totalOrders'),
       value: stats.totalOrders.toLocaleString(),
       color: 'blue',
       ratio: ratios.orders,
@@ -52,7 +54,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
     },
     {
       key: 'products',
-      title: 'Total Products',
+      title: t('dashboard.stat_totalProducts'),
       value: stats.totalProducts.toLocaleString(),
       color: 'yellow',
       ratio: ratios.products,
@@ -64,7 +66,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
     },
     {
       key: 'customers',
-      title: 'Total Customers',
+      title: t('dashboard.stat_totalCustomers'),
       value: stats.totalCustomers.toLocaleString(),
       color: 'purple',
       ratio: ratios.customers,
@@ -76,7 +78,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
     },
     {
       key: 'aov',
-      title: 'Average Order Value',
+      title: t('dashboard.stat_averageOrderValue'),
       value: `LKR ${stats.averageOrderValue.toLocaleString()}`,
       color: 'pink',
       ratio: ratios.aov,
@@ -88,7 +90,7 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
     },
     {
       key: 'growth',
-      title: 'Monthly Growth',
+      title: t('dashboard.stat_monthlyGrowth'),
       value: `${stats.monthlyGrowth}%`,
       color: 'emerald',
       ratio: ratios.growth,

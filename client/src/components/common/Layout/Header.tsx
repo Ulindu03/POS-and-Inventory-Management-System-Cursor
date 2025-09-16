@@ -2,11 +2,13 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '@/store/auth.store';
 import { BrandLogo } from '@/components/common/BrandLogo';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () => void; sidebarOpen?: boolean }) => {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [isFs, setIsFs] = useState<boolean>(Boolean(document.fullscreenElement));
+  const { i18n, t } = useTranslation();
 
   const toggleFs = useCallback(async () => {
     try {
@@ -43,7 +45,7 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
           <img src="/sidebar.png" alt="menu" className="w-5 h-5 object-contain" />
         </button>
         <BrandLogo size={32} rounded="xl" />
-        <div className="font-semibold hidden sm:block">Welcome, {user?.firstName || user?.username}</div>
+  <div className="font-semibold hidden sm:block">{t('common.welcomeUser', { name: user?.firstName || user?.username || '' })}</div>
       </div>
       <div className="flex items-center gap-2">
         {/* POS panel indicator left of fullscreen, larger and clickable */}
@@ -69,6 +71,16 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
             draggable={false}
           />
           <span className="hidden sm:inline">{isFs ? 'Exit' : 'Fullscreen'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'si' : 'en')}
+          className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 flex items-center gap-2"
+          title={i18n.language === 'en' ? 'සිංහල' : 'English'}
+          aria-label="Change language"
+        >
+          <img src="/lan.png" alt="lang" className="w-5 h-5 object-contain" />
+          <span className="hidden md:inline text-xs font-medium">{i18n.language === 'en' ? 'සිංහල' : 'English'}</span>
         </button>
         <button
           onClick={logout}

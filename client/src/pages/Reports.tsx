@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import reportsApi from '@/lib/api/reports.api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/common/Layout/Layout';
@@ -36,46 +37,48 @@ const Reports = () => {
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState(false);
 
+  const { t } = useTranslation();
+
   const reportCards: ReportCard[] = [
     {
       id: 'sales',
-      title: 'Sales Report',
-      description: 'Analyze sales performance, revenue trends, and product performance',
+      title: t('reports.salesReport.title'),
+      description: t('reports.salesReport.desc'),
       icon: <BarChart3 className="w-8 h-8" />,
       gradient: 'from-purple-500 to-blue-600'
     },
     {
       id: 'inventory',
-      title: 'Inventory Report',
-      description: 'Track stock levels, inventory value, and identify low stock items',
+  title: t('reports.inventoryReport.title'),
+  description: t('reports.inventoryReport.desc'),
       icon: <Package className="w-8 h-8" />,
       gradient: 'from-green-500 to-emerald-600'
     },
     {
       id: 'customers',
-      title: 'Customer Analytics',
-      description: 'Customer behavior, loyalty trends, and purchase patterns',
+  title: t('reports.customersReport.title'),
+  description: t('reports.customersReport.desc'),
       icon: <Users className="w-8 h-8" />,
       gradient: 'from-blue-500 to-cyan-600'
     },
     {
       id: 'suppliers',
-      title: 'Supplier Performance',
-      description: 'Supplier delivery performance, payment terms, and relationships',
+  title: t('reports.suppliersReport.title'),
+  description: t('reports.suppliersReport.desc'),
       icon: <Truck className="w-8 h-8" />,
       gradient: 'from-orange-500 to-red-600'
     },
     {
       id: 'profitloss',
-      title: 'Profit & Loss',
-      description: 'Financial overview with profit margins and expense analysis',
+  title: t('reports.profitlossReport.title'),
+  description: t('reports.profitlossReport.desc'),
       icon: <TrendingUp className="w-8 h-8" />,
       gradient: 'from-yellow-500 to-orange-600'
     },
     {
       id: 'stock',
-      title: 'Stock Movements',
-      description: 'Track all stock movements, adjustments, and transfer history',
+  title: t('reports.stockReport.title'),
+  description: t('reports.stockReport.desc'),
       icon: <PieChart className="w-8 h-8" />,
       gradient: 'from-pink-500 to-purple-600'
     }
@@ -99,10 +102,10 @@ const Reports = () => {
 
   const getBreakdownTitle = () => {
     if (!reportData) return '';
-    if (reportData.categoryBreakdown) return 'Category Breakdown';
-    if (reportData.typeBreakdown) return 'Movement Types';
-    if (reportData.supplierPerformance) return 'Supplier Performance';
-    return 'Breakdown';
+  if (reportData.categoryBreakdown) return t('reports.categoryBreakdown');
+  if (reportData.typeBreakdown) return t('reports.movementTypes');
+  if (reportData.supplierPerformance) return t('reports.supplierPerformance');
+  return t('reports.breakdown');
   };
 
   const handleGenerateReport = async () => {
@@ -168,8 +171,8 @@ const Reports = () => {
       <div className="p-6">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#F8F8F8]">Reports & Analytics</h1>
-          <p className="text-[#F8F8F8]/70">Generate business insights between custom dates.</p>
+          <h1 className="text-2xl font-bold text-[#F8F8F8]">{t('reports.title')}</h1>
+          <p className="text-[#F8F8F8]/70">{t('reports.subtitle')}</p>
         </div>
 
         {!selectedReport && (
@@ -203,7 +206,7 @@ const Reports = () => {
                     className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-[#F8F8F8]"
                   >
                     <ArrowLeft className="w-4 h-4" />
-                    Back to Reports
+                    {t('reports.back')}
                   </button>
                   <h2 className="text-xl font-semibold text-[#F8F8F8] capitalize">{selectedReport.replace(/([A-Z])/g, ' $1')}</h2>
                 </div>
@@ -213,7 +216,7 @@ const Reports = () => {
               <div className="rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-6">
                 <div className="flex items-center gap-4 mb-4">
                   <Filter className="w-5 h-5 text-[#F8F8F8]/70" />
-                  <h3 className="text-lg font-semibold text-[#F8F8F8]">Report Parameters</h3>
+                  <h3 className="text-lg font-semibold text-[#F8F8F8]">{t('reports.parameters')}</h3>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -281,7 +284,7 @@ const Reports = () => {
                       ) : (
                         <>
                           <FileText className="w-5 h-5" />
-                          Generate Report
+                          {t('reports.generate')}
                         </>
                       )}
                     </button>
@@ -349,7 +352,7 @@ const Reports = () => {
                   {/* Export Actions */}
                   <div className="rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-[#F8F8F8]">Export Options</h3>
+                      <h3 className="text-lg font-semibold text-[#F8F8F8]">{t('reports.exportOptions')}</h3>
                       <div className="flex gap-2">
                         <button
                           onClick={() => exportReport('pdf')}
