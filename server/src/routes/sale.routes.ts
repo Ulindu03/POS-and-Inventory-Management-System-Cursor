@@ -14,7 +14,7 @@ router.get('/', authenticate, authorize('admin', 'cashier', 'sales_rep'), SaleCo
 router.get('/:id', authenticate, authorize('admin', 'cashier', 'sales_rep'), SaleController.getById);
 // Debug: latest sale for verification (development only)
 if ((process.env.NODE_ENV || 'development') !== 'production') {
-  router.get('/debug/latest', authenticate, authorize('admin', 'cashier', 'sales_rep'), async (req, res, next) => {
+  router.get('/debug/latest', authenticate, authorize('admin', 'cashier', 'sales_rep'), async (_req, res, next) => {
     try {
       const { Sale } = await import('../models/Sale.model');
       const s = await Sale.findOne().sort({ createdAt: -1 }).lean();

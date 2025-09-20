@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
 import QuickDamageModal from '@/features/damage/QuickDamageModal';
+import QuickReturnModal from '@/features/pos/QuickReturnModal';
 import { useCartStore } from '@/store/cart.store';
 import { salesApi } from '@/lib/api/sales.api';
 // Replaced lucide icons with custom FS.png from public
@@ -30,6 +31,8 @@ const POS = () => {
   } | null>(null);
   // State for damage reporting modal
   const [openDamage, setOpenDamage] = useState(false);
+  // State for return and refund modal
+  const [openReturn, setOpenReturn] = useState(false);
   
   // Get cart state and actions from store
   const clear = useCartStore((s) => s.clear);
@@ -57,6 +60,11 @@ const POS = () => {
                 <img src="/warranty.png" alt="Warranty" className="w-4 h-4" />
                 <span className="hidden sm:inline">{t('pos.warrantyButton')}</span>
               </Link>
+              {/* Quick Return / Refund button */}
+              <button type="button" onClick={() => setOpenReturn(true)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[#F8F8F8] transition" title="Quick Return / Refund">
+                <img src="/returns.png" alt="Return" className="w-4 h-4" />
+                <span className="hidden sm:inline">Return</span>
+              </button>
             </div>
           </div>
           {/* Product grid for selecting items */}
@@ -85,6 +93,9 @@ const POS = () => {
       
       {/* Damage reporting modal */}
       <QuickDamageModal open={openDamage} onClose={() => setOpenDamage(false)} />
+      
+      {/* Return and refund modal */}
+      <QuickReturnModal open={openReturn} onClose={() => setOpenReturn(false)} />
       
       {/* Payment processing modal */}
       <PaymentModal

@@ -149,6 +149,10 @@ const saleSchema = new mongoose.Schema({
     }
   }],
   returns: [{
+    returnTransaction: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ReturnTransaction'
+    },
     items: [{
       product: {
         type: mongoose.Schema.Types.ObjectId,
@@ -164,6 +168,16 @@ const saleSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 0
+      },
+      reason: {
+        type: String,
+        enum: ['defective', 'expired', 'damaged', 'wrong_item', 'unwanted', 'size_issue', 'color_issue', 'other'],
+        default: 'other'
+      },
+      disposition: {
+        type: String,
+        enum: ['restock', 'damage', 'write_off', 'return_to_supplier'],
+        default: 'restock'
       }
     }],
     total: {
@@ -173,21 +187,48 @@ const saleSchema = new mongoose.Schema({
     },
     method: {
       type: String,
-      enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit'],
+      enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit', 'store_credit', 'exchange_slip', 'overpayment'],
       required: true
     },
     reference: {
       type: String,
       trim: true
     },
+    processedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
     createdAt: {
       type: Date,
       default: Date.now
     }
   }],
+  returnSummary: {
+    totalReturned: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    returnedItems: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    lastReturnDate: {
+      type: Date
+    }
+  },
+  exchangeSlipsIssued: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ExchangeSlip'
+  }],
+  overpayments: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'CustomerOverpayment'
+  }],
   status: {
     type: String,
-    enum: ['completed', 'pending', 'cancelled', 'refunded', 'held'],
+    enum: ['completed', 'pending', 'cancelled', 'refunded', 'partially_refunded', 'held'],
     default: 'completed'
   },
   notes: {
@@ -225,5 +266,8 @@ saleSchema.index({ status: 1 });
 saleSchema.index({ createdAt: -1 });
 saleSchema.index({ 'payment.method': 1 });
 saleSchema.index({ total: 1 });
+saleSchema.index({ 'returnSummary.lastReturnDate': -1 });
+saleSchema.index({ exchangeSlipsIssued: 1 });
+saleSchema.index({ overpayments: 1 });
 
 export const Sale = mongoose.model('Sale', saleSchema);
