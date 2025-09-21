@@ -20,6 +20,7 @@ const menuItems = [
   { icon: Route, imgSrc: '/deliveries.png', label: 'Deliveries', path: '/deliveries', allowedRoles: ['admin'] },
   { icon: AlertTriangle, imgSrc: '/damages.png', label: 'Damages', path: '/damages', allowedRoles: ['admin'] },
   { icon: FileText, imgSrc: '/warranty.png', label: 'Warranty', path: '/warranty', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  { icon: FileText, imgSrc: '/returns.svg', label: 'Returns', path: '/returns', allowedRoles: ['admin', 'cashier', 'sales_rep', 'manager'] },
   // Only admin can see Users and Settings panels
   { icon: Users, imgSrc: '/user.png', label: 'Users', path: '/users', allowedRoles: ['admin'] },
   { icon: SettingsIcon, imgSrc: '/settings.png', label: 'Settings', path: '/settings', allowedRoles: ['admin'] },

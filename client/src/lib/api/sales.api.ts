@@ -28,9 +28,35 @@ export const salesApi = {
     const { data } = await client.post('/sales/validate-discount', payload);
     return data as { success: true; data: { valid: boolean; type?: string; value?: number; amount?: number } };
   },
-  refund: async (id: string, payload: { items: Array<{ product: string; quantity: number; amount: number }>; method: PaymentMethod; reference?: string }) => {
+  refund: async (
+    id: string, 
+    payload: { 
+      items: Array<{ 
+        product: string; 
+        quantity: number; 
+        amount: number;
+        reason?: string;
+        condition?: string;
+        disposition?: string;
+      }>; 
+      method?: PaymentMethod | 'store_credit' | 'exchange_slip' | 'overpayment'; 
+      reference?: string;
+      returnType?: 'full_refund' | 'partial_refund' | 'exchange' | 'store_credit';
+      discount?: number;
+      notes?: string;
+    }
+  ) => {
     const { data } = await client.post(`/sales/${id}/refund`, payload);
-    return data as { success: true; data: { refund: { total: number }; sale: { id: string; total: number; status: string } } };
+    return data as { 
+      success: true; 
+      data: { 
+        refund: { total: number }; 
+        sale: { id: string; total: number; status: string };
+        returnTransaction?: any;
+        exchangeSlip?: any;
+        overpayment?: any;
+      } 
+    };
   },
   list: async (params?: { page?: number; limit?: number; q?: string }) => {
     const { data } = await client.get('/sales', { params });

@@ -244,7 +244,10 @@ export class SaleController {
       // Adjust inventory and create stock movements
       for (const i of items) {
         const p = productMap.get(String(i.product)) as any;
-        await applySaleStockMovement({ session, productDoc: p, item: i, cashierId: String(cashierId), invoiceNo, saleId: doc._id });
+  // session is guaranteed non-null inside withTransaction scope
+        if (session) {
+          await applySaleStockMovement({ session, productDoc: p, item: i, cashierId: String(cashierId), invoiceNo, saleId: doc._id });
+        }
       }
     });
   } catch (txErr: any) {
@@ -560,77 +563,197 @@ export class SaleController {
   static async refund(req: Request & { user?: any }, res: Response, next: NextFunction) {
     try {
       const { id } = req.params as { id: string };
-      // Role check: admin always, sales_rep allowed, cashier denied
+      // Role check: admin, manager, sales_rep allowed, cashier denied
       const role = req.user?.role;
-      if (role !== 'admin' && role !== 'sales_rep') {
+      if (!['admin', 'manager', 'sales_rep'].includes(role)) {
         return res.status(403).json({ success: false, message: 'Forbidden: returns not allowed for your role' });
       }
-      const { items, method, reference } = req.body as { items: Array<{ product: string; quantity: number; amount: number }>; method: 'cash' | 'card' | 'bank_transfer' | 'digital' | 'credit'; reference?: string };
+      
+      const { 
+        items, 
+        method = 'cash', 
+        reference,
+        returnType = 'partial_refund',
+        discount = 0,
+        notes 
+      } = req.body as { 
+        items: Array<{ 
+          product: string; 
+          quantity: number; 
+          amount: number;
+          reason?: string;
+          condition?: string;
+          disposition?: string;
+        }>; 
+  method?: 'cash' | 'card' | 'bank_transfer' | 'digital' | 'credit' | 'store_credit' | 'exchange_slip' | 'overpayment'; 
+        reference?: string;
+        returnType?: 'full_refund' | 'partial_refund' | 'exchange' | 'store_credit';
+        discount?: number;
+        notes?: string;
+      };
+      
       const sale = await Sale.findById(id);
       if (!sale) return res.status(404).json({ success: false, message: 'Sale not found' });
       if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ success: false, message: 'No return items' });
 
-      const returnTotal = items.reduce((s, i) => s + Math.max(0, i.amount), 0);
+      const userId = req.user?.userId;
 
-      // Append return record
-      (sale as any).returns = [ ...((sale as any).returns || []), { items, total: returnTotal, method, reference } ];
+      // Try to use the new comprehensive return system if available
+      try {
+        const { ReturnService } = await import('../services/ReturnService');
+        
+        const returnRequest = {
+          saleId: id,
+          items: items.map(item => ({
+            product: item.product,
+            quantity: item.quantity,
+            returnAmount: item.amount,
+            reason: (item.reason as any) || 'other',
+            condition: (item.condition as any) || 'new',
+            disposition: (item.disposition as any) || 'restock'
+          })),
+          returnType,
+          // Map legacy 'credit' payment method to store credit refund method if encountered
+          refundMethod: (method === 'credit' ? 'store_credit' : method) as any,
+          refundDetails: reference ? { reference } : {},
+          discount,
+          notes
+        };
+        
+        const result = await ReturnService.processReturn(returnRequest, userId);
+        
+        return res.json({
+          success: true,
+          data: {
+            refund: { total: result.data.returnTransaction.totalAmount },
+            sale: { 
+              id: sale._id, 
+              total: (sale as any).total - result.data.returnTransaction.totalAmount, 
+              status: result.data.returnTransaction.totalAmount >= (sale as any).total ? 'refunded' : 'partially_refunded'
+            },
+            returnTransaction: result.data.returnTransaction,
+            exchangeSlip: result.data.exchangeSlip,
+            overpayment: result.data.overpayment
+          }
+        });
+      } catch (serviceError) {
+        // Fallback to legacy method if new system fails
+        console.warn('Return service failed, falling back to legacy method:', serviceError);
+      }
+
+      // Legacy fallback implementation
+      const returnTotal = items.reduce((s, i) => s + Math.max(0, i.amount), 0) - discount;
+
+      // Append return record using new schema structure (legacy path)
+      const normalizedMethod = method === 'credit' ? 'store_credit' : method;
+      const returnRecord = {
+        items: items.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          amount: item.amount,
+          reason: (item.reason as any) || 'other',
+          disposition: (item.disposition as any) || 'restock'
+        })),
+        total: returnTotal,
+        method: normalizedMethod,
+        reference: reference || `LEGACY-${Date.now()}`,
+        processedBy: userId,
+        createdAt: new Date()
+      };
+
+      (sale as any).returns = [...((sale as any).returns || []), returnRecord];
+      
+      // Update return summary
+      if (!(sale as any).returnSummary) {
+        (sale as any).returnSummary = { totalReturned: 0, returnedItems: 0 };
+      }
+      (sale as any).returnSummary.totalReturned = ((sale as any).returnSummary.totalReturned || 0) + returnTotal;
+      (sale as any).returnSummary.returnedItems = ((sale as any).returnSummary.returnedItems || 0) + 
+        items.reduce((sum, item) => sum + item.quantity, 0);
+      (sale as any).returnSummary.lastReturnDate = new Date();
+      
       // Adjust sale total downward
       (sale as any).total = Math.max(0, (sale as any).total - returnTotal);
-      // Mark refunded if full amount returned
-      if ((sale as any).total === 0) (sale as any).status = 'refunded';
+      
+      // Update status based on remaining total
+      if ((sale as any).total === 0) {
+        (sale as any).status = 'refunded';
+      } else if ((sale as any).returnSummary.totalReturned > 0) {
+        (sale as any).status = 'partially_refunded';
+      }
 
       await sale.save();
 
       // Restock returned quantities and log movements
       const cashierId = req.user?.userId || (await User.findOne().select('_id'))?._id;
       for (const it of items) {
-        const prod = await Product.findById(it.product).select('trackInventory isDigital stock.current');
-        const track = (prod as any)?.trackInventory !== false && !(prod as any)?.isDigital;
-        if (!track) continue;
-        const qty = Number(it.quantity);
-        const prev = (prod as any)?.stock?.current ?? 0;
-        const next = prev + qty;
-        await Product.updateOne({ _id: it.product }, { $inc: { 'stock.current': qty } });
-        // Update Inventory as well
-        try {
-          let inv = await Inventory.findOne({ product: it.product });
-          if (!inv) {
-            inv = new Inventory({
-              product: it.product,
-              currentStock: Math.max(0, prev + qty),
-              minimumStock: Number((prod as any)?.stock?.minimum ?? 0),
-              reorderPoint: Number((prod as any)?.stock?.reorderPoint ?? 0),
-              reservedStock: 0,
-              availableStock: Math.max(0, prev + qty),
-              updatedAt: new Date(),
-            });
-          } else {
-            const curPrev = inv.currentStock ?? 0;
-            inv.currentStock = Math.max(0, curPrev + qty);
-            inv.availableStock = Math.max(0, (inv.availableStock ?? curPrev) + qty);
-            inv.updatedAt = new Date();
-          }
-          await inv.save();
-        } catch {}
-        await StockMovement.create({
-          product: it.product,
-          type: 'return',
-          quantity: qty,
-          previousStock: prev,
-          newStock: next,
-          reference: String(reference || sale.invoiceNo),
-          referenceId: sale._id,
-          referenceType: 'Sale',
-          performedBy: cashierId,
-          reason: 'customer_return',
-        });
-        setTimeout(() => {
+        const disposition = (it.disposition as any) || 'restock';
+        
+        // Only restock if disposition is 'restock'
+        if (disposition === 'restock') {
+          const prod = await Product.findById(it.product).select('trackInventory isDigital stock.current');
+          const track = (prod as any)?.trackInventory !== false && !(prod as any)?.isDigital;
+          if (!track) continue;
+          
+          const qty = Number(it.quantity);
+          const prev = (prod as any)?.stock?.current ?? 0;
+          const next = prev + qty;
+          await Product.updateOne({ _id: it.product }, { $inc: { 'stock.current': qty } });
+          
+          // Update Inventory as well
           try {
-            emitRealtime('inventory.updated', { productId: String(it.product), previous: prev, current: next, refundOf: sale._id, at: new Date().toISOString() });
+            let inv = await Inventory.findOne({ product: it.product });
+            if (!inv) {
+              inv = new Inventory({
+                product: it.product,
+                currentStock: Math.max(0, prev + qty),
+                minimumStock: Number((prod as any)?.stock?.minimum ?? 0),
+                reorderPoint: Number((prod as any)?.stock?.reorderPoint ?? 0),
+                reservedStock: 0,
+                availableStock: Math.max(0, prev + qty),
+                updatedAt: new Date(),
+              });
+            } else {
+              const curPrev = inv.currentStock ?? 0;
+              inv.currentStock = Math.max(0, curPrev + qty);
+              inv.availableStock = Math.max(0, (inv.availableStock ?? curPrev) + qty);
+              inv.updatedAt = new Date();
+            }
+            await inv.save();
           } catch {}
-        }, 0);
+          
+          await StockMovement.create({
+            product: it.product,
+            type: 'return',
+            quantity: qty,
+            previousStock: prev,
+            newStock: next,
+            reference: String(reference || sale.invoiceNo),
+            referenceId: sale._id,
+            referenceType: 'Sale',
+            performedBy: cashierId,
+            reason: `customer_return_${disposition}`,
+          });
+          
+          setTimeout(() => {
+            try {
+              emitRealtime('inventory.updated', { productId: String(it.product), previous: prev, current: next, refundOf: sale._id, at: new Date().toISOString() });
+            } catch {}
+          }, 0);
+        }
       }
-      return res.json({ success: true, data: { refund: { total: returnTotal }, sale: { id: sale._id, total: (sale as any).total, status: (sale as any).status } } });
+      
+      return res.json({ 
+        success: true, 
+        data: { 
+          refund: { total: returnTotal }, 
+          sale: { 
+            id: sale._id, 
+            total: (sale as any).total, 
+            status: (sale as any).status 
+          } 
+        } 
+      });
     } catch (err) {
       return next(err);
     }

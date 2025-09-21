@@ -21,6 +21,8 @@ import DeliveriesPage from './pages/Deliveries';
 import CategoriesPage from './pages/Categories';
 import DamagesPage from './pages/Damages';
 import WarrantyPage from './pages/Warranty';
+import ReturnsPage from './pages/ReturnsPageNew';
+import GlobalToasts from '@/components/ui/toasts/GlobalToasts';
 
 function App() {
 	// Pull actions/state from auth store
@@ -34,6 +36,7 @@ function App() {
 
 		return (
 			<BrowserRouter>
+				<GlobalToasts />
 				{isChecking ? (
 					// Show a minimal splash screen while verifying auth
 					<div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F8F8F8', background: '#000' }}>Loading…</div>
@@ -169,6 +172,14 @@ function App() {
 						element={
 							<ProtectedRoute requiredRoles={["admin"]}>
 								<Analytics />
+							</ProtectedRoute>
+						}
+					/>
+					<Route
+						path="/returns"
+						element={
+							<ProtectedRoute requiredRoles={["admin","manager","cashier","sales_rep"]}>
+								<ReturnsPage />
 							</ProtectedRoute>
 						}
 					/>
