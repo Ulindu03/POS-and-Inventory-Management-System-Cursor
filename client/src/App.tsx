@@ -36,7 +36,7 @@ function App() {
 			<BrowserRouter>
 				{isChecking ? (
 					// Show a minimal splash screen while verifying auth
-					<div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F8F8F8' }}>Loading…</div>
+					<div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F8F8F8', background: '#000' }}>Loading…</div>
 				) : (
 				// Once auth check is done, render routes
 				<Routes>

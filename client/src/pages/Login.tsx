@@ -12,7 +12,9 @@ import {
   ChevronRight,
   Sparkles,
   Mail,
-  ArrowLeft
+  ArrowLeft,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -294,6 +296,7 @@ const LoginPage = () => {
   const [emailSent, setEmailSent] = useState<boolean | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);                 // action to login with username/password
@@ -302,6 +305,45 @@ const LoginPage = () => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated); // user login state
 
   const t = buildText(language);
+
+  // Fullscreen API handling
+  useEffect(() => {
+    const handleChange = () => {
+      const fsElement = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
+      setIsFullscreen(!!fsElement);
+    };
+    document.addEventListener('fullscreenchange', handleChange);
+    document.addEventListener('webkitfullscreenchange', handleChange as any);
+    document.addEventListener('mozfullscreenchange', handleChange as any);
+    document.addEventListener('MSFullscreenChange', handleChange as any);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleChange);
+      document.removeEventListener('webkitfullscreenchange', handleChange as any);
+      document.removeEventListener('mozfullscreenchange', handleChange as any);
+      document.removeEventListener('MSFullscreenChange', handleChange as any);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    try {
+      if (!isFullscreen) {
+        const el: any = document.documentElement;
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+        else if (el.msRequestFullscreen) el.msRequestFullscreen();
+      } else {
+        const doc: any = document;
+        if (doc.exitFullscreen) doc.exitFullscreen();
+        else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+        else if (doc.mozCancelFullScreen) doc.mozCancelFullScreen();
+        else if (doc.msExitFullscreen) doc.msExitFullscreen();
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Fullscreen toggle failed', e);
+    }
+  };
 
   // Handle submit for both: login form and forgot password view.
   const handleSubmit = async (e: React.FormEvent) => {
@@ -449,11 +491,11 @@ const LoginPage = () => {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.15 }}
-              className="backdrop-blur-xl rounded-3xl shadow-2xl p-6 sm:p-8"
+              className="backdrop-blur-xl rounded-3xl shadow-2xl p-6 sm:p-8 relative"
               style={{ backgroundColor: 'rgba(248,248,248,0.06)', border: '1px solid rgba(248,248,248,0.12)' }}
             >
-            {/* Language switcher */}
-            <div className="flex justify-between items-center mb-6">
+            {/* Language + fullscreen */}
+            <div className="flex justify-between items-center mb-6 gap-2 pr-14">
               {currentView !== 'login' && (
                 <button
                   onClick={() => setCurrentView('login')}
@@ -473,6 +515,21 @@ const LoginPage = () => {
                 {language === 'en' ? 'සිංහල' : 'English'}
               </button>
             </div>
+            {/* Fullscreen image button positioned top-right */}
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="absolute top-4 right-4 rounded-md focus:outline-none focus:ring-2 focus:ring-[#FFE100] transition-transform hover:scale-105"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              style={{ background: 'rgba(0,0,0,0.25)', padding: '4px' }}
+            >
+              <img
+                src="/FS.png"
+                alt="Fullscreen"
+                className="w-8 h-8 object-contain"
+                style={{ filter: 'drop-shadow(0 0 4px rgba(255,225,0,0.4))' }}
+              />
+            </button>
 
             <AnimatePresence mode="wait">
               {currentView === 'login' ? (
