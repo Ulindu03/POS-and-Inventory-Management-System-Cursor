@@ -11,14 +11,14 @@ router.use(authenticate);
 router.post('/lookup', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.lookupSales);
 
 // Validate return before processing
-router.post('/validate', authorize('admin', 'manager', 'sales_rep'), ReturnController.validateReturn);
+router.post('/validate', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.validateReturn);
 
-// Process returns (sales reps, managers, admins)
-router.post('/', authorize('admin', 'manager', 'sales_rep'), ReturnController.processReturn);
+// Process returns (sales reps, managers, admins, cashiers)
+router.post('/', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.processReturn);
 
 // List and view returns
-router.get('/', authorize('admin', 'manager', 'sales_rep'), ReturnController.list);
-router.get('/:id', authorize('admin', 'manager', 'sales_rep'), ReturnController.getById);
+router.get('/', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.list);
+router.get('/:id', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.getById);
 
 // Approve pending returns (managers and admins only)
 router.post('/:id/approve', authorize('admin', 'manager'), ReturnController.approve);
@@ -32,14 +32,14 @@ router.get('/customer/:customerId/overpayments', authorize('admin', 'manager', '
 router.post('/overpayment/use', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.useOverpayment);
 
 // Customer return history
-router.get('/customer/:customerId/history', authorize('admin', 'manager', 'sales_rep'), ReturnController.getCustomerHistory);
+router.get('/customer/:customerId/history', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.getCustomerHistory);
 
 // Analytics and reporting
 router.get('/analytics', authorize('admin', 'manager'), ReturnController.getAnalytics);
 
 // Return policy management (admins only)
 router.post('/policies', authorize('admin'), ReturnController.createPolicy);
-router.get('/policies', authorize('admin', 'manager', 'sales_rep'), ReturnController.getPolicies);
+router.get('/policies', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.getPolicies);
 
 // Legacy route for backward compatibility
 router.post('/legacy', authorize('admin', 'sales_rep'), ReturnController.create);

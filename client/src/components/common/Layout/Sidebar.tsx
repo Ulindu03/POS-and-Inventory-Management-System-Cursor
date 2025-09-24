@@ -10,16 +10,24 @@ import { useEffect } from 'react';
 const menuItems = [
   { icon: LayoutDashboard, imgSrc: '/dashboard.png', label: 'Dashboard', path: '/dashboard', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
   { icon: ShoppingCart, imgSrc: '/POS.png', label: 'POS', path: '/pos', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
-  // Inventory management is not accessible to Sales Reps per matrix
-  { icon: Package, imgSrc: '/inventory.png', label: 'Inventory', path: '/inventory', allowedRoles: ['admin'] },
-  { icon: Package, imgSrc: '/product.png', label: 'Products', path: '/products', allowedRoles: ['admin'] },
+  // Inventory - view only access for cashier and sales_rep
+  { icon: Package, imgSrc: '/inventory.png', label: 'Inventory', path: '/inventory', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  // Products - view only access for cashier and sales_rep
+  { icon: Package, imgSrc: '/product.png', label: 'Products', path: '/products', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
   { icon: Users, imgSrc: '/customer.png', label: 'Customers', path: '/customers', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  // Suppliers - no access for cashier and sales_rep
   { icon: Truck, imgSrc: '/supplier.png', label: 'Suppliers', path: '/suppliers', allowedRoles: ['admin'] },
-  { icon: FileText, imgSrc: '/report.png', label: 'Reports', path: '/reports', allowedRoles: ['admin'] },
+  // Reports - own sales reports only for cashier and sales_rep
+  { icon: FileText, imgSrc: '/report.png', label: 'Reports', path: '/reports', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  // Analytics - no access for cashier and sales_rep
   { icon: BarChart3, imgSrc: '/analytics.png', label: 'Analytics', path: '/analytics', allowedRoles: ['admin'] },
-  { icon: Route, imgSrc: '/deliveries.png', label: 'Deliveries', path: '/deliveries', allowedRoles: ['admin'] },
-  { icon: AlertTriangle, imgSrc: '/damages.png', label: 'Damages', path: '/damages', allowedRoles: ['admin'] },
+  // Deliveries - can mark as completed for cashier and sales_rep
+  { icon: Route, imgSrc: '/deliveries.png', label: 'Deliveries', path: '/deliveries', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  // Damages - can record damaged items for cashier and sales_rep
+  { icon: AlertTriangle, imgSrc: '/damages.png', label: 'Damages', path: '/damages', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  // Warranty - can accept warranty claims for cashier and sales_rep
   { icon: FileText, imgSrc: '/warranty.png', label: 'Warranty', path: '/warranty', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  // Returns - can process customer returns for cashier and sales_rep
   { icon: FileText, imgSrc: '/returns.svg', label: 'Returns', path: '/returns', allowedRoles: ['admin', 'cashier', 'sales_rep', 'manager'] },
   // Only admin can see Users and Settings panels
   { icon: Users, imgSrc: '/user.png', label: 'Users', path: '/users', allowedRoles: ['admin'] },

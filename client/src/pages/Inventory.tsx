@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { inventoryApi } from '@/lib/api/inventory.api';
 import { useTranslation } from 'react-i18next';
 import { useRealtime } from '@/hooks/useRealtime';
+import { useAuthStore } from '@/store/auth.store';
 
 type InventoryTab = 'stock' | 'adjust' | 'alerts' | 'history';
 
@@ -15,6 +16,8 @@ const Inventory = () => {
   const [activeTab, setActiveTab] = useState<InventoryTab>('stock');
   const { t } = useTranslation();
   const [lowCount, setLowCount] = useState<number | null>(null);
+  const userRole = useAuthStore((s) => s.user?.role);
+  const isAdmin = userRole === 'admin';
 
   const loadLowCount = useCallback(async () => {
     try {
@@ -34,12 +37,20 @@ const Inventory = () => {
   socket.on('inventory.updated', () => loadLowCount());
   });
 
-  const tabs = useMemo(() => ([
-    { id: 'stock' as const, label: t('inventoryPage.tabs.stockList'), count: null },
-    { id: 'adjust' as const, label: t('inventoryPage.tabs.adjustStock'), count: null },
-    { id: 'alerts' as const, label: t('inventoryPage.tabs.lowStock'), count: lowCount },
-    { id: 'history' as const, label: t('inventoryPage.tabs.stockHistory'), count: null },
-  ]), [lowCount, t]);
+  const tabs = useMemo(() => {
+    const baseTabs = [
+      { id: 'stock' as const, label: t('inventoryPage.tabs.stockList'), count: null },
+      { id: 'alerts' as const, label: t('inventoryPage.tabs.lowStock'), count: lowCount },
+      { id: 'history' as const, label: t('inventoryPage.tabs.stockHistory'), count: null },
+    ];
+    
+    // Only show adjustment tab for admin users
+    if (isAdmin) {
+      baseTabs.splice(1, 0, { id: 'adjust' as const, label: t('inventoryPage.tabs.adjustStock'), count: null });
+    }
+    
+    return baseTabs;
+  }, [lowCount, t, isAdmin]);
 
   return (
     <AppLayout className="bg-[#242424]">
@@ -100,10 +111,11 @@ const Inventory = () => {
                 } catch {}
                 setActiveTab('adjust');
               }}
+              canAdjust={isAdmin}
             />
           )}
           {activeTab === 'adjust' && <StockAdjustment />}
-          {activeTab === 'alerts' && <LowStockAlert />}
+          {activeTab === 'alerts' && <LowStockAlert canAdjust={isAdmin} canCreatePO={isAdmin} />}
           {activeTab === 'history' && <StockMovementHistory />}
         </div>
       </div>

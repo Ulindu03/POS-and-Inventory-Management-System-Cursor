@@ -8,6 +8,7 @@ import { StickerPrintModal } from '@/features/products/StickerPrintModal';
 import ProductDeleteDialog from '../components/products/ProductDeleteDialog';
 import { CategoryManager } from '@/features/products/CategoryManager';
 import { productsApi } from '@/lib/api/products.api';
+import { useAuthStore } from '@/store/auth.store';
 
 type ProductTab = 'list' | 'categories';
 type ProductModal = 'create' | 'edit' | 'category' | null;
@@ -23,6 +24,10 @@ const Products = () => {
   const [deletingProduct, setDeletingProduct] = useState<any>(null);
   // State for product sticker printing
   const [stickerProduct, setStickerProduct] = useState<any>(null); // null allowed implicitly
+  
+  // Get user role for access control
+  const userRole = useAuthStore((s) => s.user?.role);
+  const isAdmin = userRole === 'admin';
 
   // Listen for sticker printing events from other components
   useEffect(() => {
@@ -36,7 +41,7 @@ const Products = () => {
   // Tab configuration for switching between products and categories
   const tabs = [
     { id: 'list' as const, label: t('productsPage.tabs.products'), icon: '📦' },
-    { id: 'categories' as const, label: t('productsPage.tabs.categories'), icon: '🏷️' },
+    ...(isAdmin ? [{ id: 'categories' as const, label: t('productsPage.tabs.categories'), icon: '🏷️' }] : []),
   ];
 
   // Open edit modal for existing product
@@ -164,9 +169,12 @@ const Products = () => {
         {/* Main content area showing either products list or category manager */}
         <div className="min-h-[600px]">
           {activeTab === 'list' && (
-            <ProductList 
+            <ProductList
               onEdit={handleEditProduct}
               onCreate={handleCreateProduct}
+              canEdit={isAdmin}
+              canDelete={isAdmin}
+              canCreate={isAdmin}
             />
           )}
           {activeTab === 'categories' && (

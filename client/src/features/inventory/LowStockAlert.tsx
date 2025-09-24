@@ -23,7 +23,7 @@ interface LowStockItem {
 
 type StockStatus = 'low' | 'critical' | 'out';
 
-export const LowStockAlert = () => {
+export const LowStockAlert = ({ canAdjust = true, canCreatePO = true }: { canAdjust?: boolean; canCreatePO?: boolean } = {}) => {
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({ low: 0, critical: 0, out: 0 });
@@ -185,14 +185,16 @@ export const LowStockAlert = () => {
             <Eye className="w-4 h-4 mr-2" />
             View All
           </button>
-          <button 
-            className="px-4 py-2 rounded-xl font-semibold transition-colors flex items-center"
-            style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
-            onClick={handleCreatePOs}
-          >
-            <ShoppingCart className="w-4 h-4 mr-2" />
-            Create Purchase Order
-          </button>
+          {canCreatePO && (
+            <button 
+              className="px-4 py-2 rounded-xl font-semibold transition-colors flex items-center"
+              style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
+              onClick={handleCreatePOs}
+            >
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              Create Purchase Order
+            </button>
+          )}
         </div>
       </div>
 
@@ -308,15 +310,19 @@ export const LowStockAlert = () => {
                 </div>
 
                 <div className="flex gap-2">
-                  <button className="px-3 py-1 text-sm bg-white/10 hover:bg-white/20 rounded-lg border border-white/10 transition-colors">
-                    Adjust Stock
-                  </button>
-                  <button 
-                    className="px-3 py-1 text-sm rounded-lg font-medium transition-colors"
-                    style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
-                  >
-                    Reorder
-                  </button>
+                  {canAdjust && (
+                    <button className="px-3 py-1 text-sm bg-white/10 hover:bg-white/20 rounded-lg border border-white/10 transition-colors">
+                      Adjust Stock
+                    </button>
+                  )}
+                  {canCreatePO && (
+                    <button 
+                      className="px-3 py-1 text-sm rounded-lg font-medium transition-colors"
+                      style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
+                    >
+                      Reorder
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

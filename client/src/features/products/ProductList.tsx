@@ -50,9 +50,12 @@ interface Product {
 interface ProductListProps {
   onEdit: (product: Product) => void;
   onCreate: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  canCreate?: boolean;
 }
 
-export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) => {
+export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canEdit = true, canDelete = true, canCreate = true }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -365,13 +368,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => onEdit(product)}
-                            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-                            title="Edit Product"
-                          >
-                            <Edit className="w-4 h-4 text-[#F8F8F8]/70" />
-                          </button>
+                          {canEdit && (
+                            <button
+                              onClick={() => onEdit(product)}
+                              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                              title="Edit Product"
+                            >
+                              <Edit className="w-4 h-4 text-[#F8F8F8]/70" />
+                            </button>
+                          )}
                           <button
                             onClick={() => setHistoryProduct({ id: product._id, name: product.name.en })}
                             className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
@@ -386,13 +391,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
                           >
                             <img src="/bar.png" alt="Stickers" className="w-4 h-4 object-contain" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(product._id)}
-                            className="p-2 rounded-lg bg-white/10 hover:bg-red-500/20 transition-colors"
-                            title="Delete Product"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-400" />
-                          </button>
+                          {canDelete && (
+                            <button
+                              onClick={() => handleDelete(product._id)}
+                              className="p-2 rounded-lg bg-white/10 hover:bg-red-500/20 transition-colors"
+                              title="Delete Product"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-400" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </motion.tr>
@@ -412,13 +419,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate }) =>
                 ? 'Try adjusting your search or filter criteria.'
                 : 'Start by adding your first product to the inventory.'}
             </p>
-            <button
-              onClick={onCreate}
-              className="px-4 py-2 rounded-xl font-semibold transition-all duration-200"
-              style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
-            >
-              Add First Product
-            </button>
+            {canCreate && (
+              <button
+                onClick={onCreate}
+                className="px-4 py-2 rounded-xl font-semibold transition-all duration-200"
+                style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
+              >
+                Add First Product
+              </button>
+            )}
           </div>
         )}
       </div>

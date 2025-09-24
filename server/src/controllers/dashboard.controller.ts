@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Sale } from '../models/Sale.model';
 import { Product } from '../models/Product.model';
 import { Customer } from '../models/Customer.model';
+import { AuthRequest } from '../middleware/auth.middleware';
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
@@ -11,12 +12,19 @@ function startOfNextMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth() + 1, 1, 0, 0, 0, 0);
 }
 
-export const getDashboardStats = async (_req: Request, res: Response) => {
+export const getDashboardStats = async (req: AuthRequest, res: Response) => {
   try {
     const now = new Date();
     const currStart = startOfMonth(now);
     const nextStart = startOfNextMonth(now);
     const prevStart = startOfMonth(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+
+    // Build base filters based on user role
+    const userRole = req.user?.role;
+    const isSalesRole = userRole === 'cashier' || userRole === 'sales_rep';
+    
+    // For sales roles, filter by user's sales only
+    const baseFilter = isSalesRole ? { cashier: req.user?.userId } : {};
 
     const [
       totalRevenueAgg,
@@ -26,16 +34,16 @@ export const getDashboardStats = async (_req: Request, res: Response) => {
       currentMonthRevenueAgg,
       prevMonthRevenueAgg
     ] = await Promise.all([
-      Sale.aggregate([{ $group: { _id: null, total: { $sum: '$total' } } }]),
-      Sale.countDocuments(),
+      Sale.aggregate([{ $match: baseFilter }, { $group: { _id: null, total: { $sum: '$total' } } }]),
+      Sale.countDocuments(baseFilter),
       Product.countDocuments(),
       Customer.countDocuments(),
       Sale.aggregate([
-        { $match: { createdAt: { $gte: currStart, $lt: nextStart } } },
+        { $match: { ...baseFilter, createdAt: { $gte: currStart, $lt: nextStart } } },
         { $group: { _id: null, total: { $sum: '$total' } } }
       ]),
       Sale.aggregate([
-        { $match: { createdAt: { $gte: prevStart, $lt: currStart } } },
+        { $match: { ...baseFilter, createdAt: { $gte: prevStart, $lt: currStart } } },
         { $group: { _id: null, total: { $sum: '$total' } } }
       ])
     ]);
@@ -70,7 +78,7 @@ export const getDashboardStats = async (_req: Request, res: Response) => {
   }
 };
 
-export const getSalesChart = async (req: Request, res: Response) => {
+export const getSalesChart = async (req: AuthRequest, res: Response) => {
   try {
     const period = (req.query.period as 'daily' | 'weekly' | 'monthly') || 'weekly';
     const now = new Date();
@@ -80,8 +88,13 @@ export const getSalesChart = async (req: Request, res: Response) => {
     const start = new Date(now);
     start.setDate(now.getDate() - (days - 1));
 
+    // Build base filters based on user role
+    const userRole = req.user?.role;
+    const isSalesRole = userRole === 'cashier' || userRole === 'sales_rep';
+    const baseFilter = isSalesRole ? { cashier: req.user?.userId } : {};
+
     const agg = await Sale.aggregate([
-      { $match: { createdAt: { $gte: start } } },
+      { $match: { ...baseFilter, createdAt: { $gte: start } } },
       {
         $group: {
           _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
@@ -114,10 +127,17 @@ export const getSalesChart = async (req: Request, res: Response) => {
   }
 };
 
-export const getTopProducts = async (req: Request, res: Response) => {
+export const getTopProducts = async (req: AuthRequest, res: Response) => {
   try {
     const limit = Number(req.query.limit) || 5;
+    
+    // Build base filters based on user role
+    const userRole = req.user?.role;
+    const isSalesRole = userRole === 'cashier' || userRole === 'sales_rep';
+    const baseFilter = isSalesRole ? { cashier: req.user?.userId } : {};
+    
     const agg = await Sale.aggregate([
+      { $match: baseFilter },
       { $unwind: '$items' },
       { $group: { _id: '$items.product', sales: { $sum: '$items.quantity' }, revenue: { $sum: '$items.total' } } },
       { $sort: { revenue: -1 } },
@@ -133,9 +153,15 @@ export const getTopProducts = async (req: Request, res: Response) => {
   }
 };
 
-export const getCategoryDistribution = async (_req: Request, res: Response) => {
+export const getCategoryDistribution = async (req: AuthRequest, res: Response) => {
   try {
+    // Build base filters based on user role
+    const userRole = req.user?.role;
+    const isSalesRole = userRole === 'cashier' || userRole === 'sales_rep';
+    const baseFilter = isSalesRole ? { cashier: req.user?.userId } : {};
+    
     const agg = await Sale.aggregate([
+      { $match: baseFilter },
       { $unwind: '$items' },
       { $lookup: { from: 'products', localField: 'items.product', foreignField: '_id', as: 'product' } },
       { $unwind: '$product' },
@@ -152,10 +178,16 @@ export const getCategoryDistribution = async (_req: Request, res: Response) => {
   }
 };
 
-export const getRecentSales = async (req: Request, res: Response) => {
+export const getRecentSales = async (req: AuthRequest, res: Response) => {
   try {
     const limit = Number(req.query.limit) || 5;
-    const sales = await Sale.find()
+    
+    // Build base filters based on user role
+    const userRole = req.user?.role;
+    const isSalesRole = userRole === 'cashier' || userRole === 'sales_rep';
+    const baseFilter = isSalesRole ? { cashier: req.user?.userId } : {};
+    
+    const sales = await Sale.find(baseFilter)
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate('customer', 'name')

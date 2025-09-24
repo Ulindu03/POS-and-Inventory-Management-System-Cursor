@@ -8,13 +8,13 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', authorize('admin', 'sales_rep'), cache(20), listDeliveries);
-router.post('/', authorize('admin', 'sales_rep'), createDelivery);
-router.get('/:id', authorize('admin', 'sales_rep'), getDelivery);
-router.put('/:id', authorize('admin', 'sales_rep'), updateDelivery);
-router.patch('/:id/status', authorize('admin', 'sales_rep'), updateDeliveryStatus);
-router.post('/:id/shops/:shopId/proof', authorize('admin', 'sales_rep'), upload.single('file'), uploadStopProof);
-router.post('/:id/shops/:shopId/signature', authorize('admin', 'sales_rep'), upload.single('file'), uploadStopSignature);
-router.put('/:id/shops/:shopId/media', authorize('admin', 'sales_rep'), setStopMedia);
+router.get('/', authorize('admin', 'cashier', 'sales_rep'), cache(20), listDeliveries);
+router.post('/', authorize('admin', 'cashier', 'sales_rep'), createDelivery);
+router.get('/:id', authorize('admin', 'cashier', 'sales_rep'), getDelivery);
+router.put('/:id', authorize('admin', 'cashier', 'sales_rep'), updateDelivery);
+router.patch('/:id/status', authorize('admin', 'cashier', 'sales_rep'), updateDeliveryStatus);
+router.post('/:id/shops/:shopId/proof', authorize('admin', 'cashier', 'sales_rep'), upload.single('file'), uploadStopProof);
+router.post('/:id/shops/:shopId/signature', authorize('admin', 'cashier', 'sales_rep'), upload.single('file'), uploadStopSignature);
+router.put('/:id/shops/:shopId/media', authorize('admin', 'cashier', 'sales_rep'), setStopMedia);
 
 export default router;

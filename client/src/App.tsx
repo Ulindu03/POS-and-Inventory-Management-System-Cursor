@@ -58,7 +58,7 @@ function App() {
 					<Route
 						path="/damages"
 						element={
-							<ProtectedRoute requiredRoles={['admin']}>
+							<ProtectedRoute requiredRoles={['admin', 'cashier', 'sales_rep']}>
 								<DamagesPage />
 							</ProtectedRoute>
 						}
@@ -90,7 +90,7 @@ function App() {
 					<Route
 						path="/deliveries"
 						element={
-							<ProtectedRoute requiredRoles={['admin']}>
+							<ProtectedRoute requiredRoles={['admin', 'cashier', 'sales_rep']}>
 								<DeliveriesPage />
 							</ProtectedRoute>
 						}
@@ -130,7 +130,7 @@ function App() {
 					<Route
 						path="/inventory"
 						element={
-							<ProtectedRoute requiredRoles={["admin"]}>
+							<ProtectedRoute requiredRoles={["admin", "cashier", "sales_rep"]}>
 								<Inventory />
 							</ProtectedRoute>
 						}
@@ -154,7 +154,7 @@ function App() {
 					<Route
 						path="/reports"
 						element={
-							<ProtectedRoute requiredRoles={["admin"]}>
+							<ProtectedRoute requiredRoles={["admin", "cashier", "sales_rep"]}>
 								<Reports />
 							</ProtectedRoute>
 						}
@@ -162,7 +162,7 @@ function App() {
 					<Route
 						path="/products"
 						element={
-							<ProtectedRoute requiredRoles={["admin"]}>
+							<ProtectedRoute requiredRoles={["admin", "cashier", "sales_rep"]}>
 								<Products />
 							</ProtectedRoute>
 						}

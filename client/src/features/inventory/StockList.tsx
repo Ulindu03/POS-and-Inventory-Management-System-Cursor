@@ -13,7 +13,7 @@ interface StockItem {
   status: Status;
 }
 
-export const StockList = ({ onAdjust }: { onAdjust?: (p: StockItem) => void }) => {
+export const StockList = ({ onAdjust, canAdjust = true }: { onAdjust?: (p: StockItem) => void; canAdjust?: boolean }) => {
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -262,12 +262,14 @@ export const StockList = ({ onAdjust }: { onAdjust?: (p: StockItem) => void }) =
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => onAdjust?.(item)}
-                        className="px-3 py-1 text-sm bg-white/10 hover:bg-white/20 rounded-lg border border-white/10 transition-colors"
-                      >
-                        Adjust
-                      </button>
+                      {canAdjust && (
+                        <button
+                          onClick={() => onAdjust?.(item)}
+                          className="px-3 py-1 text-sm bg-white/10 hover:bg-white/20 rounded-lg border border-white/10 transition-colors"
+                        >
+                          Adjust
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

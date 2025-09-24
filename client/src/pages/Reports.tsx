@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import reportsApi from '@/lib/api/reports.api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout } from '@/components/common/Layout/Layout';
+import { useAuthStore } from '@/store/auth.store';
 import {
   BarChart3,
   TrendingUp,
@@ -38,8 +39,11 @@ const Reports = () => {
   const [loading, setLoading] = useState(false);
 
   const { t } = useTranslation();
+  const userRole = useAuthStore((s) => s.user?.role);
+  const isAdmin = userRole === 'admin';
 
-  const reportCards: ReportCard[] = [
+  // Filter reports based on user role - only sales reports for cashier and sales_rep
+  const allReportCards: ReportCard[] = [
     {
       id: 'sales',
       title: t('reports.salesReport.title'),
@@ -49,40 +53,45 @@ const Reports = () => {
     },
     {
       id: 'inventory',
-  title: t('reports.inventoryReport.title'),
-  description: t('reports.inventoryReport.desc'),
+      title: t('reports.inventoryReport.title'),
+      description: t('reports.inventoryReport.desc'),
       icon: <Package className="w-8 h-8" />,
       gradient: 'from-green-500 to-emerald-600'
     },
     {
       id: 'customers',
-  title: t('reports.customersReport.title'),
-  description: t('reports.customersReport.desc'),
+      title: t('reports.customersReport.title'),
+      description: t('reports.customersReport.desc'),
       icon: <Users className="w-8 h-8" />,
       gradient: 'from-blue-500 to-cyan-600'
     },
     {
       id: 'suppliers',
-  title: t('reports.suppliersReport.title'),
-  description: t('reports.suppliersReport.desc'),
+      title: t('reports.suppliersReport.title'),
+      description: t('reports.suppliersReport.desc'),
       icon: <Truck className="w-8 h-8" />,
       gradient: 'from-orange-500 to-red-600'
     },
     {
       id: 'profitloss',
-  title: t('reports.profitlossReport.title'),
-  description: t('reports.profitlossReport.desc'),
+      title: t('reports.profitlossReport.title'),
+      description: t('reports.profitlossReport.desc'),
       icon: <TrendingUp className="w-8 h-8" />,
       gradient: 'from-yellow-500 to-orange-600'
     },
     {
       id: 'stock',
-  title: t('reports.stockReport.title'),
-  description: t('reports.stockReport.desc'),
+      title: t('reports.stockReport.title'),
+      description: t('reports.stockReport.desc'),
       icon: <PieChart className="w-8 h-8" />,
       gradient: 'from-pink-500 to-purple-600'
     }
   ];
+
+  // Filter reports based on user role
+  const reportCards = isAdmin 
+    ? allReportCards 
+    : allReportCards.filter(card => card.id === 'sales');
 
   const handleReportSelect = (reportType: ReportType) => {
     setSelectedReport(reportType);

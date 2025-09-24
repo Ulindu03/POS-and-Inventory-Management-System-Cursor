@@ -19,8 +19,8 @@ const router = express.Router();
 // Apply authentication middleware to all routes
 router.use(authenticate);
 
-// Reports routes (admin only per RBAC matrix)
-router.get('/sales', authorize('admin'), getSalesReport);
+// Reports routes - sales reports accessible to cashier and sales_rep, others admin only
+router.get('/sales', authorize('admin', 'cashier', 'sales_rep'), getSalesReport);
 router.get('/inventory', authorize('admin'), getInventoryReport);
 router.get('/customers', authorize('admin'), getCustomerReport);
 router.get('/suppliers', authorize('admin'), getSupplierReport);
@@ -30,7 +30,7 @@ router.get('/top-products', authorize('admin'), getTopProductsReport);
 router.get('/staff-performance', authorize('admin'), getStaffPerformanceReport);
 router.get('/delivery-performance', authorize('admin'), getDeliveryPerformanceReport);
 router.get('/inventory-turnover', authorize('admin'), getInventoryTurnoverReport);
-// Export (excel/pdf)
+// Export (excel/pdf) - admin only
 router.get('/export', authorize('admin'), exportReport);
 
 export default router;
