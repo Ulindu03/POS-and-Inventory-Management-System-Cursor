@@ -1,6 +1,7 @@
 // Express middleware that checks the access token and attaches user info to the request.
 import { Request, Response, NextFunction } from 'express';
 import { JWTService } from '../services/jwt.service';
+import { normalizeAllowedRoles, toCanonicalRole } from '../utils/roles';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -29,7 +30,8 @@ export const authenticate = async (
 
   // Validate token and store the decoded payload on req.user
   const decoded = JWTService.verifyAccessToken(token);
-  req.user = decoded;
+  // Normalize legacy 'admin' -> 'store_owner' for downstream checks
+  req.user = { ...decoded, role: toCanonicalRole(decoded.role) || decoded.role } as any;
     return next();
   } catch (error) {
     // Avoid noisy stack traces for routine expirations
@@ -56,7 +58,9 @@ export const authorize = (...roles: string[]) => {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    const allow = normalizeAllowedRoles(roles) || roles;
+    const role = toCanonicalRole(req.user.role) || req.user.role;
+    if (!allow.includes(role)) {
       return res.status(403).json({
         success: false,
         message: 'Forbidden: Insufficient permissions',

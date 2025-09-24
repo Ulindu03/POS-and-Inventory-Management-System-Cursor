@@ -62,13 +62,13 @@ export class ReturnController {
   }
 
   // POST /api/returns - Process a return
-  static async processReturn(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  static async processReturn(req: Request & { user?: any }, res: Response) {
     try {
       const userId = req.user?.userId;
       const userRole = req.user?.role;
       
       // Check permissions
-      if (!['admin', 'manager', 'sales_rep'].includes(userRole)) {
+      if (!['store_owner', 'admin', 'manager', 'sales_rep'].includes(String(userRole).toLowerCase())) {
         return res.status(403).json({ 
           success: false, 
           message: 'Insufficient permissions for processing returns' 
@@ -77,7 +77,7 @@ export class ReturnController {
       
       const result = await ReturnService.processReturn(req.body, userId);
       return res.status(201).json(result);
-    } catch (err: any) {
+  } catch (err: any) {
       // Provide clearer API error instead of opaque 500 where possible
       const message = err?.message || 'Failed to process return';
       if (err?.name === 'ValidationError') {
@@ -178,11 +178,11 @@ export class ReturnController {
       const userId = req.user?.userId;
       const userRole = req.user?.role;
       
-      // Only managers and admins can approve
-      if (!['admin', 'manager'].includes(userRole)) {
+      // Only managers and store owners can approve
+      if (!['store_owner', 'admin', 'manager'].includes(String(userRole).toLowerCase())) {
         return res.status(403).json({ 
           success: false, 
-          message: 'Only managers and admins can approve returns' 
+          message: 'Only managers and store owners can approve returns' 
         });
       }
       
@@ -368,11 +368,11 @@ export class ReturnController {
       const userId = req.user?.userId;
       const userRole = req.user?.role;
       
-      // Only admins can create policies
-      if (userRole !== 'admin') {
+      // Only store owners can create policies
+      if (!['store_owner', 'admin'].includes(String(userRole).toLowerCase())) {
         return res.status(403).json({ 
           success: false, 
-          message: 'Only admins can create return policies' 
+          message: 'Only store owners can create return policies' 
         });
       }
       

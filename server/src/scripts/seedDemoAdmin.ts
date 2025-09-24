@@ -9,9 +9,9 @@ const MONGODB_URI = process.env.MONGODB_URI || '';
 async function seedDemoAdmin() {
   await mongoose.connect(MONGODB_URI);
 
-  const username = 'admin';
-  const email = 'admin@demo.com';
-  const password = 'admin123';
+  const username = 'owner';
+  const email = 'owner@demo.com';
+  const password = 'owner123';
 
   let user = await User.findOne({ username });
   if (!user) {
@@ -19,24 +19,24 @@ async function seedDemoAdmin() {
       username,
       email,
       password,
-      firstName: 'Demo',
-      lastName: 'Admin',
-      role: 'admin',
+  firstName: 'Demo',
+  lastName: 'Owner',
+  role: 'store_owner',
       language: 'en',
       isActive: true,
     });
     await user.save();
-    console.log('Demo admin user created.');
+  console.log('Demo store owner user created.');
   } else {
     user.email = email;
-    user.password = password;
-    user.firstName = 'Demo';
-    user.lastName = 'Admin';
-    user.role = 'admin';
+  user.password = password;
+  user.firstName = 'Demo';
+  user.lastName = 'Owner';
+  user.role = 'store_owner';
     user.language = 'en';
     user.isActive = true;
     await user.save();
-    console.log('Demo admin user updated.');
+  console.log('Demo store owner user updated.');
   }
 
   await mongoose.disconnect();

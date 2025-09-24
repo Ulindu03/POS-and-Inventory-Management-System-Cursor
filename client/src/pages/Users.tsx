@@ -6,8 +6,10 @@ import FormModal from '@/components/ui/FormModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown } from 'lucide-react';
+import { RoleSelect } from '@/components/ui/RoleSelect';
 
-type Role = 'admin' | 'cashier' | 'sales_rep';
+type Role = 'store_owner' | 'admin' | 'cashier' | 'sales_rep';
 type Lang = 'en' | 'si';
 interface AdminUser {
   _id: string;
@@ -45,7 +47,7 @@ export default function UsersPage() {
     s.on('user:deleted', fetchPage);
   });
 
-  const roles = useMemo(() => ['admin', 'cashier', 'sales_rep'] as const, []);
+  const roles = useMemo(() => ['store_owner', 'cashier', 'sales_rep'] as const, []);
 
   const handleCreate = async (data: UserInput) => {
     setSaving(true);
@@ -151,18 +153,8 @@ export default function UsersPage() {
                   <td className="py-2 pl-4 pr-4">{u.username}</td>
                   <td className="py-2 pr-4">{u.firstName} {u.lastName}</td>
                   <td className="py-2 pr-4 break-words">{u.email}</td>
-                  <td className="py-2 pr-4 capitalize">
-                    <select
-                      className="bg-transparent border border-white/10 rounded px-2 py-1 vz-select"
-                      value={u.role}
-                      onChange={(e) => changeRole(u, e.target.value as any)}
-                    >
-                      {roles.map((r) => (
-                        <option key={r} value={r} className="text-black">
-                          {r}
-                        </option>
-                      ))}
-                    </select>
+                  <td className="py-2 pr-4">
+                    <RoleSelect value={u.role as any} onChange={(role) => changeRole(u, role as any)} />
                   </td>
                   <td className="py-2 pr-4">
                     <button

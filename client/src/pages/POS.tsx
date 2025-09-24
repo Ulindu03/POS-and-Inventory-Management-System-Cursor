@@ -13,6 +13,7 @@ import QuickDamageModal from '@/features/damage/QuickDamageModal';
 import QuickReturnModal from '@/features/pos/QuickReturnModal';
 import { useCartStore } from '@/store/cart.store';
 import { salesApi } from '@/lib/api/sales.api';
+import { getAccessToken } from '@/lib/api/token';
 // Replaced lucide icons with custom FS.png from public
 
 const POS = () => {
@@ -112,7 +113,7 @@ const POS = () => {
           // Attempt to fetch warranties issued for this sale
           let warranties: any[] = [];
           try {
-            const token = (await import('@/lib/api/token')).getAccessToken();
+            const token = getAccessToken();
             const res = await fetch(`/api/warranty?saleId=${encodeURIComponent(sale.id)}&page=1&pageSize=100`, { headers: token? { Authorization: `Bearer ${token}` } : {} });
             const json = await res.json();
             if (json?.success) warranties = json.data.items || [];

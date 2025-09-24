@@ -9,7 +9,7 @@ export interface IUser extends Document {
 	lastName: string;
 	phone?: string;
 	avatar?: string;
-	role: 'admin' | 'cashier' | 'sales_rep';
+	role: 'store_owner' | 'admin' | 'cashier' | 'sales_rep';
 	language: 'en' | 'si';
 	isActive: boolean;
 	lastLogin?: Date;
@@ -62,7 +62,7 @@ const userSchema = new Schema<IUser>({
 	},
 	role: {
 		type: String,
-		enum: ['admin', 'cashier', 'sales_rep'],
+		enum: ['store_owner', 'admin', 'cashier', 'sales_rep'],
 		default: 'cashier'
 	},
 	language: {

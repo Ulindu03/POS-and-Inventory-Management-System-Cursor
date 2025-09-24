@@ -29,7 +29,7 @@ const quickActions: (QuickAction & { allowedRoles?: string[]; titleKey: string; 
     icon: <Plus className="w-6 h-6" />,
     href: '/pos',
     color: 'from-emerald-500 to-green-600',
-    allowedRoles: ['admin','cashier','sales_rep']
+  allowedRoles: ['store_owner','cashier','sales_rep']
   },
   {
     title: 'Add Product',
@@ -39,7 +39,7 @@ const quickActions: (QuickAction & { allowedRoles?: string[]; titleKey: string; 
     icon: <Package className="w-6 h-6" />,
     href: '/products',
     color: 'from-blue-500 to-indigo-600',
-    allowedRoles: ['admin']
+  allowedRoles: ['store_owner']
   },
   {
     title: 'New Customer',
@@ -49,7 +49,7 @@ const quickActions: (QuickAction & { allowedRoles?: string[]; titleKey: string; 
     icon: <Users className="w-6 h-6" />,
     href: '/customers',
     color: 'from-purple-500 to-pink-600',
-    allowedRoles: ['admin','cashier','sales_rep']
+  allowedRoles: ['store_owner','cashier','sales_rep']
   },
   {
     title: 'View Reports',
@@ -59,7 +59,7 @@ const quickActions: (QuickAction & { allowedRoles?: string[]; titleKey: string; 
     icon: <FileText className="w-6 h-6" />,
     href: '/reports',
     color: 'from-orange-500 to-red-600',
-    allowedRoles: ['admin']
+  allowedRoles: ['store_owner']
   },
   {
     title: 'Analytics',
@@ -69,7 +69,7 @@ const quickActions: (QuickAction & { allowedRoles?: string[]; titleKey: string; 
   icon: <BarChart3 className="w-6 h-6" />,
     href: '/analytics',
     color: 'from-teal-500 to-cyan-600',
-    allowedRoles: ['admin']
+  allowedRoles: ['store_owner']
   },
   {
     title: 'Settings',
@@ -79,17 +79,18 @@ const quickActions: (QuickAction & { allowedRoles?: string[]; titleKey: string; 
     icon: <Settings className="w-6 h-6" />,
     href: '/settings',
     color: 'from-slate-500 to-gray-600',
-    allowedRoles: ['admin']
+  allowedRoles: ['store_owner']
   }
 ];
 
 export const QuickActions: React.FC = () => {
   const { t } = useTranslation();
   const role = useAuthStore((s) => s.user?.role);
+  const canonicalRole = role ? (String(role).toLowerCase() === 'admin' ? 'store_owner' : String(role).toLowerCase()) : undefined;
   const visibleActions = quickActions.filter(a => {
     if (!a.allowedRoles) return true;
-    if (!role) return false;
-    return a.allowedRoles.includes(role);
+    if (!canonicalRole) return false;
+    return a.allowedRoles.includes(canonicalRole);
   });
   const gridCols = visibleActions.length <= 2
     ? 'grid-cols-1 sm:grid-cols-2 max-w-[1000px] mx-auto'

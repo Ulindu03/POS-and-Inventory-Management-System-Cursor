@@ -27,7 +27,7 @@ const Products = () => {
   
   // Get user role for access control
   const userRole = useAuthStore((s) => s.user?.role);
-  const isAdmin = userRole === 'admin';
+  const isAdmin = (userRole === 'admin' || userRole === 'store_owner');
 
   // Listen for sticker printing events from other components
   useEffect(() => {

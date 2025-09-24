@@ -69,12 +69,17 @@ export const authApi = {
   },
   // Admin login step 1: request that an OTP be sent/created
   adminLoginInit: async (credentials: { username: string; password: string; rememberMe?: boolean }) => {
-    const res = await axios.post('/auth/admin/login/init', credentials);
+    // Prefer new canonical route; server keeps admin alias for BC
+    const res = await axios.post('/auth/store-owner/login/init', credentials).catch(async () => {
+      return axios.post('/auth/admin/login/init', credentials);
+    });
     return (res.data as any);
   },
   // Admin login step 2: verify the OTP; server returns tokens and user
   adminLoginVerify: async (data: { username: string; otp: string; rememberMe?: boolean }) => {
-    const res = await axios.post('/auth/admin/login/verify', data);
+    const res = await axios.post('/auth/store-owner/login/verify', data).catch(async () => {
+      return axios.post('/auth/admin/login/verify', data);
+    });
     const payload = (res.data as any)?.data || {};
     const { accessToken, refreshToken } = payload;
     if (accessToken) setAccessToken(accessToken);

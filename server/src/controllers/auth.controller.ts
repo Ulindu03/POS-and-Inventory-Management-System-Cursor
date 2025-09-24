@@ -4,6 +4,7 @@ import { User } from '../models/User.model';
 import { JWTService } from '../services/jwt.service';
 import crypto from 'crypto';
 import { sendPasswordResetEmail, sendOtpEmail } from '../services/email.service';
+import { isStoreOwner, toCanonicalRole } from '../utils/roles';
 
 export class AuthController {
   // Register new user
@@ -113,8 +114,8 @@ export class AuthController {
         });
       }
 
-  // If admin, enforce OTP step before issuing tokens
-      if (user.role === 'admin') {
+  // If store owner (formerly admin), enforce OTP step before issuing tokens
+    if (isStoreOwner(user.role)) {
         const needsNewOtp = !user.otpCode || !user.otpExpires || user.otpExpires.getTime() < Date.now();
         let emailResult: any = null;
         if (needsNewOtp) {
@@ -125,12 +126,12 @@ export class AuthController {
           await user.save();
           emailResult = await sendOtpEmail(user.email, user.otpCode);
           // eslint-disable-next-line no-console
-          console.log('[auth] Admin OTP generated', { user: user.username, sent: emailResult.ok, email: user.email, otp: process.env.DEBUG_SHOW_OTP ? otp : 'hidden', error: emailResult.ok ? undefined : emailResult.error });
+          console.log('[auth] Store Owner OTP generated', { user: user.username, sent: emailResult.ok, email: user.email, otp: process.env.DEBUG_SHOW_OTP ? otp : 'hidden', error: emailResult.ok ? undefined : emailResult.error });
         }
         return res.json({
           success: true,
           message: 'OTP required',
-          data: { requiresOtp: true, user: { id: user._id, username: user.username, role: user.role }, emailSent: Boolean(emailResult?.ok), emailError: emailResult?.error, emailPreviewUrl: emailResult?.preview, ...(process.env.DEBUG_SHOW_OTP ? { debugOtp: user.otpCode } : {}) }
+          data: { requiresOtp: true, user: { id: user._id, username: user.username, role: toCanonicalRole(user.role) || user.role }, emailSent: Boolean(emailResult?.ok), emailError: emailResult?.error, emailPreviewUrl: emailResult?.preview, ...(process.env.DEBUG_SHOW_OTP ? { debugOtp: user.otpCode } : {}) }
         });
       }
 
@@ -339,7 +340,7 @@ export class AuthController {
     try {
       const { username, password } = req.body;
       const user = await User.findOne({ $or: [{ username }, { email: username }] });
-      if (!user || user.role !== 'admin' || !user.isActive) {
+      if (!user || !isStoreOwner(user.role) || !user.isActive) {
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
       }
       const valid = await user.comparePassword(password);
@@ -367,7 +368,7 @@ export class AuthController {
     try {
       const { username, otp, rememberMe } = req.body;
       const user = await User.findOne({ $or: [{ username }, { email: username }] });
-      if (!user || user.role !== 'admin' || !user.otpCode || !user.otpExpires) {
+      if (!user || !isStoreOwner(user.role) || !user.otpCode || !user.otpExpires) {
         return res.status(400).json({ success: false, message: 'OTP not requested' });
       }
       if (user.otpExpires.getTime() < Date.now()) {
@@ -394,7 +395,7 @@ export class AuthController {
         sameSite: 'strict',
         maxAge: cookieMaxAge,
       });
-      return res.json({ success: true, message: 'Admin login successful', data: { user: { id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role }, accessToken, refreshToken } });
+  return res.json({ success: true, message: 'Store Owner login successful', data: { user: { id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName, role: toCanonicalRole(user.role) || user.role }, accessToken, refreshToken } });
     } catch (err) {
       return next(err);
     }

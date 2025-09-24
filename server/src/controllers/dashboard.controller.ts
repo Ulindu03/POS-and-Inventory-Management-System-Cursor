@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { Sale } from '../models/Sale.model';
 import { Product } from '../models/Product.model';
 import { Customer } from '../models/Customer.model';

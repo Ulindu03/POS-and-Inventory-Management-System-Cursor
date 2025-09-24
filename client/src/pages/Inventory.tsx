@@ -17,7 +17,7 @@ const Inventory = () => {
   const { t } = useTranslation();
   const [lowCount, setLowCount] = useState<number | null>(null);
   const userRole = useAuthStore((s) => s.user?.role);
-  const isAdmin = userRole === 'admin';
+  const isAdmin = (userRole === 'admin' || userRole === 'store_owner');
 
   const loadLowCount = useCallback(async () => {
     try {
@@ -38,15 +38,15 @@ const Inventory = () => {
   });
 
   const tabs = useMemo(() => {
-    const baseTabs = [
-      { id: 'stock' as const, label: t('inventoryPage.tabs.stockList'), count: null },
-      { id: 'alerts' as const, label: t('inventoryPage.tabs.lowStock'), count: lowCount },
-      { id: 'history' as const, label: t('inventoryPage.tabs.stockHistory'), count: null },
+    const baseTabs: { id: InventoryTab; label: string; count: number | null }[] = [
+      { id: 'stock', label: t('inventoryPage.tabs.stockList'), count: null },
+      { id: 'alerts', label: t('inventoryPage.tabs.lowStock'), count: lowCount },
+      { id: 'history', label: t('inventoryPage.tabs.stockHistory'), count: null },
     ];
     
     // Only show adjustment tab for admin users
     if (isAdmin) {
-      baseTabs.splice(1, 0, { id: 'adjust' as const, label: t('inventoryPage.tabs.adjustStock'), count: null });
+  baseTabs.splice(1, 0, { id: 'adjust', label: t('inventoryPage.tabs.adjustStock'), count: null });
     }
     
     return baseTabs;

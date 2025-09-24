@@ -70,7 +70,7 @@ const SimpleLogin = () => {
         const res: any = await authApi.login({ username, password, rememberMe });
         if (res?.requiresOtp) {
           setOtpStep(true);
-          toast.message('OTP sent to admin email');
+          toast.message('OTP sent to store owner email');
           return;
         }
         toast.success('Login successful');
@@ -206,7 +206,7 @@ const SimpleLogin = () => {
                   aria-label="OTP"
                   inputMode="numeric"
                 />
-                <p className="text-xs text-purple-300 mt-2">We sent a 6-digit code to the admin email. It expires in 5 minutes.</p>
+                <p className="text-xs text-purple-300 mt-2">We sent a 6-digit code to the store owner email. It expires in 5 minutes.</p>
                 <button type="button" className="mt-2 text-xs text-yellow-300 hover:text-white" onClick={async ()=> {
                   try {
                     setIsLoading(true);

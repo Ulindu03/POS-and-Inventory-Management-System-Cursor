@@ -92,7 +92,7 @@ export async function sendOtpEmail(to: string, otp: string) {
     const info = await active.sendMail({
       from,
       to,
-      subject: 'VoltZone POS Admin Login OTP',
+      subject: 'VoltZone POS Store Owner Login OTP',
       html: `<p>Your one-time password (OTP) is:</p><p style="font-size:22px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in 5 minutes. If you did not request it, ignore this email.</p>`
     });
     const preview = nodemailer.getTestMessageUrl(info) || undefined;

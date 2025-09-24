@@ -1,5 +1,6 @@
 import jwt, { Secret, SignOptions } from 'jsonwebtoken';
 import { IUser } from '../models/User.model';
+import { toCanonicalRole } from '../utils/roles';
 
 interface TokenPayload {
   userId: string;
@@ -19,7 +20,7 @@ export class JWTService {
   userId: String(user._id),
       username: user.username,
       email: user.email,
-      role: user.role,
+      role: (toCanonicalRole(user.role) || user.role) as string,
     };
 
     return jwt.sign(payload, this.ACCESS_TOKEN_SECRET, { expiresIn: this.ACCESS_TOKEN_EXPIRE });
@@ -30,7 +31,7 @@ export class JWTService {
   userId: String(user._id),
       username: user.username,
       email: user.email,
-      role: user.role,
+      role: (toCanonicalRole(user.role) || user.role) as string,
     };
 
     return jwt.sign(payload, this.REFRESH_TOKEN_SECRET, { expiresIn: this.REFRESH_TOKEN_EXPIRE });

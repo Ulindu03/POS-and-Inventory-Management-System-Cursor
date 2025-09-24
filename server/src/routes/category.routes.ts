@@ -11,10 +11,10 @@ router.get('/stats', authenticate, CategoryController.getStats);
 // Protected routes
 router.get('/:id', authenticate, CategoryController.getById);
 
-// Admin only routes
-router.post('/', authenticate, authorize('admin', 'sales_rep'), CategoryController.create);
-router.put('/:id', authenticate, authorize('admin', 'sales_rep'), CategoryController.update);
-router.delete('/:id', authenticate, authorize('admin'), CategoryController.delete);
+// Store Owner only routes
+router.post('/', authenticate, authorize('store_owner', 'sales_rep'), CategoryController.create);
+router.put('/:id', authenticate, authorize('store_owner', 'sales_rep'), CategoryController.update);
+router.delete('/:id', authenticate, authorize('store_owner'), CategoryController.delete);
 
 export default router;
 

@@ -6,7 +6,7 @@ export interface UserInput {
   password: string;
   firstName: string;
   lastName: string;
-  role?: 'admin' | 'cashier' | 'sales_rep';
+  role?: 'store_owner' | 'admin' | 'cashier' | 'sales_rep';
   language?: 'en' | 'si';
 }
 
@@ -23,7 +23,7 @@ export const usersApi = {
   setActive(id: string, isActive: boolean) {
     return client.patch(`/users/${id}/active`, { isActive });
   },
-  setRole(id: string, role: 'admin' | 'cashier' | 'sales_rep') {
+  setRole(id: string, role: 'store_owner' | 'admin' | 'cashier' | 'sales_rep') {
     return client.patch(`/users/${id}/role`, { role });
   },
   delete(id: string) {

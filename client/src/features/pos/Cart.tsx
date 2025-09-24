@@ -7,7 +7,7 @@ export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void;
   const { items, inc, dec, remove, subtotal, tax, total, discount, setDiscount } = useCartStore();
   const totalAmount = total();
   const role = useAuthStore((s) => s.user?.role);
-  const canDiscount = role === 'admin';
+  const canDiscount = role === 'admin' || role === 'store_owner';
 
   return (
     <div className="flex flex-col h-full min-h-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">

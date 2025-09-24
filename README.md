@@ -55,6 +55,15 @@ A modern, comprehensive POS (Point of Sale) system built with the MERN stack.
 docker-compose up -d
 ```
 
+### Demo Credentials (Dev Seed)
+
+When using the dev seeding endpoint (`GET /api/dev/seed-users` on the backend), the following demo users are created:
+
+- Store Owner: `owner` / `owner123`
+- Cashier: `cashier` / `cashier123`
+
+Use the Store Owner account for management actions.
+
 ## Project Structure
 ```
 voltzone-pos/
@@ -66,9 +75,9 @@ voltzone-pos/
 ## License
 © 2024 VoltZone. All rights reserved.
 
-## SMTP / Admin OTP Setup
+## SMTP / Store Owner OTP Setup
 
-Admin logins require an OTP which is emailed. Configure SMTP or use the dev fallback:
+Store Owner logins require an OTP which is emailed. Configure SMTP or use the dev fallback:
 
 1. Create a Gmail App Password (Google Account > Security > 2-Step Verification > App Passwords).
 2. Copy the generated 16-character password.
@@ -83,7 +92,7 @@ Admin logins require an OTP which is emailed. Configure SMTP or use the dev fall
    - `EMAIL_FROM=your_gmail_address`
 5. During development you can set `DEBUG_SHOW_OTP=true` to receive the OTP in the API response (never in production).
 6. Restart the server and GET `/api/auth/smtp-status` to verify: should show `configured:true` and `verify.ok:true`.
-7. Login as admin; response will include `emailSent:true` if mail dispatched.
+7. Login as store owner; response will include `emailSent:true` if mail dispatched.
 
 If SMTP isn’t configured you can still proceed using the dev OTP (shown only when debug flag is enabled).
 
@@ -119,6 +128,6 @@ The service now reads SMTP environment variables at the moment of each send (dyn
 ### Quick Checklist Before Opening an Issue
 - [ ] `/api/auth/smtp-status` shows `configured:true`.
 - [ ] `verify.ok:true`.
-- [ ] Admin login response includes `emailSent:true` (or `emailError` if failure).
+- [ ] Store Owner login response includes `emailSent:true` (or `emailError` if failure).
 - [ ] OTP mail appears in Gmail Inbox or Spam (check Spam folder!).
 - [ ] `DEBUG_SHOW_OTP` disabled in production.

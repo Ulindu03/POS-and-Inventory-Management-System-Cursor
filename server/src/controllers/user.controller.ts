@@ -72,7 +72,7 @@ export const setUserActive = async (req: AuthRequest, res: Response) => {
 export const setUserRole = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { role } = req.body as { role: 'admin' | 'cashier' | 'sales_rep' };
+    const { role } = req.body as { role: 'store_owner' | 'admin' | 'cashier' | 'sales_rep' };
     const user = await User.findByIdAndUpdate(id, { role }, { new: true })?.select('-password -refreshToken -resetPasswordToken -resetPasswordExpires');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     return res.json({ success: true, data: user });

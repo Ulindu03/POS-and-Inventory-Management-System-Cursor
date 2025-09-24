@@ -375,7 +375,7 @@ app.get('/api/dev/seed-users', async (_req, res) => {
       username: string,
       email: string,
       password: string,
-      role: 'admin' | 'cashier'
+  role: 'store_owner' | 'admin' | 'cashier'
     ) => {
       let user = await User.findOne({ username });
       if (!user) {
@@ -398,8 +398,8 @@ app.get('/api/dev/seed-users', async (_req, res) => {
       return user;
     };
 
-  // Seed both admin and cashier demo accounts
-  const admin = await ensureUser('admin', 'admin@voltzone.lk', 'admin123', 'admin');
+  // Seed both store owner and cashier demo accounts
+  const admin = await ensureUser('owner', 'owner@voltzone.lk', 'owner123', 'store_owner');
   const cashier = await ensureUser('cashier', 'cashier@voltzone.lk', 'cashier123', 'cashier');
 
     return res.json({
@@ -410,7 +410,7 @@ app.get('/api/dev/seed-users', async (_req, res) => {
         { username: cashier.username, role: cashier.role },
       ],
       credentials: {
-        admin: { username: 'admin', password: 'admin123' },
+        store_owner: { username: 'owner', password: 'owner123' },
         cashier: { username: 'cashier', password: 'cashier123' },
       },
     });

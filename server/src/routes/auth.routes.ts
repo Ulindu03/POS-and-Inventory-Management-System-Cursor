@@ -60,10 +60,13 @@ router.post('/register', validateRequest(authValidation?.register), AuthControll
  *       401:
  *         description: Invalid credentials
  */
-// Basic login and admin OTP flow
+// Basic login and admin/store-owner OTP flow
 router.post('/login', validateRequest(authValidation?.login), AuthController.login);
 router.post('/admin/login/init', AuthController.adminLoginInitiate);
 router.post('/admin/login/verify', AuthController.adminLoginVerify);
+// New canonical routes
+router.post('/store-owner/login/init', AuthController.adminLoginInitiate);
+router.post('/store-owner/login/verify', AuthController.adminLoginVerify);
 // Token utilities
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', AuthController.logout);

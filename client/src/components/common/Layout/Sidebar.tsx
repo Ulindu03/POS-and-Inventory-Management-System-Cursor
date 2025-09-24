@@ -8,30 +8,30 @@ import { useEffect } from 'react';
 
 // Define all navigation menu items with their permissions
 const menuItems = [
-  { icon: LayoutDashboard, imgSrc: '/dashboard.png', label: 'Dashboard', path: '/dashboard', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
-  { icon: ShoppingCart, imgSrc: '/POS.png', label: 'POS', path: '/pos', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  { icon: LayoutDashboard, imgSrc: '/dashboard.png', label: 'Dashboard', path: '/dashboard', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
+  { icon: ShoppingCart, imgSrc: '/POS.png', label: 'POS', path: '/pos', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
   // Inventory - view only access for cashier and sales_rep
-  { icon: Package, imgSrc: '/inventory.png', label: 'Inventory', path: '/inventory', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  { icon: Package, imgSrc: '/inventory.png', label: 'Inventory', path: '/inventory', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
   // Products - view only access for cashier and sales_rep
-  { icon: Package, imgSrc: '/product.png', label: 'Products', path: '/products', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
-  { icon: Users, imgSrc: '/customer.png', label: 'Customers', path: '/customers', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  { icon: Package, imgSrc: '/product.png', label: 'Products', path: '/products', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
+  { icon: Users, imgSrc: '/customer.png', label: 'Customers', path: '/customers', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
   // Suppliers - no access for cashier and sales_rep
-  { icon: Truck, imgSrc: '/supplier.png', label: 'Suppliers', path: '/suppliers', allowedRoles: ['admin'] },
+  { icon: Truck, imgSrc: '/supplier.png', label: 'Suppliers', path: '/suppliers', allowedRoles: ['store_owner'] },
   // Reports - own sales reports only for cashier and sales_rep
-  { icon: FileText, imgSrc: '/report.png', label: 'Reports', path: '/reports', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  { icon: FileText, imgSrc: '/report.png', label: 'Reports', path: '/reports', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
   // Analytics - no access for cashier and sales_rep
-  { icon: BarChart3, imgSrc: '/analytics.png', label: 'Analytics', path: '/analytics', allowedRoles: ['admin'] },
+  { icon: BarChart3, imgSrc: '/analytics.png', label: 'Analytics', path: '/analytics', allowedRoles: ['store_owner'] },
   // Deliveries - can mark as completed for cashier and sales_rep
-  { icon: Route, imgSrc: '/deliveries.png', label: 'Deliveries', path: '/deliveries', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  { icon: Route, imgSrc: '/deliveries.png', label: 'Deliveries', path: '/deliveries', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
   // Damages - can record damaged items for cashier and sales_rep
-  { icon: AlertTriangle, imgSrc: '/damages.png', label: 'Damages', path: '/damages', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  { icon: AlertTriangle, imgSrc: '/damages.png', label: 'Damages', path: '/damages', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
   // Warranty - can accept warranty claims for cashier and sales_rep
-  { icon: FileText, imgSrc: '/warranty.png', label: 'Warranty', path: '/warranty', allowedRoles: ['admin', 'cashier', 'sales_rep'] },
+  { icon: FileText, imgSrc: '/warranty.png', label: 'Warranty', path: '/warranty', allowedRoles: ['store_owner', 'cashier', 'sales_rep'] },
   // Returns - can process customer returns for cashier and sales_rep
-  { icon: FileText, imgSrc: '/returns.svg', label: 'Returns', path: '/returns', allowedRoles: ['admin', 'cashier', 'sales_rep', 'manager'] },
+  { icon: FileText, imgSrc: '/returns.svg', label: 'Returns', path: '/returns', allowedRoles: ['store_owner', 'cashier', 'sales_rep', 'manager'] },
   // Only admin can see Users and Settings panels
-  { icon: Users, imgSrc: '/user.png', label: 'Users', path: '/users', allowedRoles: ['admin'] },
-  { icon: SettingsIcon, imgSrc: '/settings.png', label: 'Settings', path: '/settings', allowedRoles: ['admin'] },
+  { icon: Users, imgSrc: '/user.png', label: 'Users', path: '/users', allowedRoles: ['store_owner'] },
+  { icon: SettingsIcon, imgSrc: '/settings.png', label: 'Settings', path: '/settings', allowedRoles: ['store_owner'] },
 ];
 
 export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
@@ -64,7 +64,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
 
   return (
     <>
-      {/* Dark overlay that appears when sidebar is open */}
+      {/* Mobile overlay and sliding sidebar */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -79,14 +79,14 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
         )}
       </AnimatePresence>
 
-      {/* Main sidebar panel that slides in from the left */}
+      {/* Drawer: animated sidebar on all viewports */}
       <motion.aside
         key="sidebar-panel"
         className="fixed left-0 top-0 bottom-0 z-50 w-56 lg:w-64 bg-black/30 backdrop-blur-xl border-r border-white/10 text-[#F8F8F8] flex flex-col"
         initial={false}
         animate={{ x: open ? 0 : -300, opacity: open ? 1 : 0.6 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-  aria-label="Navigation"
+        aria-label="Navigation"
       >
       {/* Company logo and branding section */}
       <motion.div className="px-5 py-6 border-b border-white/10" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>

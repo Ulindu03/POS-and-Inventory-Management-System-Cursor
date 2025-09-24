@@ -8,40 +8,40 @@ const router = Router();
 router.use(authenticate);
 
 // Sales lookup for returns (cashiers, sales reps, managers, admins)
-router.post('/lookup', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.lookupSales);
+router.post('/lookup', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.lookupSales);
 
 // Validate return before processing
-router.post('/validate', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.validateReturn);
+router.post('/validate', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.validateReturn);
 
 // Process returns (sales reps, managers, admins, cashiers)
-router.post('/', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.processReturn);
+router.post('/', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.processReturn);
 
 // List and view returns
-router.get('/', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.list);
-router.get('/:id', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.getById);
+router.get('/', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.list);
+router.get('/:id', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.getById);
 
 // Approve pending returns (managers and admins only)
-router.post('/:id/approve', authorize('admin', 'manager'), ReturnController.approve);
+router.post('/:id/approve', authorize('store_owner', 'manager'), ReturnController.approve);
 
 // Exchange slip operations
-router.post('/exchange-slip/redeem', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.redeemExchangeSlip);
-router.get('/exchange-slip/:slipNo', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.getExchangeSlip);
+router.post('/exchange-slip/redeem', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.redeemExchangeSlip);
+router.get('/exchange-slip/:slipNo', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.getExchangeSlip);
 
 // Customer overpayment operations
-router.get('/customer/:customerId/overpayments', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.getCustomerOverpayments);
-router.post('/overpayment/use', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.useOverpayment);
+router.get('/customer/:customerId/overpayments', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.getCustomerOverpayments);
+router.post('/overpayment/use', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.useOverpayment);
 
 // Customer return history
-router.get('/customer/:customerId/history', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.getCustomerHistory);
+router.get('/customer/:customerId/history', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.getCustomerHistory);
 
 // Analytics and reporting
-router.get('/analytics', authorize('admin', 'manager'), ReturnController.getAnalytics);
+router.get('/analytics', authorize('store_owner', 'manager'), ReturnController.getAnalytics);
 
 // Return policy management (admins only)
-router.post('/policies', authorize('admin'), ReturnController.createPolicy);
-router.get('/policies', authorize('admin', 'manager', 'sales_rep', 'cashier'), ReturnController.getPolicies);
+router.post('/policies', authorize('store_owner'), ReturnController.createPolicy);
+router.get('/policies', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.getPolicies);
 
 // Legacy route for backward compatibility
-router.post('/legacy', authorize('admin', 'sales_rep'), ReturnController.create);
+router.post('/legacy', authorize('store_owner', 'sales_rep'), ReturnController.create);
 
 export default router;

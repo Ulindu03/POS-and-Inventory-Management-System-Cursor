@@ -4,9 +4,9 @@ import { PromotionController } from '../controllers/promotion.controller';
 
 const router = Router();
 
-router.get('/', authenticate, authorize('admin'), PromotionController.list);
-router.post('/', authenticate, authorize('admin'), PromotionController.create);
-router.put('/:id', authenticate, authorize('admin'), PromotionController.update);
-router.post('/:id/toggle', authenticate, authorize('admin'), PromotionController.toggle);
+router.get('/', authenticate, authorize('store_owner'), PromotionController.list);
+router.post('/', authenticate, authorize('store_owner'), PromotionController.create);
+router.put('/:id', authenticate, authorize('store_owner'), PromotionController.update);
+router.post('/:id/toggle', authenticate, authorize('store_owner'), PromotionController.toggle);
 
 export default router;

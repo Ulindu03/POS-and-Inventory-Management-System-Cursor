@@ -16,14 +16,14 @@ const router = express.Router();
 router.use(authenticate);
 
 // Supplier CRUD operations
-router.get('/', authorize('admin', 'sales_rep'), getSuppliers);
-router.get('/stats', authorize('admin', 'sales_rep'), getSupplierStats);
-router.get('/:id', authorize('admin', 'sales_rep'), getSupplierById);
-router.post('/', authorize('admin', 'sales_rep'), createSupplier);
-router.put('/:id', authorize('admin', 'sales_rep'), updateSupplier);
-router.delete('/:id', authorize('admin'), deleteSupplier);
+router.get('/', authorize('store_owner', 'sales_rep'), getSuppliers);
+router.get('/stats', authorize('store_owner', 'sales_rep'), getSupplierStats);
+router.get('/:id', authorize('store_owner', 'sales_rep'), getSupplierById);
+router.post('/', authorize('store_owner', 'sales_rep'), createSupplier);
+router.put('/:id', authorize('store_owner', 'sales_rep'), updateSupplier);
+router.delete('/:id', authorize('store_owner'), deleteSupplier);
 
 // Supplier performance management
-router.patch('/:id/performance', authorize('admin', 'sales_rep'), updateSupplierPerformance);
+router.patch('/:id/performance', authorize('store_owner', 'sales_rep'), updateSupplierPerformance);
 
 export default router;

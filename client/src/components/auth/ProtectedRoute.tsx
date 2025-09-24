@@ -27,7 +27,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredRoles && role && !requiredRoles.includes(role)) {
+  const normalizeRole = (r?: string | null) => {
+    if (!r) return undefined;
+    const v = String(r).toLowerCase();
+    if (v === 'admin' || v === 'store_owner') return 'store_owner';
+    return v;
+  };
+  const normalizeList = (arr?: string[]) => arr?.map((r) => (String(r).toLowerCase() === 'admin' ? 'store_owner' : String(r).toLowerCase()));
+
+  const userRole = normalizeRole(role);
+  const allow = normalizeList(requiredRoles);
+
+  if (allow && userRole && !allow.includes(userRole)) {
     // Logged in but lacks permission: send to dashboard.
     return <Navigate to="/dashboard" replace />;
   }

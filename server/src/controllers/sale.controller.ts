@@ -181,8 +181,8 @@ export class SaleController {
         }
       }
       let discountAmount = Number(discount) || 0;
-      // Enforce role-based discount permission: only admin can apply manual discount
-      if ((discountAmount || 0) > 0 && req.user?.role !== 'admin') {
+      // Enforce role-based discount permission: only store owner can apply manual discount
+      if ((discountAmount || 0) > 0 && !(['store_owner','admin'].includes(String(req.user?.role).toLowerCase()))) {
         return res.status(403).json({ success: false, message: 'Forbidden: discount not allowed for your role' });
       }
       if (discountCode) {
@@ -563,9 +563,9 @@ export class SaleController {
   static async refund(req: Request & { user?: any }, res: Response, next: NextFunction) {
     try {
       const { id } = req.params as { id: string };
-      // Role check: admin, manager, sales_rep allowed, cashier denied
+      // Role check: store_owner, manager, sales_rep allowed, cashier denied
       const role = req.user?.role;
-      if (!['admin', 'manager', 'sales_rep'].includes(role)) {
+      if (!['store_owner', 'admin', 'manager', 'sales_rep'].includes(String(role).toLowerCase())) {
         return res.status(403).json({ success: false, message: 'Forbidden: returns not allowed for your role' });
       }
       

@@ -16,6 +16,7 @@ import {
   type Customer,
   type Purchase
 } from '@/lib/api/customers.api';
+import { deleteCustomer } from '@/lib/api/customers.api';
 
 
 
@@ -291,7 +292,6 @@ const handleDeleteCustomer = async (customer: Customer) => {
   const ok = window.confirm(`Delete customer ${customer.name} (${customer.customerCode})?`);
   if (!ok) return;
   try {
-    const { deleteCustomer } = await import('@/lib/api/customers.api');
     await deleteCustomer(customer._id);
     setCustomers(prev => prev.filter(c => c._id !== customer._id));
   } catch (e: any) {

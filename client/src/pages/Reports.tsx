@@ -40,7 +40,7 @@ const Reports = () => {
 
   const { t } = useTranslation();
   const userRole = useAuthStore((s) => s.user?.role);
-  const isAdmin = userRole === 'admin';
+  const isAdmin = (userRole === 'admin' || userRole === 'store_owner');
 
   // Filter reports based on user role - only sales reports for cashier and sales_rep
   const allReportCards: ReportCard[] = [

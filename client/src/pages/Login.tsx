@@ -1,4 +1,4 @@
-// Login page with optional admin OTP step.
+// Login page with optional store owner OTP step.
 // It shows a form, sends credentials to the store, and navigates to dashboard on success.
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -365,7 +365,7 @@ const LoginPage = () => {
         setEmailSent(res.emailSent ?? null);
         setEmailError(res.emailError || null);
         setEmailPreviewUrl(res.emailPreviewUrl || null);
-        toast.success(res.emailSent ? '🔐 OTP sent to admin email' : '🔐 OTP generated (email not sent)', {
+  toast.success(res.emailSent ? '🔐 OTP sent to store owner email' : '🔐 OTP generated (email not sent)', {
           description: res.emailSent ? 'Check your email for the 6-digit verification code' : 'Use the development OTP to proceed',
           duration: 5000,
         });
@@ -553,7 +553,7 @@ const LoginPage = () => {
                     <form onSubmit={handleOtpVerify} className="space-y-5">
                       <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8F8F8' }}>Two-Factor Authentication</h2>
                       <p className="text-sm mb-6" style={{ color: '#F8F8F8B3' }}>
-                        {emailSent ? 'We\'ve sent a 6-digit code to your admin email' : 'Development mode: OTP generated locally'}
+                        {emailSent ? 'We\'ve sent a 6-digit code to your store owner email' : 'Development mode: OTP generated locally'}
                       </p>
 
                       {/* Status Messages */}

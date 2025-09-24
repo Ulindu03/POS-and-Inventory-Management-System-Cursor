@@ -50,7 +50,7 @@ function App() {
 					<Route
 						path="/warranty"
 						element={
-							<ProtectedRoute requiredRoles={['admin','cashier','sales_rep']}>
+							<ProtectedRoute requiredRoles={['store_owner','cashier','sales_rep']}>
 								<WarrantyPage />
 							</ProtectedRoute>
 						}
@@ -58,7 +58,7 @@ function App() {
 					<Route
 						path="/damages"
 						element={
-							<ProtectedRoute requiredRoles={['admin', 'cashier', 'sales_rep']}>
+							<ProtectedRoute requiredRoles={['store_owner', 'cashier', 'sales_rep']}>
 								<DamagesPage />
 							</ProtectedRoute>
 						}
@@ -74,7 +74,7 @@ function App() {
 					<Route
 						path="/users"
 						element={
-							<ProtectedRoute requiredRoles={['admin']}>
+							<ProtectedRoute requiredRoles={['store_owner']}>
 								<UsersPage />
 							</ProtectedRoute>
 						}
@@ -82,7 +82,7 @@ function App() {
 					<Route
 						path="/settings"
 						element={
-							<ProtectedRoute requiredRoles={['admin']}>
+							<ProtectedRoute requiredRoles={['store_owner']}>
 								<SettingsPage />
 							</ProtectedRoute>
 						}
@@ -90,7 +90,7 @@ function App() {
 					<Route
 						path="/deliveries"
 						element={
-							<ProtectedRoute requiredRoles={['admin', 'cashier', 'sales_rep']}>
+							<ProtectedRoute requiredRoles={['store_owner', 'cashier', 'sales_rep']}>
 								<DeliveriesPage />
 							</ProtectedRoute>
 						}
@@ -106,7 +106,7 @@ function App() {
 					<Route
 						path="/pos"
 						element={
-							<ProtectedRoute requiredRoles={["admin","cashier","sales_rep"]}>
+							<ProtectedRoute requiredRoles={["store_owner","cashier","sales_rep"]}>
 								<Pos />
 							</ProtectedRoute>
 						}
@@ -114,7 +114,7 @@ function App() {
 					<Route
 						path="/sales"
 						element={
-							<ProtectedRoute requiredRoles={["admin","cashier","sales_rep"]}>
+							<ProtectedRoute requiredRoles={["store_owner","cashier","sales_rep"]}>
 								<Sales />
 							</ProtectedRoute>
 						}
@@ -122,7 +122,7 @@ function App() {
 					<Route
 						path="/customers"
 						element={
-							<ProtectedRoute requiredRoles={["admin","sales_rep","cashier"]}>
+							<ProtectedRoute requiredRoles={["store_owner","sales_rep","cashier"]}>
 								<Customers />
 							</ProtectedRoute>
 						}
@@ -130,7 +130,7 @@ function App() {
 					<Route
 						path="/inventory"
 						element={
-							<ProtectedRoute requiredRoles={["admin", "cashier", "sales_rep"]}>
+							<ProtectedRoute requiredRoles={["store_owner", "cashier", "sales_rep"]}>
 								<Inventory />
 							</ProtectedRoute>
 						}
@@ -138,7 +138,7 @@ function App() {
 					<Route
 						path="/suppliers"
 						element={
-							<ProtectedRoute requiredRoles={["admin"]}>
+							<ProtectedRoute requiredRoles={["store_owner"]}>
 								<Suppliers />
 							</ProtectedRoute>
 						}
@@ -146,7 +146,7 @@ function App() {
 					<Route
 						path="/purchase-orders"
 						element={
-							<ProtectedRoute requiredRoles={["admin"]}>
+							<ProtectedRoute requiredRoles={["store_owner"]}>
 								<PurchaseOrders />
 							</ProtectedRoute>
 						}
@@ -154,7 +154,7 @@ function App() {
 					<Route
 						path="/reports"
 						element={
-							<ProtectedRoute requiredRoles={["admin", "cashier", "sales_rep"]}>
+							<ProtectedRoute requiredRoles={["store_owner", "cashier", "sales_rep"]}>
 								<Reports />
 							</ProtectedRoute>
 						}
@@ -162,7 +162,7 @@ function App() {
 					<Route
 						path="/products"
 						element={
-							<ProtectedRoute requiredRoles={["admin", "cashier", "sales_rep"]}>
+							<ProtectedRoute requiredRoles={["store_owner", "cashier", "sales_rep"]}>
 								<Products />
 							</ProtectedRoute>
 						}
@@ -170,7 +170,7 @@ function App() {
 					<Route
 						path="/analytics"
 						element={
-							<ProtectedRoute requiredRoles={["admin"]}>
+							<ProtectedRoute requiredRoles={["store_owner"]}>
 								<Analytics />
 							</ProtectedRoute>
 						}
@@ -178,7 +178,7 @@ function App() {
 					<Route
 						path="/returns"
 						element={
-							<ProtectedRoute requiredRoles={["admin","manager","cashier","sales_rep"]}>
+							<ProtectedRoute requiredRoles={["store_owner","manager","cashier","sales_rep"]}>
 								<ReturnsPage />
 							</ProtectedRoute>
 						}

@@ -13,6 +13,7 @@
     "lint": "eslint . --ext .ts",
   "format": "prettier --write \"src/**/*.ts\"",
   "check": "npx tsx --version && npx nodemon --version",
+  "migrate:roles": "npx tsx src/scripts/migrateAdminToStoreOwner.ts",
   "script:backfill:canonicalPhone": "npx tsx src/scripts/backfillCanonicalPhone.ts",
   "script:debug:customers": "npx tsx src/scripts/debugCustomers.ts"
   },

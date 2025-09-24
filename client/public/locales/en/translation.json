@@ -6,7 +6,8 @@
     "logout": "Logout",
     "dashboard": "Dashboard",
     "loading": "Loading...",
-    "currency": "LKR"
+    "currency": "LKR",
+    "selected": "Selected"
   },
   "auth": {
     "title": "VoltZone POS System",
@@ -30,7 +31,7 @@
     "fillFields": "Please fill in all fields",
     "sending": "Sending...",
     "demo": "Demo Credentials",
-    "admin": "Admin",
+  "admin": "Store Owner",
     "cashier": "Cashier"
   },
   "users": {
@@ -68,9 +69,13 @@
     "deleteFailed": "Delete failed",
     "activate": "Activate",
     "deactivate": "Deactivate",
-    "role_admin": "Admin",
+    "role_store_owner": "Store Owner",
+    "role_store_owner_desc": "Full access to all settings and data",
+    "role_admin": "Store Owner",
     "role_cashier": "Cashier",
-    "role_sales_rep": "Sales Rep"
+    "role_cashier_desc": "Perform sales and apply discounts; limited access",
+    "role_sales_rep": "Sales Rep",
+    "role_sales_rep_desc": "Customer interactions and sales; no settings access"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -169,7 +174,7 @@
   },
   "authExtra": {
     "enterOtp": "Enter OTP",
-    "otpInstructionEmail": "A 6-digit code was sent to the admin email. It expires in 5 minutes.",
+  "otpInstructionEmail": "A 6-digit code was sent to the store owner email. It expires in 5 minutes.",
     "otpInstructionNoEmail": "Email not sent (SMTP not configured). Use the OTP code to proceed.",
     "otpCodeLabel": "OTP Code",
     "resend": "Resend",
@@ -183,7 +188,7 @@
   "authReauth": {
     "passwordGate": "Re-authentication required to access dashboard.",
     "getOtp": "Get OTP",
-    "enterOtp": "Enter the OTP sent to admin email.",
+  "enterOtp": "Enter the OTP sent to the store owner email.",
     "invalidPassword": "Invalid password",
     "invalidOtp": "Invalid OTP",
     "logout": "Logout"
