@@ -51,6 +51,18 @@ export const authApi = {
   return response.data;
   },
 
+  // Two-step reset: send OTP to email
+  resetInit: async (identifier: { email?: string; username?: string }) => {
+    const response = await axios.post('/auth/password-reset/init', identifier);
+    return response.data;
+  },
+
+  // Verify reset OTP which will trigger reset link email
+  resetVerify: async (data: { email?: string; username?: string; otp: string }) => {
+    const response = await axios.post('/auth/password-reset/verify', data);
+    return response.data;
+  },
+
   resetPassword: async (token: string, password: string) => {
     const response = await axios.post(`/auth/reset-password/${token}`, { password });
   return response.data;
@@ -69,17 +81,17 @@ export const authApi = {
   },
   // Admin login step 1: request that an OTP be sent/created
   adminLoginInit: async (credentials: { username: string; password: string; rememberMe?: boolean }) => {
-    // Prefer new canonical route; server keeps admin alias for BC
-    const res = await axios.post('/auth/store-owner/login/init', credentials).catch(async () => {
-      return axios.post('/auth/admin/login/init', credentials);
-    });
+    // Prefer new generalized route; server keeps legacy aliases for BC
+    const res = await axios.post('/auth/otp-login/init', credentials)
+      .catch(async () => axios.post('/auth/store-owner/login/init', credentials))
+      .catch(async () => axios.post('/auth/admin/login/init', credentials));
     return (res.data as any);
   },
   // Admin login step 2: verify the OTP; server returns tokens and user
   adminLoginVerify: async (data: { username: string; otp: string; rememberMe?: boolean }) => {
-    const res = await axios.post('/auth/store-owner/login/verify', data).catch(async () => {
-      return axios.post('/auth/admin/login/verify', data);
-    });
+    const res = await axios.post('/auth/otp-login/verify', data)
+      .catch(async () => axios.post('/auth/store-owner/login/verify', data))
+      .catch(async () => axios.post('/auth/admin/login/verify', data));
     const payload = (res.data as any)?.data || {};
     const { accessToken, refreshToken } = payload;
     if (accessToken) setAccessToken(accessToken);

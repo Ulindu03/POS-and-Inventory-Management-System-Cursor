@@ -13,9 +13,13 @@ export interface IUser extends Document {
 	language: 'en' | 'si';
 	isActive: boolean;
 	lastLogin?: Date;
+	passwordUpdatedAt?: Date;
 	refreshToken?: string | null;
 	resetPasswordToken?: string;
 	resetPasswordExpires?: Date;
+	resetOtpCode?: string;
+	resetOtpExpires?: Date;
+	resetOtpAttempts?: number;
 	twoFactorEnabled?: boolean;
 	permissions: string[];
 	otpCode?: string;
@@ -77,6 +81,9 @@ const userSchema = new Schema<IUser>({
 	lastLogin: {
 		type: Date
 	},
+	passwordUpdatedAt: {
+		type: Date
+	},
 	refreshToken: {
 		type: String,
 		default: null
@@ -103,7 +110,10 @@ const userSchema = new Schema<IUser>({
 	},
 	resetPasswordExpires: {
 		type: Date
-	}
+	},
+	resetOtpCode: { type: String },
+	resetOtpExpires: { type: Date },
+	resetOtpAttempts: { type: Number, default: 0 }
 }, {
 	timestamps: true
 });

@@ -23,6 +23,7 @@ import DamagesPage from './pages/Damages';
 import WarrantyPage from './pages/Warranty';
 import ReturnsPage from './pages/ReturnsPageNew';
 import GlobalToasts from '@/components/ui/toasts/GlobalToasts';
+import ResetPasswordPage from './pages/ResetPassword';
 
 function App() {
 	// Pull actions/state from auth store
@@ -45,6 +46,7 @@ function App() {
 				<Routes>
 					{/* Public routes */}
 					<Route path="/login" element={<LoginPage />} />
+						<Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 					<Route path="/" element={<LoginPage />} /> {/* Default to login */}
 					{/* Protected routes. Only render if logged in. Some require specific roles. */}
 					<Route

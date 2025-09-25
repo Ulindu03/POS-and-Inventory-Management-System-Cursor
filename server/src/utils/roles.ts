@@ -21,3 +21,9 @@ export function normalizeAllowedRoles(roles: string[] | undefined): string[] | u
   // Map any 'admin' occurrences to 'store_owner' while keeping others unchanged
   return roles.map(r => (String(r).toLowerCase() === 'admin' ? ROLE_STORE_OWNER : String(r).toLowerCase()));
 }
+
+// Define which roles require OTP during login.
+export function requiresOtpForLogin(role: string | undefined | null): boolean {
+  const r = toCanonicalRole(role);
+  return r === 'store_owner' || r === 'cashier' || r === 'sales_rep';
+}

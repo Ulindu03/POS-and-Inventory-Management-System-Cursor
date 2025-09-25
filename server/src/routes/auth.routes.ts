@@ -60,13 +60,13 @@ router.post('/register', validateRequest(authValidation?.register), AuthControll
  *       401:
  *         description: Invalid credentials
  */
-// Basic login and admin/store-owner OTP flow
+// Basic login and OTP flow (store owner, cashier, sales rep)
 router.post('/login', validateRequest(authValidation?.login), AuthController.login);
 router.post('/admin/login/init', AuthController.adminLoginInitiate);
 router.post('/admin/login/verify', AuthController.adminLoginVerify);
-// New canonical routes
-router.post('/store-owner/login/init', AuthController.adminLoginInitiate);
-router.post('/store-owner/login/verify', AuthController.adminLoginVerify);
+// New canonical routes (generalized)
+router.post('/otp-login/init', AuthController.adminLoginInitiate);
+router.post('/otp-login/verify', AuthController.adminLoginVerify);
 // Token utilities
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', AuthController.logout);
@@ -106,6 +106,10 @@ router.post('/smtp-reload', async (_req, res) => {
  *         description: User not found
  */
 router.post('/forgot-password', validateRequest(authValidation?.forgotPassword), AuthController.forgotPassword);
+
+// Two-step reset: send OTP to email, then verify to send reset link
+router.post('/password-reset/init', AuthController.passwordResetInit);
+router.post('/password-reset/verify', AuthController.passwordResetVerify);
 
 /**
  * @swagger

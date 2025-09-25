@@ -212,23 +212,67 @@ type ForgotFormProps = {
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
+  resetOtpPhase: 'idle' | 'otp';
+  resetOtp: string;
+  setResetOtp: (v: string) => void;
+  resetResendCooldown: number;
+  onResend: () => Promise<void> | void;
 };
 
-const ForgotView = ({ t, formData, handleInputChange, handleSubmit, isLoading }: ForgotFormProps) => (
+const ForgotView = ({ t, formData, handleInputChange, handleSubmit, isLoading, resetOtpPhase, resetOtp, setResetOtp, resetResendCooldown, onResend }: ForgotFormProps) => (
   <>
     <h2 className="text-2xl font-bold text-white mb-2">{t.forgotTitle}</h2>
-    <p className="text-purple-200 text-sm mb-6">{t.forgotDescription}</p>
+    <p className="text-purple-200 text-sm mb-6">
+      {resetOtpPhase === 'otp' ? t.resetOtpInstruction : t.forgotDescription}
+    </p>
     <form onSubmit={handleSubmit} className="space-y-5">
       <motion.div initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.4 }}>
         <label className="block text-sm font-medium text-purple-200 mb-2">{t.email}</label>
         <div className="relative">
           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" color="#000000" />
-          <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black" style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }} placeholder="you@example.com" autoComplete="email" />
+          <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black" style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }} placeholder="you@example.com" autoComplete="email" disabled={resetOtpPhase === 'otp'} />
         </div>
       </motion.div>
+
+      {resetOtpPhase === 'otp' && (
+        <motion.div initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.45 }}>
+          <label className="block text-sm font-medium text-purple-200 mb-2">Verification Code</label>
+          <div className="relative">
+            <input
+              type="text"
+              value={resetOtp}
+              onChange={(e) => setResetOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
+              className="w-full pl-4 pr-28 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black"
+              style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }}
+              placeholder="123456"
+              inputMode="numeric"
+              maxLength={6}
+            />
+            <button
+              type="button"
+              disabled={isLoading || resetResendCooldown > 0}
+              onClick={() => onResend()}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium px-3 py-1 rounded-lg shadow-md transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: resetResendCooldown > 0 
+                  ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                  : 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)',
+                color: '#F8F8F8',
+                border: '1px solid rgba(255,225,0,0.25)'
+              }}
+            >
+              {resetResendCooldown > 0 ? `Wait ${resetResendCooldown}s` : 'Resend'}
+            </button>
+          </div>
+        </motion.div>
+      )}
       <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.5 }}>
-        <button type="submit" disabled={isLoading} className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2">
-          {isLoading ? (<><Loader2 className="w-5 h-5 animate-spin" /> Sending...</>) : (<><span>{t.sendResetLink}</span><Mail className="w-5 h-5" /></>)}
+        <button type="submit" disabled={isLoading || (resetOtpPhase === 'otp' && resetOtp.length !== 6)} className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2">
+          {isLoading ? (
+            <><Loader2 className="w-5 h-5 animate-spin" /> {resetOtpPhase === 'otp' ? 'Verifying...' : 'Sending...'} </>
+          ) : (
+            <><span>{resetOtpPhase === 'otp' ? 'Verify & Send Reset Link' : t.sendResetLink}</span><Mail className="w-5 h-5" /></>
+          )}
         </button>
       </motion.div>
     </form>
@@ -257,6 +301,14 @@ function buildText(language: 'en' | 'si') {
       loginSuccess: 'Login successful! Redirecting...',
   loginError: 'Invalid username or password',
   fillFields: 'Please fill in all fields',
+      // Reset OTP specific
+      resetOtpInstruction: 'Enter the 6-digit code we sent to your email. After verifying, we\'ll email you a reset link.',
+      resetOtpCodeSent: 'Verification code sent to your email',
+      verifyAndSendReset: 'Verify & Send Reset Link',
+      enterSixDigitCode: 'Enter the 6-digit code',
+      invalidOrExpiredCode: 'Invalid or expired code',
+      couldNotStartReset: 'Could not start reset',
+      resend: 'Resend'
     },
     si: {
       title: 'VoltZone POS පද්ධතිය',
@@ -277,6 +329,14 @@ function buildText(language: 'en' | 'si') {
       loginSuccess: 'සාර්ථකව පිවිසුණි! යොමු කරමින්...',
   loginError: 'වැරදි පරිශීලක නාමය හෝ මුරපදය',
   fillFields: 'කරුණාකර සියලුම ක්ෂේත්‍ර පුරවන්න',
+      // Reset OTP specific
+      resetOtpInstruction: 'ඔබගේ ඊමේල් වෙත යැවූ අංක 6ක කේතය ඇතුළත් කරන්න. තහවුරු කළ පසු, යළි සැකසීමේ සබඳිය ඊමේල් මගින් යවනු ඇත.',
+      resetOtpCodeSent: 'තහවුරු කිරීමේ කේතය ඔබගේ ඊමේල් වෙත යවා ඇත',
+      verifyAndSendReset: 'තහවුරු කර සබඳිය යවන්න',
+      enterSixDigitCode: 'අංක 6ක කේතය ඇතුළත් කරන්න',
+      invalidOrExpiredCode: 'වැරදි හෝ කල් ඉකුත් වූ කේතය',
+      couldNotStartReset: 'යළි සැකසීම ආරම්භ කළ නොහැක',
+      resend: 'යළි යවන්න'
     }
   } as const;
   return map[language];
@@ -297,6 +357,34 @@ const LoginPage = () => {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Reset OTP step state
+  const [resetOtpPhase, setResetOtpPhase] = useState<'idle' | 'otp'>('idle');
+  const [resetOtp, setResetOtp] = useState('');
+  const [resetResendCooldown, setResetResendCooldown] = useState(0);
+  useEffect(() => {
+    if (!resetResendCooldown) return;
+    const id = setInterval(() => setResetResendCooldown(c => (c > 0 ? c - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [resetResendCooldown]);
+
+  const handleResetResend = async () => {
+    if (!formData.email) { toast.error(t.fillFields); return; }
+    try {
+      setIsLoading(true);
+      const res = await authApi.resetInit({ email: formData.email });
+      const preview = res?.data?.emailPreviewUrl || res?.data?.preview;
+      setResetResendCooldown(60);
+      toast.success(t.resetOtpCodeSent);
+      if (preview) {
+        console.log('Reset OTP preview:', preview);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not resend code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);                 // action to login with username/password
@@ -350,8 +438,49 @@ const LoginPage = () => {
     e.preventDefault();
     if (currentView === 'forgot') {
       if (!formData.email) { toast.error(t.fillFields); return; }
+      // If we're in OTP phase, verify the OTP which will send the reset link
+      if (resetOtpPhase === 'otp') {
+        if (!resetOtp || resetOtp.length !== 6) { toast.error(t.enterSixDigitCode); return; }
+        setIsLoading(true);
+        try {
+          const result = await authApi.resetVerify({ email: formData.email, otp: resetOtp });
+          toast.success(result?.message || t.resetSent);
+          setCurrentView('login');
+          setResetOtpPhase('idle');
+          setResetOtp('');
+        } catch (err:any) {
+          console.error(err);
+          toast.error(err?.response?.data?.message || t.invalidOrExpiredCode);
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
+      // Phase 1: request OTP to be sent
       setIsLoading(true);
-      setTimeout(() => { setIsLoading(false); toast.success(t.resetSent); setCurrentView('login'); }, 1500);
+      try {
+        const res = await authApi.resetInit({ email: formData.email });
+        const emailPreview = res?.data?.emailPreviewUrl || res?.data?.preview;
+        setResetOtpPhase('otp');
+        setResetResendCooldown(60);
+        toast.success(t.resetOtpCodeSent);
+        if (emailPreview) {
+          // Dev helper
+          console.log('Reset OTP preview:', emailPreview);
+        }
+      } catch (err:any) {
+        console.error(err);
+        // Fallback to the old direct reset link flow if backend doesn't support OTP
+        try {
+          const res = await authApi.forgotPassword(formData.email);
+          toast.success(t.resetSent);
+          setCurrentView('login');
+        } catch (e:any) {
+          toast.error(err?.response?.data?.message || t.couldNotStartReset);
+        }
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
     if (otpRequired) return; // If we are on the OTP step, ignore the login form submit
@@ -398,6 +527,13 @@ const LoginPage = () => {
     const id = setInterval(() => setResendCooldown(c => (c > 0 ? c - 1 : 0)), 1000);
     return () => clearInterval(id);
   }, [resendCooldown]);
+
+  // Reset OTP resend cooldown timer
+  useEffect(() => {
+    if (!resetResendCooldown) return;
+    const id = setInterval(() => setResetResendCooldown(c => (c > 0 ? c - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [resetResendCooldown]);
 
   // Submit the OTP for admin login
   const handleOtpVerify = async (e: React.FormEvent) => {
@@ -713,6 +849,23 @@ const LoginPage = () => {
                     handleInputChange={handleInputChange}
                     handleSubmit={handleSubmit}
                     isLoading={isLoading}
+                    resetOtpPhase={resetOtpPhase}
+                    resetOtp={resetOtp}
+                    setResetOtp={setResetOtp}
+                    resetResendCooldown={resetResendCooldown}
+                    onResend={async () => {
+                      if (resetResendCooldown > 0) return;
+                      try {
+                        setIsLoading(true);
+                        await authApi.resetInit({ email: formData.email });
+                        setResetResendCooldown(60);
+                        toast.success('Code resent');
+                      } catch (e:any) {
+                        toast.error(e?.response?.data?.message || 'Could not resend code');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
                   />
                 </motion.div>
               )}

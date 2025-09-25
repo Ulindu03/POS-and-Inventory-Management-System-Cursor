@@ -3,10 +3,80 @@ import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/User.model';
 import { JWTService } from '../services/jwt.service';
 import crypto from 'crypto';
-import { sendPasswordResetEmail, sendOtpEmail } from '../services/email.service';
-import { isStoreOwner, toCanonicalRole } from '../utils/roles';
+import { sendPasswordResetEmail, sendOtpEmail, sendResetOtpEmail } from '../services/email.service';
+import { toCanonicalRole, requiresOtpForLogin } from '../utils/roles';
 
 export class AuthController {
+  // Password reset via OTP flow
+  static async passwordResetInit(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email, username } = req.body as { email?: string; username?: string };
+      const identifier = email || username;
+      const user = identifier ? await User.findOne({ $or: [{ email: identifier }, { username: identifier }] }) : null;
+      if (!user || !user.isActive) {
+        // Do not reveal whether user exists
+        return res.json({ success: true, message: 'If the account exists, an OTP was sent.' });
+      }
+      // Throttle and reuse unexpired OTP
+      const now = Date.now();
+      const hasActive = user.resetOtpExpires && user.resetOtpExpires.getTime() > now && user.resetOtpCode;
+      if (hasActive) {
+        if ((user.resetOtpAttempts || 0) >= 5) {
+          return res.status(429).json({ success: false, message: 'Too many requests. Please wait until the current code expires.' });
+        }
+        user.resetOtpAttempts = (user.resetOtpAttempts || 0) + 1;
+        await user.save();
+        const sent = await sendResetOtpEmail(user.email, user.resetOtpCode!);
+        return res.json({ success: true, message: sent.ok ? 'OTP resent' : 'OTP generated', data: { emailSent: !!sent.ok, emailPreviewUrl: (sent as any).preview } });
+      }
+      // Issue new code
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      user.resetOtpCode = otp;
+      user.resetOtpExpires = new Date(now + 10 * 60 * 1000); // 10m
+      user.resetOtpAttempts = 1;
+      await user.save();
+      const sent = await sendResetOtpEmail(user.email, otp);
+      return res.json({ success: true, message: sent.ok ? 'OTP sent' : 'OTP generated', data: { emailSent: !!sent.ok, emailPreviewUrl: (sent as any).preview } });
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  static async passwordResetVerify(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email, username, otp } = req.body as { email?: string; username?: string; otp: string };
+      const identifier = email || username;
+      const user = identifier ? await User.findOne({ $or: [{ email: identifier }, { username: identifier }] }) : null;
+      if (!user || !user.resetOtpCode || !user.resetOtpExpires) {
+        return res.status(400).json({ success: false, message: 'OTP not requested' });
+      }
+      if (user.resetOtpExpires.getTime() < Date.now()) {
+        user.resetOtpCode = undefined;
+        user.resetOtpExpires = undefined;
+        await user.save();
+        return res.status(400).json({ success: false, message: 'OTP expired' });
+      }
+      if (otp !== user.resetOtpCode) {
+        return res.status(401).json({ success: false, message: 'Invalid OTP' });
+      }
+      // Success: clear reset OTP and send reset link
+      user.resetOtpCode = undefined;
+      user.resetOtpExpires = undefined;
+      user.resetOtpAttempts = 0;
+      // Issue a reset token like forgotPassword
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+      user.resetPasswordToken = hashedToken;
+      user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000); // 30m
+      await user.save();
+      const appUrl = process.env.APP_URL || 'http://localhost:5173';
+      const resetUrl = `${appUrl}/reset-password/${resetToken}`;
+      const emailRes = await sendPasswordResetEmail(user.email, resetUrl);
+      return res.json({ success: true, message: emailRes.ok ? 'Reset link sent' : 'Reset link generated', data: { resetUrl, emailSent: !!emailRes.ok } });
+    } catch (err) {
+      return next(err);
+    }
+  }
   // Register new user
   static async register(req: Request, res: Response, next: NextFunction) {
     try {
@@ -114,8 +184,8 @@ export class AuthController {
         });
       }
 
-  // If store owner (formerly admin), enforce OTP step before issuing tokens
-    if (isStoreOwner(user.role)) {
+  // If role requires OTP (store_owner, cashier, sales_rep), enforce OTP step before issuing tokens
+    if (requiresOtpForLogin(user.role)) {
         const needsNewOtp = !user.otpCode || !user.otpExpires || user.otpExpires.getTime() < Date.now();
         let emailResult: any = null;
         if (needsNewOtp) {
@@ -303,6 +373,9 @@ export class AuthController {
       user.password = password;
       user.resetPasswordToken = undefined;
       user.resetPasswordExpires = undefined;
+      // Invalidate existing sessions by clearing refresh token and mark password change time
+      user.refreshToken = null;
+      (user as any).passwordUpdatedAt = new Date();
       await user.save();
 
       return res.json({
@@ -335,12 +408,12 @@ export class AuthController {
     }
   }
 
-  // Admin login phase 1: verify credentials and send OTP
+  // Login OTP phase 1: verify credentials and send OTP (for roles requiring OTP)
   static async adminLoginInitiate(req: Request, res: Response, next: NextFunction) {
     try {
       const { username, password } = req.body;
       const user = await User.findOne({ $or: [{ username }, { email: username }] });
-      if (!user || !isStoreOwner(user.role) || !user.isActive) {
+      if (!user || !requiresOtpForLogin(user.role) || !user.isActive) {
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
       }
       const valid = await user.comparePassword(password);
@@ -363,12 +436,12 @@ export class AuthController {
     }
   }
 
-  // Admin login phase 2: verify OTP and issue tokens
+  // Login OTP phase 2: verify OTP and issue tokens (for roles requiring OTP)
   static async adminLoginVerify(req: Request, res: Response, next: NextFunction) {
     try {
       const { username, otp, rememberMe } = req.body;
       const user = await User.findOne({ $or: [{ username }, { email: username }] });
-      if (!user || !isStoreOwner(user.role) || !user.otpCode || !user.otpExpires) {
+      if (!user || !requiresOtpForLogin(user.role) || !user.otpCode || !user.otpExpires) {
         return res.status(400).json({ success: false, message: 'OTP not requested' });
       }
       if (user.otpExpires.getTime() < Date.now()) {
@@ -395,7 +468,7 @@ export class AuthController {
         sameSite: 'strict',
         maxAge: cookieMaxAge,
       });
-  return res.json({ success: true, message: 'Store Owner login successful', data: { user: { id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName, role: toCanonicalRole(user.role) || user.role }, accessToken, refreshToken } });
+  return res.json({ success: true, message: 'Login successful', data: { user: { id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName, role: toCanonicalRole(user.role) || user.role }, accessToken, refreshToken } });
     } catch (err) {
       return next(err);
     }

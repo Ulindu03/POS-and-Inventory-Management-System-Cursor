@@ -104,6 +104,48 @@ export async function sendOtpEmail(to: string, otp: string) {
   }
 }
 
+export async function sendResetOtpEmail(to: string, otp: string) {
+  const t = getTransporter();
+  const { from, enableEthereal } = env();
+  if (!t) {
+    if (!enableEthereal) {
+      console.warn('[email] SMTP not configured and Ethereal fallback disabled. (reset OTP)');
+      return { ok: false, error: 'SMTP not configured' };
+    }
+    etherealReady ??= nodemailer.createTestAccount().then(acc => {
+        transporter = nodemailer.createTransport({
+          host: acc.smtp.host,
+            port: acc.smtp.port,
+            secure: acc.smtp.secure,
+            auth: { user: acc.user, pass: acc.pass },
+        });
+        console.log('[email] Using Ethereal test account', acc.user);
+      }).catch(err => {
+        console.warn('[email] Ethereal account creation failed', err);
+      });
+    await etherealReady;
+    if (!transporter) {
+      console.warn('[email] SMTP not configured and Ethereal fallback failed. Reset OTP:', otp);
+      return { ok: false, error: 'SMTP not configured' };
+    }
+  }
+  try {
+    const active = (transporter || t);
+    if (!active) return { ok: false, error: 'no transporter available' };
+    const info = await active.sendMail({
+      from,
+      to,
+      subject: 'VoltZone POS - Password Reset Code',
+      html: `<p>Your password reset verification code is:</p><p style="font-size:22px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in 10 minutes.</p>`
+    });
+    const preview = nodemailer.getTestMessageUrl(info) || undefined;
+    return { ok: true, id: info.messageId, preview, fallbackUsed: !t };
+  } catch (err: any) {
+    console.error('[email] reset OTP send failed', err);
+    return { ok: false, error: err?.message || 'send failed' };
+  }
+}
+
 export function isSmtpConfigured() {
   const { host, user, pass } = env();
   return Boolean(host && user && pass);
