@@ -1,7 +1,9 @@
-// This component protects a route:
-// - Waits until we finish checking auth on first load
-// - If not logged in, send the user to /login
-// - If a role list is provided, only allow those roles
+// This component protects a route.
+// In simple English:
+// - Wait until the app finishes the first-time auth check.
+// - If not logged in, send the user to /login.
+// - If requiredRoles provided, only allow users with those roles.
+// - Legacy 'admin' is treated as 'store_owner'.
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';

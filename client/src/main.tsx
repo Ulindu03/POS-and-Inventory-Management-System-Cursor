@@ -1,4 +1,5 @@
 // Entry point of the React application
+// In simple English: set up global styles, i18n, React Query, error boundary, toasts, and render <App/>.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

@@ -1,6 +1,8 @@
 // This file configures a single Axios instance for all API calls.
-// It adds the access token to each request and tries to refresh the token
-// once when a request fails with 401 (unauthorized).
+// In simple English:
+// - Before every request, we add the access token in the Authorization header.
+// - If the server returns 401 once (token expired), we try to refresh tokens and retry the request.
+// - We avoid sending many refresh requests at the same time by using a small queue.
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { getAccessToken, setAccessToken, getRefreshToken, setRefreshToken, clearAccessToken, clearRefreshToken, clearAllTokens } from '@/lib/api/token';
 
@@ -29,7 +31,7 @@ client.interceptors.request.use(
   }
 );
 
-// Keep response interceptor simple; refresh handled in store
+// Response handling with refresh support
 // We keep track if a refresh is already happening, and queue other requests
 // so we only hit the refresh endpoint once.
 let isRefreshing = false;

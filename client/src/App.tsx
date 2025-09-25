@@ -1,4 +1,8 @@
-// Main app router. On start, we ask the auth store to check if the user is logged in.
+// Main app router.
+// In simple English:
+// - On start, we check if the user is already logged in.
+// - Public routes: /login and /reset-password/*
+// - All other routes are protected by <ProtectedRoute> and may require certain roles.
 import { useEffect } from 'react'; // React hook to run code on mount
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'; // Router components
 // Import all pages we can navigate to

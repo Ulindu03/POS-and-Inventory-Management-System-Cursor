@@ -1,11 +1,14 @@
 // This file holds all authentication state and actions using Zustand (a small state library).
-// It talks to the backend via authApi and saves/reads tokens via token helpers.
+// In simple English:
+// - We save the logged-in user and tokens here.
+// - We call the backend using authApi.
+// - Some roles need OTP on login. In that case we wait until OTP is verified.
+// - "Remember me" decides where we store tokens (localStorage vs sessionStorage).
 import { create } from 'zustand';
 import { authApi } from '@/lib/api/auth.api';
 import { getAccessToken, setAccessToken, clearAccessToken, clearAllTokens } from '@/lib/api/token';
 
 // Key for persisting whether user opted into quick re-auth (remember me)
-// We use this key to remember if the user wants a persistent login.
 // true -> tokens in localStorage; false -> tokens in sessionStorage (handled in token.ts)
 const REMEMBER_ME_KEY = 'vz_remember_me';
 const setRememberMeFlag = (val: boolean) => {
@@ -53,11 +56,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 	pendingUsername: null,
 
 	login: async (credentials) => {
-		// Call backend login with username/password (and remember flag).
+			// Call backend login with username/password (and remember flag).
 		const payload = await authApi.login(credentials);
-		// If server indicates an OTP step is required (admin) don't set authenticated yet
+			// If server indicates an OTP step is required, don't set authenticated yet
 		if (payload?.requiresOtp) {
-			// Admin login path: backend asked for OTP verification first.
+				// Backend asked for OTP verification first.
 			set({
 				otpRequired: true,
 				pendingUsername: credentials.username,
@@ -76,7 +79,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 	},
 
 	verifyAdminOtp: async ({ otp, rememberMe }) => {
-	const username = get().pendingUsername; // Username saved during admin login init
+		const username = get().pendingUsername; // Username saved during OTP-required login
 		if (!username) throw new Error('No pending admin login');
 	const payload = await authApi.adminLoginVerify({ username, otp, rememberMe }); // Verify OTP with backend
 		const { user, accessToken } = payload as any;
@@ -90,7 +93,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 			// Inform backend to invalidate tokens/cookies if needed.
 			await authApi.logout();
 		} finally {
-			// Always clear local storage and session storage values on logout.
+					// Always clear local storage and session storage values on logout.
 			clearAllTokens();
 			setRememberMeFlag(false);
 			set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
@@ -98,21 +101,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 	},
 
 	clearAuth: () => {
-	// Local reset without calling backend (useful on auth errors)
+		// Local reset without calling backend (useful on auth errors)
 	clearAllTokens();
 		setRememberMeFlag(false);
 		set({ user: null, isAuthenticated: false, accessToken: null, isChecking: false });
 	},
 
 	refreshToken: async () => {
-	// Ask backend for a new access token using the refresh token.
+		// Ask backend for a new access token using the refresh token.
 	const { accessToken } = await authApi.refreshToken();
 		setAccessToken(accessToken);
 		set({ accessToken, isAuthenticated: Boolean(get().user) });
 	},
 
 	checkAuth: async () => {
-		set({ isChecking: true }); // Show small loading state while we check.
+			set({ isChecking: true }); // Show small loading state while we check.
 		// New behavior: only attempt silent auth if an access token is present.
 		// If only a refresh token exists we will force user to login instead of auto-refreshing silently.
 		const currentAccess = getAccessToken();
@@ -121,7 +124,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 			return;
 		}
 		try {
-			// Validate token with a /me call to fetch the current user.
+				// Validate token with a /me call to fetch the current user.
 			const me = await authApi.getCurrentUser();
 			const hasUser = Boolean(me?.user && (me.user.id || me.user._id));
 			if (hasUser) {

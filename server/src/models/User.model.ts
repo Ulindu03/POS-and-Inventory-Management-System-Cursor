@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+// User document shape used by Mongoose
 export interface IUser extends Document {
 	username: string;
 	email: string;
@@ -9,20 +10,20 @@ export interface IUser extends Document {
 	lastName: string;
 	phone?: string;
 	avatar?: string;
-	role: 'store_owner' | 'admin' | 'cashier' | 'sales_rep';
+	role: 'store_owner' | 'admin' | 'cashier' | 'sales_rep'; // 'admin' kept for legacy; normalized elsewhere
 	language: 'en' | 'si';
 	isActive: boolean;
 	lastLogin?: Date;
-	passwordUpdatedAt?: Date;
+	passwordUpdatedAt?: Date; // set when password changed to invalidate existing sessions
 	refreshToken?: string | null;
-	resetPasswordToken?: string;
-	resetPasswordExpires?: Date;
-	resetOtpCode?: string;
-	resetOtpExpires?: Date;
-	resetOtpAttempts?: number;
+	resetPasswordToken?: string; // token used in reset link
+	resetPasswordExpires?: Date; // expiry for reset link
+	resetOtpCode?: string; // 6-digit code for reset (step 1)
+	resetOtpExpires?: Date; // expiry for reset OTP
+	resetOtpAttempts?: number; // small throttle counter
 	twoFactorEnabled?: boolean;
 	permissions: string[];
-	otpCode?: string;
+	otpCode?: string; // login OTP code (for roles requiring OTP)
 	otpExpires?: Date;
 	otpAttempts?: number;
 	comparePassword(candidate: string): Promise<boolean>;
@@ -118,6 +119,7 @@ const userSchema = new Schema<IUser>({
 	timestamps: true
 });
 
+// Hash password if it was modified before saving
 userSchema.pre('save', async function (next) {
 	const user = this as IUser;
 	if (!user.isModified('password')) {
@@ -129,6 +131,7 @@ userSchema.pre('save', async function (next) {
 	return next();
 });
 
+// Compare a plain password to the stored hash
 userSchema.methods.comparePassword = async function (candidate: string): Promise<boolean> {
 	const user = this as IUser;
 	return bcrypt.compare(candidate, user.password);

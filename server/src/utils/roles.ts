@@ -3,6 +3,7 @@ export type Role = 'store_owner' | 'admin' | 'cashier' | 'sales_rep';
 export const ROLE_STORE_OWNER = 'store_owner' as const;
 export const ROLE_ADMIN_LEGACY = 'admin' as const; // deprecated alias
 
+// Convert various role strings to the canonical values we use everywhere.
 export function toCanonicalRole(role: string | undefined | null): Role | undefined {
   if (!role) return undefined;
   const r = String(role).toLowerCase();
@@ -12,17 +13,19 @@ export function toCanonicalRole(role: string | undefined | null): Role | undefin
   return undefined;
 }
 
+// Convenience: check if role is the store owner (covers legacy 'admin').
 export function isStoreOwner(role: string | undefined | null): boolean {
   return toCanonicalRole(role) === ROLE_STORE_OWNER;
 }
 
+// Map 'admin' to 'store_owner' inside arrays used by authorize(...roles)
 export function normalizeAllowedRoles(roles: string[] | undefined): string[] | undefined {
   if (!roles) return roles;
   // Map any 'admin' occurrences to 'store_owner' while keeping others unchanged
   return roles.map(r => (String(r).toLowerCase() === 'admin' ? ROLE_STORE_OWNER : String(r).toLowerCase()));
 }
 
-// Define which roles require OTP during login.
+// Define which roles require OTP during login (more secure for privileged or payment-facing roles).
 export function requiresOtpForLogin(role: string | undefined | null): boolean {
   const r = toCanonicalRole(role);
   return r === 'store_owner' || r === 'cashier' || r === 'sales_rep';

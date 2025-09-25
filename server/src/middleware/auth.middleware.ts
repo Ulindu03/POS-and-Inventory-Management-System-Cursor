@@ -1,4 +1,8 @@
 // Express middleware that checks the access token and attaches user info to the request.
+// In simple English:
+// - We read the bearer token from the Authorization header.
+// - If valid, we attach the decoded payload to req.user.
+// - We also normalize the role so legacy 'admin' becomes 'store_owner'.
 import { Request, Response, NextFunction } from 'express';
 import { JWTService } from '../services/jwt.service';
 import { normalizeAllowedRoles, toCanonicalRole } from '../utils/roles';

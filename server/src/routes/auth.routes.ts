@@ -1,4 +1,9 @@
 // Defines all /auth endpoints.
+// In simple English:
+// - /login does normal login; if role needs OTP, it responds with requiresOtp=true instead of tokens.
+// - /otp-login/* handles the two-step OTP login for store owner/cashier/sales_rep.
+// - /forgot-password is the older direct reset link flow (kept for compatibility).
+// - /password-reset/* is the new two-step reset: send OTP first, verify, then email reset link.
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { isSmtpConfigured, verifySmtpConnection, smtpDiagnostics } from '../services/email.service';

@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 
 // IMPORTANT: Do NOT snapshot env vars at import time (dotenv might load later).
-// Always read them dynamically to avoid "SMTP not configured" when .env loads after imports.
+// Always read them dynamically so the service works even if .env loads after imports.
 function env() {
   return {
     host: process.env.SMTP_HOST,
@@ -13,13 +13,14 @@ function env() {
   } as const;
 }
 
-let transporter: nodemailer.Transporter | null = null;
-let etherealReady: Promise<void> | null = null;
+let transporter: nodemailer.Transporter | null = null; // real SMTP transporter (Gmail or custom)
+let etherealReady: Promise<void> | null = null; // lazily create Ethereal test account if needed
 
+// Build or return the current SMTP transporter.
 function getTransporter() {
   if (transporter) return transporter;
   const { host, port, user, pass } = env();
-  if (!user || !pass) return null;
+  if (!user || !pass) return null; // not configured
   try {
     if (!host) {
       // Gmail shortcut
@@ -43,6 +44,7 @@ function getTransporter() {
   return transporter;
 }
 
+// Send a standard password reset link email.
 export async function sendPasswordResetEmail(to: string, resetUrl: string) {
   const t = getTransporter();
   const { from } = env();
@@ -56,6 +58,8 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string) {
   return { ok: true, id: info.messageId };
 }
 
+// Send the login OTP to the user's email. If real SMTP is not configured and
+// Ethereal fallback is enabled, we create a temporary Ethereal inbox and return a preview link.
 export async function sendOtpEmail(to: string, otp: string) {
   const t = getTransporter();
   const { from, enableEthereal } = env();
@@ -104,6 +108,7 @@ export async function sendOtpEmail(to: string, otp: string) {
   }
 }
 
+// Send the password reset OTP (step 1 of the new reset flow)
 export async function sendResetOtpEmail(to: string, otp: string) {
   const t = getTransporter();
   const { from, enableEthereal } = env();
@@ -146,11 +151,13 @@ export async function sendResetOtpEmail(to: string, otp: string) {
   }
 }
 
+// Whether real SMTP credentials are configured
 export function isSmtpConfigured() {
   const { host, user, pass } = env();
   return Boolean(host && user && pass);
 }
 
+// Verify SMTP connectivity
 export async function verifySmtpConnection() {
   const t = getTransporter();
   const { host, user } = env();
@@ -163,6 +170,7 @@ export async function verifySmtpConnection() {
   }
 }
 
+// Basic diagnostics to help debug SMTP configuration
 export function smtpDiagnostics() {
   const { host, port, user, pass, from } = env();
   return {

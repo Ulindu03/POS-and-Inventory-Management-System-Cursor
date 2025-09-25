@@ -1,4 +1,11 @@
 // Controller functions for authentication endpoints.
+// In simple English:
+// - Login:
+//   * Some roles (store owner, cashier, sales rep) need a 6-digit OTP by email before we issue tokens.
+//   * Others get tokens directly after password is verified.
+// - Forgot Password:
+//   * Old way: directly email reset link.
+//   * New safer way: first email a 6-digit code (OTP). After user verifies this code, we email the reset link.
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../models/User.model';
 import { JWTService } from '../services/jwt.service';
@@ -29,7 +36,7 @@ export class AuthController {
         const sent = await sendResetOtpEmail(user.email, user.resetOtpCode!);
         return res.json({ success: true, message: sent.ok ? 'OTP resent' : 'OTP generated', data: { emailSent: !!sent.ok, emailPreviewUrl: (sent as any).preview } });
       }
-      // Issue new code
+  // Issue new code
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       user.resetOtpCode = otp;
       user.resetOtpExpires = new Date(now + 10 * 60 * 1000); // 10m
@@ -59,7 +66,7 @@ export class AuthController {
       if (otp !== user.resetOtpCode) {
         return res.status(401).json({ success: false, message: 'Invalid OTP' });
       }
-      // Success: clear reset OTP and send reset link
+  // Success: clear reset OTP and send reset link
       user.resetOtpCode = undefined;
       user.resetOtpExpires = undefined;
       user.resetOtpAttempts = 0;
@@ -69,7 +76,7 @@ export class AuthController {
       user.resetPasswordToken = hashedToken;
       user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000); // 30m
       await user.save();
-      const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const appUrl = process.env.APP_URL || 'http://localhost:5173'; // client app URL for reset page
       const resetUrl = `${appUrl}/reset-password/${resetToken}`;
       const emailRes = await sendPasswordResetEmail(user.email, resetUrl);
       return res.json({ success: true, message: emailRes.ok ? 'Reset link sent' : 'Reset link generated', data: { resetUrl, emailSent: !!emailRes.ok } });
@@ -94,7 +101,7 @@ export class AuthController {
         });
       }
 
-  // Create new user
+    // Create new user (default role is cashier if none provided)
       const user = new User({
         username,
         email,
@@ -107,14 +114,14 @@ export class AuthController {
 
       await user.save();
 
-  // Generate tokens
+    // Generate tokens for the new user
   const { accessToken, refreshToken } = JWTService.generateTokenPair(user);
 
       // Save refresh token to database
       user.refreshToken = refreshToken;
       await user.save();
 
-      // Set refresh token in httpOnly cookie
+  // Set refresh token in httpOnly cookie so JS cannot read it (safer)
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -184,7 +191,7 @@ export class AuthController {
         });
       }
 
-  // If role requires OTP (store_owner, cashier, sales_rep), enforce OTP step before issuing tokens
+      // If role requires OTP (store_owner, cashier, sales_rep), enforce OTP step before issuing tokens
     if (requiresOtpForLogin(user.role)) {
         const needsNewOtp = !user.otpCode || !user.otpExpires || user.otpExpires.getTime() < Date.now();
         let emailResult: any = null;
@@ -205,12 +212,12 @@ export class AuthController {
         });
       }
 
-      // Non-admin: proceed normally
+  // No OTP required: proceed normally
       user.lastLogin = new Date();
       const { accessToken, refreshToken } = JWTService.generateTokenPair(user);
       user.refreshToken = refreshToken;
       await user.save();
-  // Choose cookie lifetime based on Remember Me
+    // Choose cookie lifetime based on Remember Me
   const cookieMaxAge = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
@@ -231,7 +238,7 @@ export class AuthController {
   // Refresh token
   static async refreshToken(req: Request, res: Response, next: NextFunction) {
     try {
-  // Accept refresh token from httpOnly cookie, Authorization bearer, header, or body for dev
+      // Accept refresh token from httpOnly cookie, Authorization bearer, header, or body (dev fallback)
   const cookieToken = req.cookies?.refreshToken;
   const authHeader = req.headers.authorization?.split(' ')[1];
   const headerToken = (req.headers['x-refresh-token'] as string) || authHeader;
@@ -257,14 +264,14 @@ export class AuthController {
         });
       }
 
-  // Generate new tokens
+    // Generate new tokens
       const { accessToken, refreshToken: newRefreshToken } = JWTService.generateTokenPair(user);
 
       // Update refresh token in database
       user.refreshToken = newRefreshToken;
       await user.save();
 
-  // Set new refresh token in cookie
+    // Set new refresh token in cookie
       res.cookie('refreshToken', newRefreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -297,7 +304,7 @@ export class AuthController {
         );
       }
 
-  // Clear cookie
+    // Clear cookie
       res.clearCookie('refreshToken');
 
       return res.json({
@@ -322,7 +329,7 @@ export class AuthController {
         });
       }
 
-  // Generate reset token
+    // Generate reset token
       const resetToken = crypto.randomBytes(32).toString('hex');
       const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
 
@@ -331,7 +338,7 @@ export class AuthController {
       user.resetPasswordExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
       await user.save();
 
-      const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const appUrl = process.env.APP_URL || 'http://localhost:5173'; // client app URL
       const resetUrl = `${appUrl}/reset-password/${resetToken}`;
       const result = await sendPasswordResetEmail(email, resetUrl);
 
@@ -369,7 +376,7 @@ export class AuthController {
         });
       }
 
-      // Update password
+  // Update password and invalidate sessions
       user.password = password;
       user.resetPasswordToken = undefined;
       user.resetPasswordExpires = undefined;
@@ -420,7 +427,7 @@ export class AuthController {
       if (!valid) {
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
       }
-      // Rate-limit OTP requests: lock if >5 in 30mins
+  // Rate-limit OTP requests: lock if >5 in 30 mins and current code not expired
       if (user.otpAttempts && user.otpAttempts >= 5 && user.otpExpires && user.otpExpires.getTime() > Date.now()) {
         return res.status(429).json({ success: false, message: 'Too many OTP requests. Please wait until current code expires.' });
       }
@@ -453,7 +460,7 @@ export class AuthController {
       if (otp !== user.otpCode) {
         return res.status(401).json({ success: false, message: 'Invalid OTP' });
       }
-      // success -> clear OTP and login
+  // Success -> clear OTP and login
       user.otpCode = undefined;
       user.otpExpires = undefined;
       user.otpAttempts = 0;

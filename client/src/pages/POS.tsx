@@ -1,4 +1,9 @@
-// Point of Sale (POS) system page for processing customer transactions
+// Point of Sale (POS) page for processing customer transactions.
+// In simple English:
+// - Left side: choose products (grid + barcode scanner).
+// - Right side: cart with items and checkout.
+// - When payment completes: we build a receipt snapshot and try to fetch any warranties created for this sale.
+// - We also broadcast events so other tabs/pages can refresh (e.g., Warranty page, Customer history).
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { ProductGrid } from '@/features/pos/ProductGrid';
 import { Cart } from '@/features/pos/Cart';
@@ -81,7 +86,7 @@ const POS = () => {
               onClear={clear}
               onDamage={() => setOpenDamage(true)}
               onHold={async () => {
-                // Save current cart as a hold ticket for later retrieval
+                // Save current cart as a "hold" ticket for later retrieval (park the sale)
                 const payload = { items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })), discount };
                 const res = await salesApi.hold(payload);
                 setHold(res.data.ticket);
@@ -103,14 +108,14 @@ const POS = () => {
         open={open}
         onClose={() => setOpen(false)}
         onComplete={async (sale) => {
-          // Capture a snapshot of totals before clearing the cart so the receipt shows correct values
+          // Capture totals now (before clearing cart) so the receipt shows correct values
           const snapshot = {
             subtotal,
             discount,
             tax,
             total,
           };
-          // Attempt to fetch warranties issued for this sale
+          // Attempt to fetch warranties issued for this sale (if any)
           let warranties: any[] = [];
           try {
             const token = getAccessToken();
@@ -131,7 +136,7 @@ const POS = () => {
             // Broadcast sale created with optional customer id to refresh customer purchase history
             const detail: any = { saleId: sale.id, invoiceNo: sale.invoiceNo, customerId: sale.customerId };
             window.dispatchEvent(new CustomEvent('sales:created', { detail }));
-            // Cross-tab broadcast via BroadcastChannel and storage event
+            // Cross-tab broadcast via BroadcastChannel and storage event (so other tabs update too)
             try {
               const bc = new (window as any).BroadcastChannel ? new BroadcastChannel('sales') : null;
               if (bc) {

@@ -1,5 +1,8 @@
-// Login page with optional store owner OTP step.
-// It shows a form, sends credentials to the store, and navigates to dashboard on success.
+// Login page for VoltZone POS.
+// In simple English:
+// - Normal login: user enters username + password, goes to dashboard.
+// - OTP login: some roles (store owner, cashier, sales rep) must also enter a 6-digit code sent to email.
+// - Forgot Password: first we send a 6-digit code to email. After verifying that code, the server emails the reset link.
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -30,7 +33,7 @@ const VoltZoneLogo = ({ className = "w-20 h-20" }: { className?: string }) => (
   />
 );
 
-// Floating particles animation (FFE100 glow)
+// Floating particles animation (FFE100 glow) — visual only
 const FloatingParticle = ({ delay = 0 }: { delay?: number }) => (
   <motion.div
     className="absolute w-2 h-2 rounded-full"
@@ -51,7 +54,7 @@ const FloatingParticle = ({ delay = 0 }: { delay?: number }) => (
   />
 );
 
-// Subtle animated grid overlay
+// Subtle animated grid overlay — visual only
 const AnimatedGrid = () => (
   <motion.div
     className="absolute inset-0"
@@ -67,7 +70,7 @@ const AnimatedGrid = () => (
   />
 );
 
-// Orbiting glow ring with a moving dot
+// Orbiting glow ring with a moving dot — visual only
 const OrbitingGlow = ({ radius = 160, size = 8, duration = 36, delay = 0 }: { radius?: number; size?: number; duration?: number; delay?: number }) => (
   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
     <motion.div
@@ -97,7 +100,7 @@ const OrbitingGlow = ({ radius = 160, size = 8, duration = 36, delay = 0 }: { ra
   </div>
 );
 
-// Shooting star streak
+// Shooting star streak — visual only
 const ShootingStar = ({ delay = 2, top = '10%', left = '-10%' }: { delay?: number; top?: string; left?: string }) => (
   <motion.div
     className="absolute"
@@ -111,7 +114,7 @@ const ShootingStar = ({ delay = 2, top = '10%', left = '-10%' }: { delay?: numbe
   </motion.div>
 );
 
-// Aurora ribbon background
+// Aurora ribbon background — visual only
 const Aurora = () => (
   <>
     <motion.div
@@ -343,23 +346,29 @@ function buildText(language: 'en' | 'si') {
 }
 
 const LoginPage = () => {
+  // UI state for showing/hiding password
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  // Language for small built-in texts (English/Sinhala)
   const [language, setLanguage] = useState<'en' | 'si'>('en');
+  // Which panel is visible: login form or forgot password form
   const [currentView, setCurrentView] = useState('login');
+  // Login + forgot form inputs
   const [formData, setFormData] = useState({
     username: '',
     password: '',
     email: '',
     rememberMe: false
   });
+  // Email status/preview (helpful in development to preview the email content)
   const [emailSent, setEmailSent] = useState<boolean | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Reset OTP step state
+  // Forgot Password (2-step) state: Step 1 send OTP, Step 2 verify OTP
   const [resetOtpPhase, setResetOtpPhase] = useState<'idle' | 'otp'>('idle');
   const [resetOtp, setResetOtp] = useState('');
+  // Cooldown timer to throttle resend button for reset OTP
   const [resetResendCooldown, setResetResendCooldown] = useState(0);
   useEffect(() => {
     if (!resetResendCooldown) return;
@@ -387,10 +396,10 @@ const LoginPage = () => {
   };
 
   const navigate = useNavigate();
-  const login = useAuthStore((s) => s.login);                 // action to login with username/password
-  const otpRequired = useAuthStore((s) => s.otpRequired);     // true when backend asked for OTP
-  const verifyAdminOtp = useAuthStore((s) => s.verifyAdminOtp); // action to verify the OTP
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated); // user login state
+  const login = useAuthStore((s) => s.login);                 // Action to login with username/password
+  const otpRequired = useAuthStore((s) => s.otpRequired);     // True when server requires OTP before completing login
+  const verifyAdminOtp = useAuthStore((s) => s.verifyAdminOtp); // Action to verify the OTP (completes login)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated); // Logged-in state
 
   const t = buildText(language);
 
@@ -433,7 +442,7 @@ const LoginPage = () => {
     }
   };
 
-  // Handle submit for both: login form and forgot password view.
+  // Handle form submit for both: login and forgot password.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (currentView === 'forgot') {
@@ -483,7 +492,7 @@ const LoginPage = () => {
       }
       return;
     }
-    if (otpRequired) return; // If we are on the OTP step, ignore the login form submit
+    if (otpRequired) return; // If we already switched to OTP step, ignore the login form submit
     if (!formData.username || !formData.password) { toast.error(t.fillFields); return; }
     setIsLoading(true);
     try {
@@ -535,7 +544,7 @@ const LoginPage = () => {
     return () => clearInterval(id);
   }, [resetResendCooldown]);
 
-  // Submit the OTP for admin login
+  // Submit the OTP for admin/cashier/sales-rep login to finish sign-in
   const handleOtpVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otp || otp.length !== 6) {
