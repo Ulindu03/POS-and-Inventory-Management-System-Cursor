@@ -17,6 +17,12 @@ export const authApi = {
   return payload;
   },
 
+  // POST /auth/login-face with a face embedding vector
+  loginFace: async (embedding: number[]) => {
+    const response = await axios.post('/auth/login-face', { embedding });
+    return response.data?.data || {};
+  },
+
   register: async (userData: any) => {
     const response = await axios.post('/auth/register', userData);
     return response.data;

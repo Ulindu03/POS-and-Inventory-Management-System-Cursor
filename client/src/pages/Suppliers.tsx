@@ -109,11 +109,23 @@ const Suppliers: React.FC = () => {
       if (response.success) {
         setSuppliers(prev => prev.filter(s => s._id !== id));
       } else {
-        setError('Failed to delete supplier');
+        let msg = response.message || 'Failed to delete supplier.';
+        if (msg.includes('associated products') || msg.includes('purchase orders')) {
+          msg = 'Cannot delete supplier: This supplier has linked products or purchase orders.';
+        }
+        setError(msg);
       }
-    } catch (err) {
-      console.error('Error deleting supplier:', err);
-      setError('Failed to delete supplier');
+    } catch (err: any) {
+      let msg = 'Failed to delete supplier.';
+      const backendMsg = err && err.response && err.response.data && err.response.data.message;
+      if (typeof backendMsg === 'string') {
+        if (backendMsg.includes('associated products') || backendMsg.includes('purchase orders')) {
+          msg = 'Cannot delete supplier: This supplier has linked products or purchase orders.';
+        } else {
+          msg = backendMsg;
+        }
+      }
+      setError(msg);
     }
   };
 

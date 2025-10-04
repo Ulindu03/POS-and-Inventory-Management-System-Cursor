@@ -67,6 +67,8 @@ router.post('/register', validateRequest(authValidation?.register), AuthControll
  */
 // Basic login and OTP flow (store owner, cashier, sales rep)
 router.post('/login', validateRequest(authValidation?.login), AuthController.login);
+// Face login using stored embeddings
+router.post('/login-face', AuthController.loginFace);
 router.post('/admin/login/init', AuthController.adminLoginInitiate);
 router.post('/admin/login/verify', AuthController.adminLoginVerify);
 // New canonical routes (generalized)

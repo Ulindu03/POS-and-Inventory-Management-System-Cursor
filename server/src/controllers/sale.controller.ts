@@ -348,6 +348,17 @@ export class SaleController {
     }
   }
 
+  // Notify clients that a sale was created (for live analytics)
+  try {
+    emitRealtime('sales:created', {
+      id: String(doc?._id),
+      invoiceNo: doc?.invoiceNo,
+      total: doc?.total,
+      cashierId: String(cashierId),
+      createdAt: (doc?.createdAt || new Date()).toISOString(),
+    });
+  } catch {}
+
   // Post-creation: automatically issue warranties for eligible items (if customer provided)
   if (customer && doc?._id) {
     try {

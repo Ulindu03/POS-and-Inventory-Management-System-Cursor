@@ -40,7 +40,9 @@ interface AuthState {
 	otpRequired: boolean;
 	pendingUsername: string | null;
 	login: (credentials: { username: string; password: string; rememberMe?: boolean }) => Promise<any>;
+	loginWithFace: (embedding: number[]) => Promise<any>;
 	verifyAdminOtp: (data: { otp: string; rememberMe?: boolean }) => Promise<void>;
+	cancelOtp: () => void;
 	logout: () => Promise<void>;
 	refreshToken: () => Promise<void>;
 	checkAuth: () => Promise<void>;
@@ -78,6 +80,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 		return payload;
 	},
 
+	loginWithFace: async (embedding) => {
+		// Send embedding to backend; after face match, backend requires OTP
+		const payload = await authApi.loginFace(embedding);
+		if (payload?.requiresOtp && payload?.user?.username) {
+			set({ otpRequired: true, pendingUsername: payload.user.username, isAuthenticated: false, isChecking: false });
+			return payload;
+		}
+		return payload;
+	},
+
 	verifyAdminOtp: async ({ otp, rememberMe }) => {
 		const username = get().pendingUsername; // Username saved during OTP-required login
 		if (!username) throw new Error('No pending admin login');
@@ -86,6 +98,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 		if (accessToken) setAccessToken(accessToken);
 		if (typeof rememberMe === 'boolean') setRememberMeFlag(rememberMe);
 		set({ user, accessToken, isAuthenticated: true, isChecking: false, otpRequired: false, pendingUsername: null });
+	},
+
+	// Allow user to cancel the OTP step and go back to normal username/password login UI
+	cancelOtp: () => {
+		set({ otpRequired: false, pendingUsername: null });
 	},
 
 	logout: async () => {

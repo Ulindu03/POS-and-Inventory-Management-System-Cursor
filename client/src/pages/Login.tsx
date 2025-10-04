@@ -3,7 +3,7 @@
 // - Normal login: user enters username + password, goes to dashboard.
 // - OTP login: some roles (store owner, cashier, sales rep) must also enter a 6-digit code sent to email.
 // - Forgot Password: first we send a 6-digit code to email. After verifying that code, the server emails the reset link.
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User,
@@ -22,6 +22,8 @@ import {
 import { toast, Toaster } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
+import Webcam from 'react-webcam';
+import * as faceapi from 'face-api.js';
 import { authApi } from '@/lib/api/auth.api';
 
 // VoltZone Logo (use public/logo.jpg)
@@ -163,7 +165,7 @@ type LoginFormProps = {
 const LoginView = ({ t, formData, showPassword, setShowPassword, handleInputChange, handleSubmit, isLoading, setCurrentView }: LoginFormProps) => (
   <>
     <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8F8F8' }}>{t.welcome}</h2>
-    <p className="text-sm mb-6" style={{ color: '#F8F8F8B3' }}>{t.description}</p>
+    {/* Removed subtitle description as per request */}
 
   <form onSubmit={handleSubmit} className="space-y-5">
   {/* Username */}
@@ -178,10 +180,29 @@ const LoginView = ({ t, formData, showPassword, setShowPassword, handleInputChan
       {/* Password */}
       <motion.div initial={{ x: -50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5, delay: 0.5 }}>
         <label className="block text-sm font-medium mb-2" style={{ color: '#F8F8F8B3' }}>{t.password}</label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" color="#000000" />
-          <input type={showPassword ? 'text' : 'password'} name="password" value={formData.password} onChange={handleInputChange} className="w-full pl-10 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black" style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }} placeholder="••••••••" autoComplete="current-password" />
-          <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors bg-transparent border-0 p-0 focus:outline-none" style={{ color: '#000000' }}>
+        <div className="relative group">
+          <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5" color="#000000" />
+          <input
+            type={showPassword ? 'text' : 'password'}
+            name="password"
+            value={formData.password}
+            onChange={handleInputChange}
+            className="w-full pl-10 pr-12 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black"
+            style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }}
+            placeholder="••••••••"
+            autoComplete="current-password"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            className="absolute top-1/2 -translate-y-1/2 right-3 p-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-[#FFE100] text-black/70 hover:text-black transition-colors"
+            style={{
+              background: '#F5F5F5',
+              border: '1px solid #E2E2E2',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+            }}
+          >
             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
@@ -365,6 +386,8 @@ const LoginPage = () => {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailPreviewUrl, setEmailPreviewUrl] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Remember which role triggered OTP so we show the right message (store owner, cashier, sales rep)
+  const [otpRole, setOtpRole] = useState<string | null>(null);
   // Forgot Password (2-step) state: Step 1 send OTP, Step 2 verify OTP
   const [resetOtpPhase, setResetOtpPhase] = useState<'idle' | 'otp'>('idle');
   const [resetOtp, setResetOtp] = useState('');
@@ -397,11 +420,144 @@ const LoginPage = () => {
 
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);                 // Action to login with username/password
+  const loginWithFace = useAuthStore((s) => s.loginWithFace);
   const otpRequired = useAuthStore((s) => s.otpRequired);     // True when server requires OTP before completing login
   const verifyAdminOtp = useAuthStore((s) => s.verifyAdminOtp); // Action to verify the OTP (completes login)
+  const cancelOtp = useAuthStore((s) => s.cancelOtp);           // Action to cancel OTP mode and return to login
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated); // Logged-in state
 
   const t = buildText(language);
+  // Face-api.js model load state
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [showFaceModal, setShowFaceModal] = useState(false);
+  const webcamRef = useRef<Webcam | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [faceDetected, setFaceDetected] = useState(false);
+  const scanTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Load models from public/models once on mount
+    const load = async () => {
+      const tryLoad = async (root: string) => {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(root),
+          faceapi.nets.faceRecognitionNet.loadFromUri(root),
+          faceapi.nets.faceLandmark68Net.loadFromUri(root),
+        ]);
+      };
+      const candidates = [
+        '/models',
+        'https://justadudewhohacks.github.io/face-api.js/models'
+      ];
+      for (const root of candidates) {
+        try {
+          await tryLoad(root);
+          setModelsLoaded(true);
+          return;
+        } catch (e) {
+          // continue to next candidate quietly
+        }
+      }
+      toast.error('Failed to load face models. Please place files under /public/models');
+    };
+    load();
+  }, []);
+
+  const captureEmbedding = async (): Promise<number[] | null> => {
+    const videoEl = webcamRef.current?.video as HTMLVideoElement | undefined;
+    if (!videoEl) return null;
+    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 192, scoreThreshold: 0.5 });
+    const detection = await faceapi
+      .detectSingleFace(videoEl, options)
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+    if (!detection) return null;
+    // descriptor is Float32Array length 128 (or 512 depending on model); convert to number[]
+    return Array.from(detection.descriptor as Float32Array).map((x) => Number(Number(x).toFixed(6)));
+  };
+
+  const handleFaceLogin = async () => {
+    if (!modelsLoaded) { toast.error('Models not loaded yet'); return; }
+    setIsLoading(true);
+    try {
+      const embedding = await captureEmbedding();
+      if (!embedding) { toast.error('No face detected. Ensure good lighting and single face.'); return; }
+      const res = await loginWithFace(embedding);
+      if (res?.requiresOtp) {
+        setOtpRole(res?.user?.role || null);
+        setEmailSent(res?.emailSent ?? null);
+        setEmailError(res?.emailError || null);
+        setEmailPreviewUrl(res?.emailPreviewUrl || null);
+        toast.success('Face matched. OTP sent to your email');
+      } else {
+        toast.error('Unexpected response');
+      }
+    } catch (err:any) {
+      console.error(err);
+      // Standardized message for failed face recognition attempts
+      const faceFailMsg = 'Face not recognized.Please Try Again.';
+      const status = err?.response?.status;
+      const backendMsg: string | undefined = err?.response?.data?.message;
+      // If it's a server error (5xx) or a validation (4xx but not auth) unrelated to face, show backend message.
+      // Otherwise (typical 401/403 or custom mismatch), force our clearer face message to avoid vague "Invalid token" etc.
+      if (status && status >= 500) {
+        toast.error(backendMsg || 'Server error during face login');
+      } else if (backendMsg && status && ![401,403].includes(status) && !/face|embedding|recogn/i.test(backendMsg)) {
+        toast.error(backendMsg);
+      } else {
+        toast.error(faceFailMsg);
+      }
+    } finally {
+      setIsLoading(false);
+      setShowFaceModal(false);
+    }
+  };
+
+  // Auto-scan when modal is open and models are loaded; on detection, auto trigger login
+  useEffect(() => {
+    const startScan = () => {
+      if (scanTimer.current) return;
+      setIsScanning(true);
+      setFaceDetected(false);
+      const tick = async () => {
+        const videoEl = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
+        if (!videoEl) return;
+        try {
+          const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.6 });
+          const det = await faceapi.detectSingleFace(videoEl, options);
+          const ok = Boolean(det);
+          setFaceDetected(ok);
+          if (ok) {
+            // Stop scanning and proceed
+            if (scanTimer.current) { window.clearInterval(scanTimer.current); scanTimer.current = null; }
+            setIsScanning(false);
+            // Small delay to let UI update
+            setTimeout(() => { handleFaceLogin(); }, 150);
+          }
+        } catch {
+          // ignore
+        }
+      };
+      tick();
+      scanTimer.current = window.setInterval(tick, 700);
+    };
+    const stopScan = () => {
+      if (scanTimer.current) { window.clearInterval(scanTimer.current); scanTimer.current = null; }
+      setIsScanning(false);
+      setFaceDetected(false);
+    };
+    if (showFaceModal && modelsLoaded) startScan(); else stopScan();
+    return () => stopScan();
+  }, [showFaceModal, modelsLoaded]);
+
+  // Helper: map role to a simple label used in OTP messages
+  const roleLabel = (r?: string | null) => {
+    const v = (r || '').toLowerCase();
+    if (v === 'store_owner' || v === 'admin') return 'store owner';
+    if (v === 'cashier') return 'cashier';
+    if (v === 'sales_rep') return 'sales representative';
+    return 'account'; // generic fallback
+  };
 
   // Fullscreen API handling
   useEffect(() => {
@@ -503,7 +659,9 @@ const LoginPage = () => {
         setEmailSent(res.emailSent ?? null);
         setEmailError(res.emailError || null);
         setEmailPreviewUrl(res.emailPreviewUrl || null);
-  toast.success(res.emailSent ? '🔐 OTP sent to store owner email' : '🔐 OTP generated (email not sent)', {
+        setOtpRole(res?.user?.role || null);
+        const label = roleLabel(res?.user?.role);
+  toast.success(res.emailSent ? `🔐 OTP sent to the ${label} account email` : '🔐 OTP generated (email not sent)', {
           description: res.emailSent ? 'Check your email for the 6-digit verification code' : 'Use the development OTP to proceed',
           duration: 5000,
         });
@@ -573,14 +731,81 @@ const LoginPage = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  // Lock page scroll while on login screen so panel fits viewport
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
   // Prevent UI flash: while authenticated but before navigation, render minimal placeholder
   if (isAuthenticated) {
     return <div className="min-h-screen flex items-center justify-center bg-black text-white">Redirecting...</div>;
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{ backgroundColor: '#000000' }}>
+    <div className="h-screen relative overflow-hidden" style={{ backgroundColor: '#000000' }}>
       <Toaster position="top-right" richColors />
+      {/* Face Login Modal */}
+      <AnimatePresence>
+        {showFaceModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-[92vw] max-w-md rounded-2xl p-4 sm:p-6"
+              style={{ backgroundColor: 'rgba(248,248,248,0.06)', border: '1px solid rgba(248,248,248,0.12)' }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold" style={{ color: '#F8F8F8' }}>Face Login</h3>
+                <button
+                  onClick={() => setShowFaceModal(false)}
+                  className="text-sm px-2 py-1 rounded-md"
+                  style={{ background: 'rgba(0,0,0,0.25)', color: '#F8F8F8' }}
+                >Close</button>
+              </div>
+              <div className="rounded-xl overflow-hidden mb-4" style={{ background: '#000' }}>
+                <Webcam
+                  ref={webcamRef as any}
+                  audio={false}
+                  screenshotFormat="image/jpeg"
+                  videoConstraints={{ facingMode: 'user' }}
+                  style={{ width: '100%', height: 'auto' }}
+                />
+              </div>
+              <p className="text-xs mb-4" style={{ color: '#F8F8F8B3' }}>
+                Center your face in the box. Ensure good lighting. Avoid multiple faces in frame.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  disabled={isLoading || !modelsLoaded}
+                  onClick={handleFaceLogin}
+                  className="flex-1 py-2.5 rounded-lg font-semibold shadow-md disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #FFE100 0%, #FFD100 100%)', color: '#000000' }}
+                >
+                  {isLoading ? 'Signing in...' : 'Sign in with Face'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFaceModal(false)}
+                  className="px-4 py-2.5 rounded-lg font-semibold"
+                  style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)', color: '#F8F8F8', border: '1px solid rgba(255,225,0,0.25)' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Animated background elements */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -612,14 +837,14 @@ const LoginPage = () => {
       })}
 
       {/* Main content: split layout */}
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 min-h-screen">
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 h-full">
         {/* Left: Login panel */}
-        <div className="order-2 lg:order-1 flex items-center justify-center px-4 py-10 lg:p-12">
+        <div className="order-2 lg:order-1 flex items-center justify-center px-4 py-6 lg:p-10 h-full">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="w-full max-w-[560px]"
+            className="w-full max-w-[560px] max-h-full overflow-hidden flex flex-col"
           >
             <motion.div className="mb-8 flex items-center gap-4">
               <VoltZoneLogo className="w-16 h-16" />
@@ -636,7 +861,7 @@ const LoginPage = () => {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.15 }}
-              className="backdrop-blur-xl rounded-3xl shadow-2xl p-6 sm:p-8 relative"
+              className="backdrop-blur-xl rounded-3xl shadow-2xl p-6 sm:p-6 relative flex-1 overflow-auto"
               style={{ backgroundColor: 'rgba(248,248,248,0.06)', border: '1px solid rgba(248,248,248,0.12)' }}
             >
             {/* Language + fullscreen */}
@@ -692,14 +917,45 @@ const LoginPage = () => {
                         isLoading={isLoading}
                         setCurrentView={(v) => setCurrentView(v)}
                       />
+                      {/* Face login button */}
+                      <div className="mt-4">
+                        {/* Face icon above button if available */}
+                        <div className="flex justify-center mb-2">
+                          <img src="/face.png" alt="Face" className="w-8 h-8 opacity-90" onError={(e:any)=>{ e.currentTarget.style.display='none'; }} />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowFaceModal(true)}
+                          className="w-full py-3 px-4 font-semibold rounded-xl shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+                          style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)', color: '#F8F8F8', border: '1px solid rgba(255,225,0,0.25)' }}
+                        >
+                          {modelsLoaded ? 'Login with Face' : 'Loading Face Models...'}
+                        </button>
+                      </div>
                     </>
                   )}
                   {otpRequired && (
                     <form onSubmit={handleOtpVerify} className="space-y-5">
                       <h2 className="text-2xl font-bold mb-2" style={{ color: '#F8F8F8' }}>Two-Factor Authentication</h2>
                       <p className="text-sm mb-6" style={{ color: '#F8F8F8B3' }}>
-                        {emailSent ? 'We\'ve sent a 6-digit code to your store owner email' : 'Development mode: OTP generated locally'}
+                        {emailSent ? `We've sent a 6-digit code to the ${roleLabel(otpRole)} account email` : 'Development mode: OTP generated locally'}
                       </p>
+
+                      {/* Back to Login (cancel OTP) */}
+                      <div className="mb-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            cancelOtp();
+                            setOtp('');
+                            setResendCooldown(0);
+                          }}
+                          className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg transition-colors"
+                          style={{ color: '#F8F8F8CC', background: 'rgba(248,248,248,0.06)', border: '1px solid rgba(248,248,248,0.12)' }}
+                        >
+                          <ArrowLeft className="w-4 h-4" /> {t.backToLogin}
+                        </button>
+                      </div>
 
                       {/* Status Messages */}
                       {emailSent && (
@@ -886,7 +1142,7 @@ const LoginPage = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className="text-center mt-8 text-sm"
+              className="text-center mt-4 text-sm shrink-0"
               style={{ color: '#F8F8F8B3' }}
             >
               <p>© 2025 VoltZone. Secure • Encrypted • Private</p>
@@ -895,14 +1151,14 @@ const LoginPage = () => {
         </div>
 
         {/* Right: Company marketing/info */}
-        <div className="order-1 lg:order-2 relative hidden md:flex items-center justify-center p-8 lg:p-16">
+        <div className="order-1 lg:order-2 relative hidden md:flex items-center justify-center p-6 lg:p-12 h-full overflow-hidden">
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
             className="max-w-2xl w-full"
           >
-            <div className="backdrop-blur-xl/20 rounded-3xl p-8 lg:p-10">
+            <div className="backdrop-blur-xl/20 rounded-3xl p-8 lg:p-10 flex flex-col items-center text-center">
               <div className="mb-6">
                 <div className="text-sm opacity-70" style={{ color: '#F8F8F8B3' }}>VoltZone • Retail Suite</div>
                 <h2 className="text-5xl lg:text-6xl font-extrabold leading-tight">
@@ -913,11 +1169,11 @@ const LoginPage = () => {
               <p className="text-base lg:text-lg mb-6 max-w-xl" style={{ color: '#F8F8F8CC' }}>
                 Welcome to your VoltZone dashboard — manage orders, track inventory, and keep your business shining. Secure, fast, elegant.
               </p>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-8">
-                <li className="flex items-center gap-2" style={{ color: '#F8F8F8B3' }}><span className="w-1.5 h-1.5 rounded-full" style={{ background:'#FFE100' }} /> Real-time stock</li>
-                <li className="flex items-center gap-2" style={{ color: '#F8F8F8B3' }}><span className="w-1.5 h-1.5 rounded-full" style={{ background:'#FFE100' }} /> Smart analytics</li>
-                <li className="flex items-center gap-2" style={{ color: '#F8F8F8B3' }}><span className="w-1.5 h-1.5 rounded-full" style={{ background:'#FFE100' }} /> Fast checkout</li>
-                <li className="flex items-center gap-2" style={{ color: '#F8F8F8B3' }}><span className="w-1.5 h-1.5 rounded-full" style={{ background:'#FFE100' }} /> Secure backups</li>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-8 max-w-md mx-auto">
+                <li className="flex items-center gap-2 justify-center" style={{ color: '#F8F8F8B3' }}><span className="w-1.5 h-1.5 rounded-full" style={{ background:'#FFE100' }} /> Real-time stock</li>
+                <li className="flex items-center gap-2 justify-center" style={{ color: '#F8F8F8B3' }}><span className="w-1.5 h-1.5 rounded-full" style={{ background:'#FFE100' }} /> Smart analytics</li>
+                <li className="flex items-center gap-2 justify-center" style={{ color: '#F8F8F8B3' }}><span className="w-1.5 h-1.5 rounded-full" style={{ background:'#FFE100' }} /> Fast checkout</li>
+                <li className="flex items-center gap-2 justify-center" style={{ color: '#F8F8F8B3' }}><span className="w-1.5 h-1.5 rounded-full" style={{ background:'#FFE100' }} /> Secure backups</li>
               </ul>
               <div className="text-xs opacity-80" style={{ color: '#F8F8F899' }}>Secure • Encrypted • Private</div>
             </div>

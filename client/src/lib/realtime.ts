@@ -11,7 +11,9 @@ let socket: ClientSocket | null = null;
 
 export function getSocket() {
   if (!socket) {
-    const url = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:5000';
+    // In development, use the Vite dev server URL with proxy
+    // In production, use the actual backend URL
+    const url = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || window.location.origin;
     socket = io(url, {
       withCredentials: true,
       transports: ['websocket'],

@@ -1,6 +1,7 @@
 import { useCartStore } from '@/store/cart.store';
 import { productsApi, categoriesApi, type ProductListItem, type CategoryItem } from '@/lib/api/products.api';
 import { motion } from 'framer-motion';
+import { proxyImage } from '@/lib/proxyImage';
 import { useEffect, useState } from 'react';
 
 export const ProductGrid = () => {
@@ -88,7 +89,7 @@ export const ProductGrid = () => {
                     const thumb = p.images?.find(i => i.isPrimary)?.url || p.images?.[0]?.url || '';
                     return thumb ? (
                       <img
-                        src={thumb}
+                        src={proxyImage(thumb)}
                         alt={p.name.en}
                         loading="lazy"
                         className="w-full h-full object-cover object-center block"

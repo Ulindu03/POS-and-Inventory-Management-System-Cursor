@@ -242,19 +242,72 @@ export const exportReport = async (req: Request, res: Response): Promise<void> =
             { label: 'Gross Profit', value: get('gross profit') },
           );
         }
-        // Render summary chips
-        const chipH = 22;
-        const gap = 8;
-        let x = doc.page.margins.left;
-        const y = doc.y;
-        summaryPairs.forEach((p) => {
-          const label = `${p.label}: ${p.value}`;
-          const w = doc.widthOfString(label) + 16;
-          doc.roundedRect(x, y, w, chipH, 6).fillAndStroke('#f3f4f6', '#e5e7eb');
-          doc.fillColor('#111111').font('Helvetica').fontSize(10).text(label, x + 8, y + 6, { width: w - 16, lineBreak: false });
-          x += w + gap;
+        // Render summary chips (enhanced: wrapping, accent colors, auto font shrink)
+  const chipH = 40; // taller to allow two-line layout (label + value)
+        const horizGap = 10;
+        const vertGap = 8;
+        const leftX = doc.page.margins.left;
+        const maxLineWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+        let cursorX = leftX;
+        let cursorY = doc.y;
+
+        const accents = [
+          { fill: '#fff7ed', stroke: '#fdba74', text: '#7c2d12' }, // amber
+          { fill: '#eef2ff', stroke: '#c7d2fe', text: '#312e81' }, // indigo
+          { fill: '#fdf2f8', stroke: '#fbcfe8', text: '#831843' }, // pink
+          { fill: '#ecfdf5', stroke: '#6ee7b7', text: '#064e3b' }, // emerald
+          { fill: '#f1f5f9', stroke: '#cbd5e1', text: '#0f172a' }, // slate fallback
+        ];
+
+        const fitFontSize = (label: string, maxWidth: number, base = 11, min = 7) => {
+          let size = base;
+          while (size > min) {
+            doc.fontSize(size);
+            if (doc.widthOfString(label) <= maxWidth - 16) return size; // padding compensation
+            size -= 1;
+          }
+          return size;
+        };
+
+        summaryPairs.forEach((p, idx) => {
+          const palette = accents[idx] || accents[accents.length - 1];
+          const rawLabel = p.label;
+          const rawValue = p.value;
+          // Provisional font size to measure
+          doc.font('Helvetica').fontSize(11);
+            // Calculate desired width with a safety clamp
+          // width considers widest between label and value
+          let chipW = Math.min(Math.max(Math.max(doc.widthOfString(rawLabel), doc.widthOfString(rawValue)) + 28, 130), Math.min(260, maxLineWidth));
+          // Wrap to new line if exceeding remaining width
+          if (cursorX + chipW > leftX + maxLineWidth) {
+            cursorX = leftX;
+            cursorY += chipH + vertGap;
+          }
+          // Auto-shrink font if still too wide
+          const fsLabel = fitFontSize(rawLabel, chipW, 11, 8);
+          const fsValue = fitFontSize(rawValue, chipW, 12, 8);
+          doc.fontSize(Math.min(fsLabel, fsValue));
+          // Recompute width if font shrank
+          chipW = Math.min(Math.max(Math.max(doc.widthOfString(rawLabel), doc.widthOfString(rawValue)) + 28, 130), Math.min(260, maxLineWidth));
+          if (cursorX + chipW > leftX + maxLineWidth) {
+            // Force wrap again with new width
+            cursorX = leftX;
+            cursorY += chipH + vertGap;
+          }
+          // Draw chip
+          doc.save();
+          doc.roundedRect(cursorX, cursorY, chipW, chipH, 10).fillAndStroke(palette.fill, palette.stroke);
+          // Label (top line)
+          doc.fillColor(palette.text).font('Helvetica-Bold').fontSize(fsLabel);
+          doc.text(rawLabel, cursorX + 14, cursorY + 6, { width: chipW - 28, lineBreak: false });
+          // Value (second line, slightly larger if possible)
+          doc.font('Helvetica-Bold').fontSize(fsValue).fillColor(palette.text);
+          doc.text(rawValue, cursorX + 14, cursorY + 6 + fsLabel + 2, { width: chipW - 28, lineBreak: false });
+          doc.restore();
+          cursorX += chipW + horizGap;
         });
-        doc.moveDown(2);
+        // Set doc.y below last row of chips + some spacing
+        doc.y = cursorY + chipH + 12;
       } catch {}
     }
 
@@ -280,7 +333,12 @@ export const exportReport = async (req: Request, res: Response): Promise<void> =
     // Table renderer
     const startY = doc.y;
     const colPadding = 8;
-    const widths = columns.map((c) => Math.max(c.width || 14, Math.ceil(doc.widthOfString(c.header) / 5) * 5));
+    // Increase minimum for date column to avoid truncation, and compute base widths
+    const widths = columns.map((c) => {
+      const base = Math.max(c.width || 14, Math.ceil(doc.widthOfString(c.header) / 5) * 5);
+      if (String(c.header).toLowerCase().includes('date')) return Math.max(base, 90); // widen date
+      return base;
+    });
     const totalFlex = widths.reduce((a, b) => a + b, 0);
     const pageW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const scale = pageW / totalFlex;
@@ -295,10 +353,13 @@ export const exportReport = async (req: Request, res: Response): Promise<void> =
     doc.roundedRect(x - 1, y - 2, pageW + 2, headerH + 4, 6).fill('#f3f4f6');
     doc.fillColor('#111111').font('Helvetica-Bold').fontSize(10);
     columns.forEach((c, i) => {
-      const w = scaled[i] - colPadding * 2;
+      const colWidth = scaled[i];
+      const w = colWidth - colPadding * 2;
       const header = clipToWidth(String(c.header), w);
       doc.text(header, x + colPadding, y + 6, { width: w, lineBreak: false });
-      x += scaled[i];
+      // Vertical header separator
+      doc.moveTo(x + colWidth, y - 2).lineTo(x + colWidth, y + headerH + 2).stroke('#e2e8f0');
+      x += colWidth;
     });
     doc.restore();
     y += headerH;
@@ -319,12 +380,21 @@ export const exportReport = async (req: Request, res: Response): Promise<void> =
         if (c.key === 'date') txt = asDate(raw);
         else if (typeof raw === 'number') txt = `LKR ${Math.round(raw).toLocaleString('en-LK')}`;
         else txt = String(raw ?? '');
-        const maxW = scaled[i] - colPadding * 2;
-        const clipped = clipToWidth(txt, maxW);
+        const colWidth = scaled[i];
+        const maxW = colWidth - colPadding * 2;
+        // Do not clip numeric or date values—allow them to shrink font if needed
+        let display = txt;
+        if (!(c.key === 'date' || typeof raw === 'number')) {
+          display = clipToWidth(txt, maxW);
+        }
         const numeric = typeof raw === 'number' || ['items', 'quantity'].includes(c.key);
-        doc.text(clipped, x + colPadding, y + 5, { width: maxW, align: numeric ? 'right' : 'left', lineBreak: false });
-        x += scaled[i];
+        doc.text(display, x + colPadding, y + 5, { width: maxW, align: numeric ? 'right' : 'left', lineBreak: false });
+        // Cell vertical grid line
+        doc.moveTo(x + colWidth, y - 2).lineTo(x + colWidth, y + rowH + 2).stroke('#f1f5f9');
+        x += colWidth;
       });
+      // Horizontal line beneath row
+      doc.moveTo(doc.page.margins.left, y + rowH + 2).lineTo(doc.page.width - doc.page.margins.right, y + rowH + 2).stroke('#f1f5f9');
       y += rowH;
       if (y > doc.page.height - doc.page.margins.bottom - 40) {
         doc.addPage();

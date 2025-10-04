@@ -1,50 +1,65 @@
 import React, { useEffect, useState } from 'react';
-import { Save, Building } from 'lucide-react';
+import { categoriesApi } from '@/lib/api/products.api';
+import { Save, Building, Wand2 } from 'lucide-react';
 import FormModal from '@/components/ui/FormModal';
-import { Supplier } from '@/lib/api/suppliers.api';
+import { Supplier, getSuppliers } from '@/lib/api/suppliers.api';
 import { z } from 'zod';
+
 
 const supplierSchema = z.object({
   name: z.string().min(1, 'Supplier name is required'),
   supplierCode: z.string().min(1, 'Supplier code is required'),
   contactPerson: z.string().optional(),
-  email: z
-    .string()
-    .optional()
-    .or(z.literal(''))
-    .refine((val) => !val || /.+@.+\..+/.test(val), { message: 'Invalid email address' }),
+  email: z.string().email('Invalid email').optional(),
   phone: z.string().optional(),
   alternatePhone: z.string().optional(),
-  address: z
-    .object({
-      street: z.string().optional(),
-      city: z.string().optional(),
-      province: z.string().optional(),
-      postalCode: z.string().optional(),
-    })
-    .optional(),
-  taxId: z.string().optional(),
-  paymentTerms: z.string().default('30 days'),
-  creditLimit: z.number().min(0, 'Credit limit must be positive'),
-  creditUsed: z.number().min(0, 'Credit used must be positive'),
-  rating: z.number().min(1, 'Rating must be at least 1').max(5, 'Rating must be at most 5'),
+  address: z.object({
+    street: z.string().optional(),
+    city: z.string().optional(),
+    province: z.string().optional(),
+    postalCode: z.string().optional(),
+    town: z.string().optional(),
+    townOther: z.string().optional(),
+  }).optional(),
+  paymentTerms: z.string().optional(),
+  paymentPeriodType: z.string().optional(),
+  category: z.string().min(1, 'Category is required'),
+  creditLimit: z.number().optional(),
+  creditUsed: z.number().optional(),
+  rating: z.number().optional(),
   performance: z.object({
-    onTimeDelivery: z.number().min(0).max(100),
-    qualityRating: z.number().min(0).max(100),
-    priceCompetitiveness: z.number().min(0).max(100),
-  }),
+    onTimeDelivery: z.number().optional(),
+    qualityRating: z.number().optional(),
+    priceCompetitiveness: z.number().optional(),
+  }).optional(),
   status: z.enum(['active', 'inactive', 'suspended']),
   isActive: z.boolean(),
   notes: z.string().optional(),
-  bankDetails: z
-    .object({
-      accountName: z.string().optional(),
-      accountNumber: z.string().optional(),
-      bankName: z.string().optional(),
-      branch: z.string().optional(),
-    })
-    .optional(),
+  bankDetails: z.object({
+    accountName: z.string().optional(),
+    accountNumber: z.string().optional(),
+    bankName: z.string().optional(),
+    branch: z.string().optional(),
+  }).optional(),
 });
+
+
+type AddressEx = {
+  street?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  town?: string;
+  townOther?: string;
+};
+
+type SupplierCategory = NonNullable<Supplier['categories']>[number];
+
+type SupplierFormData = Partial<Omit<Supplier, 'address' | 'categories'>> & {
+  address: AddressEx;
+  paymentPeriodType?: 'day' | 'week' | 'month' | 'year';
+  category?: string;
+};
 
 interface SupplierFormProps {
   supplier?: Supplier;
@@ -54,16 +69,30 @@ interface SupplierFormProps {
 }
 
 export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCancel, loading = false }) => {
-  const [formData, setFormData] = useState<Partial<Supplier>>({
+  const [customCategory, setCustomCategory] = useState('');
+  const [showCategoryInput, setShowCategoryInput] = useState(false);
+  const [categories, setCategories] = useState<SupplierCategory[]>([]);
+  // Fetch categories from API
+  useEffect(() => {
+    (async () => {
+      const res = await categoriesApi.list();
+      if (res.success && res.data?.items) {
+        setCategories(res.data.items);
+      }
+    })();
+  }, []);
+  const [formData, setFormData] = useState<SupplierFormData>({
     name: '',
     supplierCode: '',
     contactPerson: '',
     email: '',
     phone: '',
     alternatePhone: '',
-    address: { street: '', city: '', province: '', postalCode: '' },
+    address: { street: '', city: '', province: '', postalCode: '', town: '', townOther: '' },
     taxId: '',
-    paymentTerms: '30 days',
+    paymentTerms: '',
+    paymentPeriodType: 'day',
+    category: '',
     creditLimit: 0,
     creditUsed: 0,
     rating: 3,
@@ -74,7 +103,74 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
     bankDetails: { accountName: '', accountNumber: '', bankName: '', branch: '' },
   });
 
+  // Province/district/town dropdown options
+  const provinceOptions = [
+    '', 'Western', 'Central', 'Southern', 'Northern', 'Eastern', 'North Western', 'North Central', 'Uva', 'Sabaragamuwa'
+  ];
+  const districtMap: Record<string, string[]> = {
+    Western: ['Colombo', 'Gampaha', 'Kalutara'],
+    Central: ['Kandy', 'Matale', 'Nuwara Eliya'],
+    Southern: ['Galle', 'Matara', 'Hambantota'],
+    Northern: ['Jaffna', 'Kilinochchi', 'Mannar', 'Mullaitivu', 'Vavuniya'],
+    Eastern: ['Trincomalee', 'Batticaloa', 'Ampara'],
+    'North Western': ['Kurunegala', 'Puttalam'],
+    'North Central': ['Anuradhapura', 'Polonnaruwa'],
+    Uva: ['Badulla', 'Monaragala'],
+    Sabaragamuwa: ['Ratnapura', 'Kegalle']
+  };
+  const townMap: Record<string, Record<string, string[]>> = {
+    Western: {
+      Colombo: ['Colombo', 'Dehiwala', 'Moratuwa', 'Kotte', 'Nugegoda', 'Maharagama', 'Mount Lavinia', 'Homagama', 'Piliyandala'],
+      Gampaha: ['Gampaha', 'Negombo', 'Ja-Ela', 'Wattala', 'Kelaniya', 'Minuwangoda', 'Ragama', 'Veyangoda', 'Katunayake'],
+      Kalutara: ['Kalutara', 'Panadura', 'Horana', 'Beruwala', 'Matugama', 'Aluthgama', 'Bandaragama']
+    },
+    Central: {
+      Kandy: ['Kandy', 'Peradeniya', 'Katugastota', 'Gampola', 'Nawalapitiya', 'Akurana', 'Kundasale'],
+      Matale: ['Matale', 'Dambulla', 'Sigiriya', 'Rattota', 'Ukuwela', 'Naula'],
+      'Nuwara Eliya': ['Nuwara Eliya', 'Hatton', 'Ginigathhena', 'Talawakele', 'Lindula', 'Kotagala']
+    },
+    Southern: {
+      Galle: ['Galle', 'Hikkaduwa', 'Ambalangoda', 'Elpitiya', 'Baddegama', 'Bentota'],
+      Matara: ['Matara', 'Weligama', 'Dikwella', 'Akuressa', 'Hakmana'],
+      Hambantota: ['Hambantota', 'Tangalle', 'Tissamaharama', 'Ambalantota', 'Beliatta']
+    },
+    Northern: {
+      Jaffna: ['Jaffna', 'Chavakachcheri', 'Nallur', 'Point Pedro', 'Karainagar'],
+      Kilinochchi: ['Kilinochchi', 'Paranthan', 'Poonakary'],
+      Mannar: ['Mannar', 'Pesalai', 'Talaimannar'],
+      Mullaitivu: ['Mullaitivu', 'Puthukkudiyiruppu', 'Oddusuddan'],
+      Vavuniya: ['Vavuniya', 'Cheddikulam', 'Nedunkeni']
+    },
+    Eastern: {
+      Trincomalee: ['Trincomalee', 'Kinniya', 'Muttur', 'Kantale'],
+      Batticaloa: ['Batticaloa', 'Eravur', 'Kaluwanchikudy', 'Valaichchenai'],
+      Ampara: ['Ampara', 'Kalmunai', 'Akkaraipattu', 'Sammanthurai', 'Dehiattakandiya']
+    },
+    'North Western': {
+      Kurunegala: ['Kurunegala', 'Kuliyapitiya', 'Narammala', 'Pannala', 'Polgahawela', 'Melsiripura'],
+      Puttalam: ['Puttalam', 'Chilaw', 'Wennappuwa', 'Marawila', 'Anamaduwa']
+    },
+    'North Central': {
+      Anuradhapura: ['Anuradhapura', 'Mihintale', 'Kekirawa', 'Eppawala', 'Medawachchiya'],
+      Polonnaruwa: ['Polonnaruwa', 'Hingurakgoda', 'Medirigiriya', 'Dimbulagala']
+    },
+    Uva: {
+      Badulla: ['Badulla', 'Bandarawela', 'Haputale', 'Ella', 'Welimada', 'Passara'],
+      Monaragala: ['Monaragala', 'Wellawaya', 'Buttala', 'Kataragama', 'Siyambalanduwa']
+    },
+    Sabaragamuwa: {
+      Ratnapura: ['Ratnapura', 'Balangoda', 'Eheliyagoda', 'Pelmadulla', 'Embilipitiya'],
+      Kegalle: ['Kegalle', 'Mawanella', 'Warakapola', 'Ruwanwella', 'Rambukkana']
+    }
+  };
+  const selectedProvince = formData.address?.province || '';
+  const selectedDistrict = formData.address?.city || '';
+  const townOptions = selectedProvince && selectedDistrict && townMap[selectedProvince]?.[selectedDistrict]
+    ? [...townMap[selectedProvince][selectedDistrict], 'Other']
+    : [];
+
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [genLoading, setGenLoading] = useState(false);
 
   useEffect(() => {
     if (supplier) {
@@ -85,9 +181,17 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
         email: supplier.email || '',
         phone: supplier.phone || '',
         alternatePhone: supplier.alternatePhone || '',
-        address: supplier.address || { street: '', city: '', province: '', postalCode: '' },
+        address: {
+          street: supplier.address?.street || '',
+          city: supplier.address?.city || '',
+          province: supplier.address?.province || '',
+          postalCode: supplier.address?.postalCode || '',
+          town: (supplier.address as AddressEx | undefined)?.town || '',
+          townOther: (supplier.address as AddressEx | undefined)?.townOther || '',
+        },
         taxId: supplier.taxId || '',
         paymentTerms: supplier.paymentTerms,
+        category: supplier.categories?.[0]?._id || '',
         creditLimit: supplier.creditLimit,
         creditUsed: supplier.creditUsed,
         rating: supplier.rating,
@@ -95,21 +199,38 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
         status: supplier.status,
         isActive: supplier.isActive,
         notes: supplier.notes || '',
-        bankDetails: supplier.bankDetails || { accountName: '', accountNumber: '', bankName: '', branch: '' },
+        bankDetails: {
+          accountName: supplier.bankDetails?.accountName || '',
+          accountNumber: supplier.bankDetails?.accountNumber || '',
+          bankName: supplier.bankDetails?.bankName || '',
+          branch: supplier.bankDetails?.branch || '',
+        },
       });
     }
   }, [supplier]);
 
-  const handleInputChange = (field: keyof Supplier, value: any) => {
-    setFormData((prev) => ({ ...(prev as any), [field]: value } as Partial<Supplier>));
+  const handleInputChange = <K extends keyof SupplierFormData>(field: K, value: SupplierFormData[K]) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
     const key = String(field);
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: '' }));
   };
 
-  const handleNestedInputChange = (parent: keyof Supplier, field: string, value: any) => {
+  type NestedKeys = 'address' | 'bankDetails' | 'performance';
+
+  const handleNestedInputChange = <K extends NestedKeys, F extends keyof NonNullable<SupplierFormData[K]> & string>(
+    parent: K,
+    field: F,
+    value: NonNullable<SupplierFormData[K]>[F]
+  ) => {
     setFormData((prev) => {
-      const parentObj: any = (prev as any)[parent as string] || {};
-      return { ...(prev as any), [parent]: { ...parentObj, [field]: value } } as Partial<Supplier>;
+      const currentParent = (prev?.[parent] as Record<string, unknown> | undefined) ?? {};
+      return {
+        ...prev,
+        [parent]: {
+          ...currentParent,
+          [field]: value,
+        },
+      } as SupplierFormData;
     });
   };
 
@@ -131,9 +252,85 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [popupError, setPopupError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) onSubmit(formData);
+    if (!validateForm()) return;
+    // Map category to categories array for API (full object)
+    let selectedCategoryObj: SupplierCategory | undefined;
+    if (formData.category) {
+      selectedCategoryObj = categories.find((cat) => cat._id === formData.category);
+      if (!selectedCategoryObj) {
+        setPopupError('Selected category could not be found.');
+        return;
+      }
+    }
+
+    type SubmitData = Partial<Supplier> & {
+      category?: string;
+      paymentPeriodType?: SupplierFormData['paymentPeriodType'];
+    };
+
+    const submitData: SubmitData = {
+      ...formData,
+      categories: selectedCategoryObj ? [selectedCategoryObj] : [],
+    };
+
+    delete submitData.category;
+    delete submitData.paymentPeriodType;
+
+    try {
+      await onSubmit(submitData);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create supplier';
+      setPopupError(message);
+    }
+  };
+
+  // Helper to format code like PREFIX-001
+  const formatCode = (prefix: string, num: number, width: number = 3) => {
+    const safePrefix = (prefix || 'SUP').toUpperCase().replace(/[^A-Z]/g, '') || 'SUP';
+    const padded = String(num).padStart(width, '0');
+    return `${safePrefix}-${padded}`;
+  };
+
+  const generateSupplierCode = async () => {
+    try {
+      setGenLoading(true);
+      // Prefer current prefix if user typed one (e.g., ABC-), else use SUP
+      const current = (formData.supplierCode || '').toUpperCase();
+      const prefix = current.includes('-') ? current.split('-')[0] : (current || 'SUP');
+
+      const res = await getSuppliers({ page: 1, limit: 1000 });
+      const list: Supplier[] = res?.data || [];
+      // Extract numeric suffixes for matching prefix
+      let maxNum = 0;
+      let maxWidth = 3;
+      list.forEach(s => {
+        const code = (s.supplierCode || '').toUpperCase();
+        const parts = code.split('-');
+        if (parts.length >= 2) {
+          const [pfx, numStr] = [parts[0], parts[parts.length - 1]];
+          const n = parseInt(numStr, 10);
+          if (pfx === prefix && !Number.isNaN(n)) {
+            maxNum = Math.max(maxNum, n);
+            maxWidth = Math.max(maxWidth, numStr.length);
+          }
+        }
+      });
+      const next = maxNum + 1;
+      const nextCode = formatCode(prefix, next, maxWidth);
+      setFormData(prev => ({ ...prev, supplierCode: nextCode }));
+      setErrors(prev => ({ ...prev, supplierCode: '' }));
+    } catch (error) {
+      console.error('generateSupplierCode failed', error);
+      // Fallback when API fails
+      const fallback = formatCode('SUP', 1);
+      setFormData(prev => ({ ...prev, supplierCode: fallback }));
+    } finally {
+      setGenLoading(false);
+    }
   };
 
   let buttonLabel = 'Create Supplier';
@@ -168,6 +365,12 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
         </div>
       }
     >
+      {popupError && (
+        <div className="mb-4 p-3 rounded-xl bg-red-500/20 text-red-700 text-center font-semibold">
+          {popupError}
+          <button className="ml-2 px-2 py-1 rounded bg-red-500 text-white" onClick={() => setPopupError(null)}>Close</button>
+        </div>
+      )}
       <form id="supplier-form" onSubmit={handleSubmit} className="space-y-6">
         {/* Basic & Contact */}
         <div className="rounded-xl border border-white/10 bg-white/5 p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -186,7 +389,17 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
               {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
             </div>
             <div>
-              <label htmlFor="supplier-code" className="block text-sm font-medium text-[#F8F8F8] mb-1">Supplier Code *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="supplier-code" className="block text-sm font-medium text-[#F8F8F8]">Supplier Code *</label>
+                <button
+                  type="button"
+                  onClick={generateSupplierCode}
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-white/10 border border-white/10 text-[#F8F8F8] hover:bg-white/20 disabled:opacity-50"
+                  disabled={genLoading}
+                >
+                  <Wand2 className="w-3 h-3" /> {genLoading ? 'Generating...' : 'Generate'}
+                </button>
+              </div>
               <input
                 type="text"
                 id="supplier-code"
@@ -198,30 +411,94 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
               {errors.supplierCode && <p className="text-red-400 text-sm mt-1">{errors.supplierCode}</p>}
             </div>
             <div>
-              <label htmlFor="supplier-taxId" className="block text-sm font-medium text-[#F8F8F8] mb-1">Tax ID</label>
-              <input
-                type="text"
-                id="supplier-taxId"
-                value={formData.taxId}
-                onChange={(e) => handleInputChange('taxId', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                placeholder="Enter tax ID"
-              />
+              {/* Tax ID removed as requested */}
             </div>
             <div>
               <label htmlFor="supplier-paymentTerms" className="block text-sm font-medium text-[#F8F8F8] mb-1">Payment Terms</label>
-              <select
-                id="supplier-paymentTerms"
-                value={formData.paymentTerms}
-                onChange={(e) => handleInputChange('paymentTerms', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
-              >
-                <option value="15 days">15 days</option>
-                <option value="30 days">30 days</option>
-                <option value="45 days">45 days</option>
-                <option value="60 days">60 days</option>
-                <option value="90 days">90 days</option>
-              </select>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="supplier-paymentTerms"
+                  value={formData.paymentTerms}
+                  onChange={(e) => handleInputChange('paymentTerms', e.target.value)}
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                  placeholder="e.g., 30"
+                />
+                <select
+                  id="supplier-paymentPeriodType"
+                  value={formData.paymentPeriodType || 'day'}
+                  onChange={(e) =>
+                    handleInputChange(
+                      'paymentPeriodType',
+                      e.target.value as SupplierFormData['paymentPeriodType']
+                    )
+                  }
+                  className="px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+                >
+                  <option value="day">Day</option>
+                  <option value="week">Week</option>
+                  <option value="month">Month</option>
+                  <option value="year">Year</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="supplier-category" className="block text-sm font-medium text-[#F8F8F8] mb-1">Product Category</label>
+              <div className="flex gap-2 items-center">
+                <select
+                  id="supplier-category"
+                  value={formData.category || ''}
+                  onChange={(e) => {
+                    handleInputChange('category', e.target.value);
+                    if (e.target.value === 'other') setShowCategoryInput(true);
+                    else setShowCategoryInput(false);
+                  }}
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+                >
+                  <option value="">Select category</option>
+                  {categories.map((cat) => (
+                    <option key={cat._id} value={cat._id}>{cat.name.en}</option>
+                  ))}
+                  <option value="other">Other</option>
+                </select>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-full bg-emerald-500 text-white text-lg font-bold hover:bg-emerald-600"
+                  title="Add new category"
+                  onClick={() => setShowCategoryInput(true)}
+                >
+                  +
+                </button>
+              </div>
+              {showCategoryInput && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter new category name (EN)"
+                    value={customCategory}
+                    onChange={e => setCustomCategory(e.target.value)}
+                    className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+                  />
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-xl bg-emerald-500 text-white font-semibold hover:bg-emerald-600"
+                    onClick={async () => {
+                      if (customCategory.trim()) {
+                        // Create new category via API
+                        const payload = { name: { en: customCategory.trim(), si: customCategory.trim() } };
+                        const res = await categoriesApi.create(payload);
+                        if (res.success && res.data?.category) {
+                          setCategories(prev => [...prev, res.data.category]);
+                          handleInputChange('category', res.data.category._id);
+                        }
+                        setCustomCategory('');
+                        setShowCategoryInput(false);
+                      }
+                    }}
+                  >Add</button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -291,26 +568,65 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
               />
             </div>
             <div>
-              <label htmlFor="address-city" className="block text-sm font-medium text-[#F8F8F8] mb-1">City</label>
-              <input
-                type="text"
-                id="address-city"
-                value={formData.address?.city}
-                onChange={(e) => handleNestedInputChange('address', 'city', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                placeholder="Enter city"
-              />
+              <label htmlFor="address-province" className="block text-sm font-medium text-[#F8F8F8] mb-1">Province</label>
+              <select
+                id="address-province"
+                value={formData.address?.province || ''}
+                onChange={(e) => {
+                  handleNestedInputChange('address', 'province', e.target.value);
+                  handleNestedInputChange('address', 'city', '');
+                  handleNestedInputChange('address', 'town', '');
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+              >
+                <option value="">Select province</option>
+                {provinceOptions.slice(1).map((prov) => (
+                  <option key={prov} value={prov}>{prov}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label htmlFor="address-province" className="block text-sm font-medium text-[#F8F8F8] mb-1">Province</label>
-              <input
-                type="text"
-                id="address-province"
-                value={formData.address?.province}
-                onChange={(e) => handleNestedInputChange('address', 'province', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                placeholder="Enter province"
-              />
+              <label htmlFor="address-district" className="block text-sm font-medium text-[#F8F8F8] mb-1">District</label>
+              <select
+                id="address-district"
+                value={formData.address?.city || ''}
+                onChange={(e) => {
+                  handleNestedInputChange('address', 'city', e.target.value);
+                  handleNestedInputChange('address', 'town', '');
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+                disabled={!selectedProvince}
+              >
+                <option value="">Select district</option>
+                {selectedProvince && districtMap[selectedProvince]?.map((district) => (
+                  <option key={district} value={district}>{district}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="address-town" className="block text-sm font-medium text-[#F8F8F8] mb-1">Town</label>
+              <select
+                id="address-town"
+                value={formData.address?.town || ''}
+                onChange={(e) => handleNestedInputChange('address', 'town', e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
+                disabled={!selectedDistrict}
+              >
+                <option value="">Select town</option>
+                {townOptions.map((town) => (
+                  <option key={town} value={town}>{town}</option>
+                ))}
+              </select>
+              {formData.address?.town === 'Other' && (
+                <input
+                  type="text"
+                  id="address-town-other"
+                  value={formData.address?.townOther || ''}
+                  onChange={(e) => handleNestedInputChange('address', 'townOther', e.target.value)}
+                  className="mt-2 w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
+                  placeholder="Enter town manually"
+                />
+              )}
             </div>
             <div>
               <label htmlFor="address-postalCode" className="block text sm font-medium text-[#F8F8F8] mb-1">Postal Code</label>
@@ -326,95 +642,6 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
           </div>
         </div>
 
-        {/* Financial & Performance */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-[#F8F8F8]">Financial Information</h3>
-            <div>
-              <label htmlFor="credit-limit" className="block text-sm font-medium text-[#F8F8F8] mb-1">Credit Limit (LKR)</label>
-              <input
-                type="number"
-                id="credit-limit"
-                value={formData.creditLimit}
-                onChange={(e) => handleInputChange('creditLimit', parseFloat(e.target.value) || 0)}
-                className={`w-full px-4 py-3 rounded-xl bg-white/10 border ${errors.creditLimit ? 'border-red-500' : 'border-white/10'} text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30`}
-                placeholder="0.00"
-                min={0}
-                step={0.01}
-              />
-              {errors.creditLimit && <p className="text-red-400 text-sm mt-1">{errors.creditLimit}</p>}
-            </div>
-            <div>
-              <label htmlFor="credit-used" className="block text-sm font-medium text-[#F8F8F8] mb-1">Credit Used (LKR)</label>
-              <input
-                type="number"
-                id="credit-used"
-                value={formData.creditUsed}
-                onChange={(e) => handleInputChange('creditUsed', parseFloat(e.target.value) || 0)}
-                className={`w-full px-4 py-3 rounded-xl bg-white/10 border ${errors.creditUsed ? 'border-red-500' : 'border-white/10'} text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30`}
-                placeholder="0.00"
-                min={0}
-                step={0.01}
-              />
-              {errors.creditUsed && <p className="text-red-400 text-sm mt-1">{errors.creditUsed}</p>}
-            </div>
-          </div>
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-[#F8F8F8]">Performance & Rating</h3>
-            <div>
-              <label htmlFor="supplier-rating" className="block text-sm font-medium text-[#F8F8F8] mb-1">Rating (1-5)</label>
-              <input
-                type="number"
-                id="supplier-rating"
-                value={formData.rating}
-                onChange={(e) => handleInputChange('rating', parseInt(e.target.value) || 3)}
-                className={`w-full px-4 py-3 rounded-xl bg-white/10 border ${errors.rating ? 'border-red-500' : 'border-white/10'} text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30`}
-                min={1}
-                max={5}
-              />
-              {errors.rating && <p className="text-red-400 text-sm mt-1">{errors.rating}</p>}
-            </div>
-            <div>
-              <label htmlFor="perf-onTime" className="block text-sm font-medium text-[#F8F8F8] mb-1">On-time Delivery (%)</label>
-              <input
-                type="number"
-                id="perf-onTime"
-                value={formData.performance?.onTimeDelivery}
-                onChange={(e) => handleNestedInputChange('performance', 'onTimeDelivery', parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                placeholder="0"
-                min={0}
-                max={100}
-              />
-            </div>
-            <div>
-              <label htmlFor="perf-quality" className="block text-sm font-medium text-[#F8F8F8] mb-1">Quality Rating (%)</label>
-              <input
-                type="number"
-                id="perf-quality"
-                value={formData.performance?.qualityRating}
-                onChange={(e) => handleNestedInputChange('performance', 'qualityRating', parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                placeholder="0"
-                min={0}
-                max={100}
-              />
-            </div>
-            <div>
-              <label htmlFor="perf-price" className="block text-sm font-medium text-[#F8F8F8] mb-1">Price Competitiveness (%)</label>
-              <input
-                type="number"
-                id="perf-price"
-                value={formData.performance?.priceCompetitiveness}
-                onChange={(e) => handleNestedInputChange('performance', 'priceCompetitiveness', parseFloat(e.target.value) || 0)}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                placeholder="0"
-                min={0}
-                max={100}
-              />
-            </div>
-          </div>
-        </div>
 
         {/* Bank, Status & Notes */}
         <div className="rounded-xl border border-white/10 bg-white/5 p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -472,7 +699,9 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, 
               <select
                 id="supplier-status"
                 value={formData.status}
-                onChange={(e) => handleInputChange('status', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('status', e.target.value as SupplierFormData['status'])
+                  }
                 className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
               >
                 <option value="active">Active</option>

@@ -1,4 +1,5 @@
 import { formatLKR } from '@/lib/utils/currency';
+import { proxyImage } from '@/lib/proxyImage';
 import { useEffect, useRef, useState } from 'react';
 import { settingsApi } from '@/lib/api/settings.api';
 
@@ -123,7 +124,7 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
           >
             <div className="store-block" style={{ textAlign: 'center', marginBottom: 6 }}>
               {showLogo && (
-                <img src={logoUrl || '/logo.jpg'} alt="Company Logo" style={{ width: '28mm', maxWidth: 120, height: 'auto', objectFit: 'contain', margin: '0 auto 6px', display: 'block' }} />
+                <img src={proxyImage(logoUrl || '/logo.jpg')} alt="Company Logo" style={{ width: '28mm', maxWidth: 120, height: 'auto', objectFit: 'contain', margin: '0 auto 6px', display: 'block' }} />
               )}
               <h1 style={{ fontSize: 18, margin: '0 0 4px', fontFamily: 'Arial, Helvetica, sans-serif' }}>{store?.name || 'VoltZone'}</h1>
               {store?.address && (<div className="muted small">{store.address}</div>)}

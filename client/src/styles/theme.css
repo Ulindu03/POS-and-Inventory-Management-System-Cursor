@@ -1,0 +1,35 @@
+:root {
+  --vz-bg: #0d0d0f;
+  --vz-bg-alt: #18181b;
+  --vz-surface: rgba(255,255,255,0.06);
+  --vz-border: rgba(255,255,255,0.12);
+  --vz-text: #f5f5f5;
+  --vz-text-dim: #c7c7c7;
+  --vz-accent: #ffe100;
+  --vz-accent-grad: linear-gradient(135deg,#ffe100,#ffd000);
+  --vz-primary-grad: linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#ec4899 100%);
+  --vz-danger: #ef4444;
+  --vz-success: #22c55e;
+  --vz-radius: 14px;
+  --vz-focus: 0 0 0 2px rgba(255,225,0,0.4);
+}
+
+.light-theme {
+  --vz-bg: #f8f9fb;
+  --vz-bg-alt: #ffffff;
+  --vz-surface: rgba(0,0,0,0.04);
+  --vz-border: rgba(0,0,0,0.12);
+  --vz-text: #1a1a1a;
+  --vz-text-dim: #555;
+  --vz-accent: #d4af00;
+  --vz-accent-grad: linear-gradient(135deg,#f5d142,#e7b800);
+  --vz-primary-grad: linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#ec4899 100%);
+  --vz-danger: #dc2626;
+  --vz-success: #16a34a;
+  --vz-focus: 0 0 0 2px rgba(212,175,0,0.4);
+}
+
+body.vz-themed {
+  background: var(--vz-bg);
+  color: var(--vz-text);
+}

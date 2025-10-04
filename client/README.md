@@ -1,3 +1,42 @@
+## Face Recognition Setup (face-api.js)
+
+1) Install deps (already in package.json):
+
+```
+npm i
+```
+
+2) Download face-api.js models and place under `public/models`:
+
+- `tiny_face_detector_model-weights_manifest.json` + binary file(s)
+- `face_landmark_68_model-weights_manifest.json` + binary file(s)
+- `face_recognition_model-weights_manifest.json` + binary file(s)
+
+You can get official models from the face-api.js repo releases. Keep the filenames as shipped. Final structure:
+
+```
+public/
+  models/
+    tiny_face_detector_model-weights_manifest.json
+    tiny_face_detector_model-shard1
+    face_landmark_68_model-weights_manifest.json
+    face_landmark_68_model-shard1
+    face_recognition_model-weights_manifest.json
+    face_recognition_model-shard1
+```
+
+3) Start the dev server:
+
+```
+npm run dev
+```
+
+4) On the Login page, click “Login with Face”. Ensure good lighting and a single face in frame.
+
+Notes:
+- Embeddings are computed client-side and sent to the backend.
+- Backend compares via cosine similarity against stored `faceEmbedding` in `User`.
+- Threshold is 0.6 by default (adjust on server if needed).
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

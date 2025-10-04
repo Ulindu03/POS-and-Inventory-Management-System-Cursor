@@ -4,6 +4,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';  // Important! Global styles and Tailwind CSS
+import './styles/theme.css'; // Theme CSS variables (dark/light)
 import './styles/print.css'; // Print-specific styles for receipts and reports
 import './config/i18n'; // Internationalization setup for multiple languages
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // Data fetching and caching

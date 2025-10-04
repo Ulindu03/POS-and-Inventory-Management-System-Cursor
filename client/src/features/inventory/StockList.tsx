@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Package, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { productsApi } from '@/lib/api/products.api';
 import { useRealtime } from '@/hooks/useRealtime';
+import { proxyImage } from '@/lib/proxyImage';
 
 type Status = 'good' | 'low' | 'critical' | 'out';
 interface StockItem {
@@ -11,6 +12,7 @@ interface StockItem {
   category?: { _id?: string; name?: { en: string; si: string } } | string;
   stock: { current?: number; minimum?: number; reorderPoint?: number };
   status: Status;
+  images?: { url: string; isPrimary?: boolean }[];
 }
 
 export const StockList = ({ onAdjust, canAdjust = true }: { onAdjust?: (p: StockItem) => void; canAdjust?: boolean }) => {
@@ -49,6 +51,7 @@ export const StockList = ({ onAdjust, canAdjust = true }: { onAdjust?: (p: Stock
         category: p.category,
         stock: { current: cur, minimum: min, reorderPoint: rp },
         status: computeStatus(cur, min, rp),
+        images: p.images || [],
       });
       });
       setItems(mapped);
@@ -239,9 +242,30 @@ export const StockList = ({ onAdjust, canAdjust = true }: { onAdjust?: (p: Stock
                 filteredItems.map((item) => (
                   <tr key={item._id} className="hover:bg-white/5 transition-colors">
                     <td className="px-6 py-4">
-                      <div>
-                        <div className="font-medium text-[#F8F8F8]">{item.name.en}</div>
-                        <div className="text-sm text-[#F8F8F8]/70">{(typeof item.category === 'string' ? item.category : (item.category as any)?.name?.en) || '—'}</div>
+                      <div className="flex items-center gap-3">
+                        {(() => {
+                          const primary = item.images?.find(i => i.isPrimary) || item.images?.[0];
+                          if (!primary?.url) {
+                            return (
+                              <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-white/5 border border-white/10 text-[#F8F8F8]/40 shrink-0">
+                                <Package className="w-5 h-5" />
+                              </div>
+                            );
+                          }
+                          return (
+                            <img
+                              src={proxyImage(primary.url)}
+                              alt={item.name.en}
+                              className="w-12 h-12 object-cover rounded-lg border border-white/10 shadow-sm shrink-0"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          );
+                        })()}
+                        <div className="min-w-0">
+                          <div className="font-medium text-[#F8F8F8] truncate max-w-[240px]">{item.name.en}</div>
+                          <div className="text-sm text-[#F8F8F8]/70 truncate max-w-[240px]">{(typeof item.category === 'string' ? item.category : (item.category as any)?.name?.en) || '—'}</div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-[#F8F8F8]">

@@ -615,7 +615,10 @@ export const getDeliveryPerformanceReport = async (req: Request, res: Response) 
     const start = startDate ? new Date(String(startDate)) : new Date(0);
     const end = endDate ? new Date(String(endDate)) : new Date();
 
-    const filter: any = { scheduledDate: { $gte: start, $lte: end } };
+    // Include records where either scheduledDate OR createdAt is in range.
+    // This helps when scheduledDate is not set but the delivery exists in the period.
+    const dateMatch: any = { $gte: start, $lte: end };
+    const filter: any = { $or: [ { scheduledDate: dateMatch }, { createdAt: dateMatch } ] };
     if (salesRep) filter.salesRep = salesRep;
 
     const deliveries = await Delivery.find(filter)

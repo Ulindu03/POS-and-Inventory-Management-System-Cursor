@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import reportsApi from '@/lib/api/reports.api';
 import { AreaChart, BarChart, PieChart } from '@/components/common/Charts';
 import { GlassCard, StatsCard } from '@/components/common/Card';
-import { Calendar, RefreshCcw, Users, Package, TrendingUp } from '@/lib/safe-lucide-react';
+import { Calendar, RefreshCcw, Users, Package, TrendingUp, Truck, AlertTriangle, CheckCircle, Percent } from '@/lib/safe-lucide-react';
+import { useRealtime } from '@/hooks/useRealtime';
 
 const Analytics: React.FC = () => {
   const [dateRange, setDateRange] = useState(() => ({
@@ -16,11 +17,22 @@ const Analytics: React.FC = () => {
   const [topProducts, setTopProducts] = useState<any[]>([]);
   const [staffPerf, setStaffPerf] = useState<any>(null);
   const [deliveryPerf, setDeliveryPerf] = useState<any>(null);
+  const [lastUpdated, setLastUpdated] = useState<{ delivery?: number; inventory?: number; sales?: number }>(() => ({}));
+  // Keep the latest date range available inside socket callbacks
+  const dateRangeRef = useRef(dateRange);
+  useEffect(() => { dateRangeRef.current = dateRange; }, [dateRange]);
+
+  // Normalize date params to include the full end day; server uses $lte end
+  const buildRangeParams = (range: { startDate: string; endDate: string }) => {
+    const start = `${range.startDate}T00:00:00.000`;
+    const end = `${range.endDate}T23:59:59.999`;
+    return { startDate: start, endDate: end } as any;
+  };
 
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const params = { startDate: dateRange.startDate, endDate: dateRange.endDate } as any;
+  const params = buildRangeParams(dateRange);
   const [s, inv, top, staff, del] = await Promise.all([
         reportsApi.sales({ ...params, period: 'daily' }),
         reportsApi.inventory(params),
@@ -28,13 +40,15 @@ const Analytics: React.FC = () => {
         reportsApi.staffPerformance(params),
         reportsApi.deliveryPerformance(params)
       ]);
-      setSales(s?.data || null);
+  setSales(s?.data || null);
       setInventory(inv?.data || null);
   // topProducts endpoint returns { success, data: [...] }
   const topArr = Array.isArray(top) ? top : (top?.data || []);
   setTopProducts(Array.isArray(topArr) ? topArr : []);
-      setStaffPerf(staff || null);
-      setDeliveryPerf(del || null);
+  setStaffPerf(staff || null);
+  setDeliveryPerf(del || null);
+  const now = Date.now();
+  setLastUpdated({ sales: now, inventory: now, delivery: now });
     } catch (e) {
       console.error('Failed to load analytics', e);
     } finally {
@@ -42,10 +56,86 @@ const Analytics: React.FC = () => {
     }
   };
 
+  // Lightweight fetchers for real-time updates (avoid toggling the main loading state)
+  const rtFetchDelivery = async () => {
+    try {
+      const params = buildRangeParams(dateRangeRef.current);
+      const del = await reportsApi.deliveryPerformance(params);
+      setDeliveryPerf(del || null);
+      setLastUpdated((p) => ({ ...p, delivery: Date.now() }));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('rt delivery refresh failed');
+    }
+  };
+  const rtFetchInventory = async () => {
+    try {
+      const params = buildRangeParams(dateRangeRef.current);
+      const inv = await reportsApi.inventory(params);
+      setInventory(inv?.data || null);
+      setLastUpdated((p) => ({ ...p, inventory: Date.now() }));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('rt inventory refresh failed');
+    }
+  };
+  const rtFetchSalesAndStaff = async () => {
+    try {
+      const params = { ...buildRangeParams(dateRangeRef.current), period: 'daily' } as any;
+      const [s, top, staff] = await Promise.all([
+        reportsApi.sales(params),
+        reportsApi.topProducts({ ...params, limit: 8, sort: 'best' }),
+        reportsApi.staffPerformance(buildRangeParams(dateRangeRef.current)),
+      ]);
+      setSales(s?.data || null);
+      const topArr = Array.isArray(top) ? top : (top?.data || []);
+      setTopProducts(Array.isArray(topArr) ? topArr : []);
+      setStaffPerf(staff || null);
+      setLastUpdated((p) => ({ ...p, sales: Date.now() }));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('rt sales refresh failed');
+    }
+  };
+
+  // Debounce bursts of events
+  const deliveryTimerRef = useRef<number | null>(null);
+  const inventoryTimerRef = useRef<number | null>(null);
+  const scheduleDeliveryRefresh = () => {
+    if (deliveryTimerRef.current) window.clearTimeout(deliveryTimerRef.current);
+    deliveryTimerRef.current = window.setTimeout(rtFetchDelivery, 250);
+  };
+  const scheduleInventoryRefresh = () => {
+    if (inventoryTimerRef.current) window.clearTimeout(inventoryTimerRef.current);
+    inventoryTimerRef.current = window.setTimeout(rtFetchInventory, 300);
+  };
+  const salesTimerRef = useRef<number | null>(null);
+  const scheduleSalesRefresh = () => {
+    if (salesTimerRef.current) window.clearTimeout(salesTimerRef.current);
+    salesTimerRef.current = window.setTimeout(rtFetchSalesAndStaff, 220);
+  };
+
   useEffect(() => {
     fetchAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refetch when date range changes
+  useEffect(() => {
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange.startDate, dateRange.endDate]);
+
+  // Real-time: listen to delivery and inventory events and refresh relevant sections
+  useRealtime((socket) => {
+    socket.on('delivery:created', scheduleDeliveryRefresh);
+    socket.on('delivery:updated', scheduleDeliveryRefresh);
+    socket.on('delivery:status', scheduleDeliveryRefresh);
+    // Inventory may affect low/out-of-stock stats
+    socket.on('inventory.low_stock', scheduleInventoryRefresh);
+    // Sales impact revenue trend, top products, staff performance
+    socket.on('sales:created', scheduleSalesRefresh);
+  });
 
   const salesTrend = useMemo(() => {
     return (sales?.periodData || []).map((p: any) => ({ name: p.period, revenue: p.revenue, sales: p.sales }));
@@ -164,24 +254,67 @@ const Analytics: React.FC = () => {
 
         {/* Delivery Summary */}
         {deliveryPerf?.data?.summary && (
-          <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Delivery Performance</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-gray-600">Total Deliveries</p>
-                <p className="text-2xl font-bold">{(deliveryPerf.data.summary.total || 0).toLocaleString()}</p>
+          <GlassCard variant="darkSubtle" className="p-6 border border-[#3e3e3e]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-[#F8F8F8]">Delivery Performance</h3>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span className="relative inline-flex items-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse" /> Live
+                </span>
+                <span>• Updated {lastUpdated.delivery ? new Date(lastUpdated.delivery).toLocaleTimeString() : '—'}</span>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Completion Rate</p>
-                <p className="text-2xl font-bold">{(deliveryPerf.data.summary.completionRate || 0).toFixed(1)}%</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Total Deliveries */}
+              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-amber-400/20 border border-amber-400/30 text-amber-300">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-400">Total Deliveries</p>
+                    <p className="text-xl font-bold text-[#F8F8F8]">{(deliveryPerf.data.summary.total || 0).toLocaleString()}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Damaged Total</p>
-                <p className="text-2xl font-bold">{(deliveryPerf.data.summary.totalDamaged || 0).toLocaleString()}</p>
+
+              {/* Completion Rate */}
+              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-emerald-400/15 border border-emerald-400/30 text-emerald-300">
+                    <Percent className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-400">Completion Rate</p>
+                    <p className="text-xl font-bold text-[#F8F8F8]">{(deliveryPerf.data.summary.completionRate || 0).toFixed(1)}%</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Completed</p>
-                <p className="text-2xl font-bold">{(deliveryPerf.data.summary.statusCounts?.completed || 0).toLocaleString()}</p>
+
+              {/* Damaged Total */}
+              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-rose-400/15 border border-rose-400/30 text-rose-300">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-400">Damaged Total</p>
+                    <p className="text-xl font-bold text-[#F8F8F8]">{(deliveryPerf.data.summary.totalDamaged || 0).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Completed */}
+              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-sky-400/15 border border-sky-400/30 text-sky-300">
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-400">Completed</p>
+                    <p className="text-xl font-bold text-[#F8F8F8]">{(deliveryPerf.data.summary.statusCounts?.completed || 0).toLocaleString()}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </GlassCard>

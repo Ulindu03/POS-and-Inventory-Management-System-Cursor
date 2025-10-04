@@ -26,6 +26,9 @@ export const usersApi = {
   setRole(id: string, role: 'store_owner' | 'admin' | 'cashier' | 'sales_rep') {
     return client.patch(`/users/${id}/role`, { role });
   },
+  setFaceEmbedding(id: string, faceEmbedding: number[]) {
+    return client.patch(`/users/${id}/face`, { faceEmbedding });
+  },
   delete(id: string) {
     return client.delete(`/users/${id}`);
   },

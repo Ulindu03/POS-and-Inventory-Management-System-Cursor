@@ -1,7 +1,8 @@
 // Main layout component that wraps all pages with sidebar and header
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -9,13 +10,32 @@ interface AppLayoutProps {
 }
 
 export const AppLayout = ({ children, className = '' }: AppLayoutProps) => {
-  // Track whether sidebar is open or closed on mobile
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+  const STORAGE_KEY = 'vz_sidebar_open_v2';
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw === '1') return true;
+      if (raw === '0') return false;
+      return false; // new default: always closed until user toggles
+    } catch { return false; }
+  });
+  const location = useLocation();
+
+  // Persist state on any change (all breakpoints now)
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, sidebarOpen ? '1' : '0'); } catch {}
+  }, [sidebarOpen]);
+
+  // Auto-close on route change (navigation) if currently open
+  useEffect(() => {
+    if (sidebarOpen) setSidebarOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   return (
   <div className={`min-h-screen w-full flex relative ${className}`}>
       {/* Sidebar navigation menu */}
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+  <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       {/* Main content area */}
       <div className="flex-1 min-h-0 flex flex-col">
         {/* Top header with user info and controls */}

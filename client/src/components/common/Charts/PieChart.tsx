@@ -35,11 +35,11 @@ export const PieChart: React.FC<PieChartProps> = ({
       <ResponsiveContainer width="100%" height={height}>
         <RechartsPieChart>
           <Pie
-            data={data}
+            data={data as any}
             cx="50%"
             cy="50%"
             labelLine={false}
-            label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+            label={({ name, percent }: any) => `${name} ${(((percent as number) || 0) * 100).toFixed(0)}%`}
             outerRadius={100}
             innerRadius={55}
             paddingAngle={2}

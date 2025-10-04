@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Search, 
-  Edit, 
-  Trash2, 
-  Package, 
+import {
+  Search,
+  Edit,
+  Trash2,
+  Package,
   Tag,
   TrendingUp,
   TrendingDown,
-  AlertTriangle
+  AlertTriangle,
 } from 'lucide-react';
 import { ProductHistoryModal } from './ProductHistoryModal';
 import { formatLKR } from '@/lib/utils/currency';
 import { productsApi, categoriesApi } from '@/lib/api/products.api';
+import { proxyImage } from '@/lib/proxyImage';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface Product {
   _id: string;
@@ -68,6 +70,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
     outOfStock: 0
   });
   const [historyProduct, setHistoryProduct] = useState<{ id: string; name: string } | null>(null);
+  const [confirmingProduct, setConfirmingProduct] = useState<Product | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Load products (backend)
   useEffect(() => {
@@ -134,21 +139,53 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
     return { status: 'good', color: 'text-green-400', bgColor: 'bg-green-500/20', icon: <TrendingUp className="w-4 h-4" /> };
   };
 
-  const handleDelete = async (productId: string) => {
-    if (confirm('Are you sure you want to delete this product?')) {
-      try {
-        await productsApi.delete(productId);
-        setProducts(prev => prev.filter(p => p._id !== productId));
-        setStats(prev => ({
-          ...prev,
-          total: Math.max(prev.total - 1, 0)
-        }));
-      } catch (error) {
-        console.error('Error deleting product:', error);
-        alert('Failed to delete product');
-      }
+  const handleDeleteClick = (product: Product) => {
+    setDeleteError(null);
+    setConfirmingProduct(product);
+  };
+
+  const updateStatsFromList = (list: Product[]) => ({
+    total: list.length,
+    active: list.filter((p) => p.isActive !== false).length,
+    lowStock: list.filter((p) => {
+      const stock = p.stock?.current ?? 0;
+      return stock <= 10 && stock > 0;
+    }).length,
+    outOfStock: list.filter((p) => (p.stock?.current ?? 0) === 0).length,
+  });
+
+  const handleConfirmDelete = async () => {
+    if (!confirmingProduct) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      await productsApi.delete(confirmingProduct._id);
+      setProducts((prev) => {
+        const remaining = prev.filter((p) => p._id !== confirmingProduct._id);
+        setStats(updateStatsFromList(remaining));
+        return remaining;
+      });
+      setConfirmingProduct(null);
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      setDeleteError('Failed to delete product. Please try again.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
+
+  const handleCancelDelete = () => {
+    if (deleteLoading) return;
+    setConfirmingProduct(null);
+    setDeleteError(null);
+  };
+
+  const confirmTitle = confirmingProduct ? `Delete ${confirmingProduct.name.en}?` : 'Delete product';
+  const confirmDescription = deleteError
+    ? `${deleteError} Please check your connection and try again.`
+    : confirmingProduct
+      ? `This will permanently remove ${confirmingProduct.name.en} (SKU: ${confirmingProduct.sku}). Existing reports will remain for reference.`
+      : '';
 
   return (
     <div className="space-y-6">
@@ -309,7 +346,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                           <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center">
                             {thumbUrl && (
                               <img
-                                src={thumbUrl}
+                                src={proxyImage(thumbUrl)}
                                 alt={product.name.en}
                                 className="absolute inset-0 w-full h-full object-cover"
                                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
@@ -393,7 +430,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                           </button>
                           {canDelete && (
                             <button
-                              onClick={() => handleDelete(product._id)}
+                              onClick={() => handleDeleteClick(product)}
                               className="p-2 rounded-lg bg-white/10 hover:bg-red-500/20 transition-colors"
                               title="Delete Product"
                             >
@@ -438,6 +475,17 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
           onClose={() => setHistoryProduct(null)}
         />
       )}
+      <ConfirmDialog
+        open={Boolean(confirmingProduct)}
+        title={confirmTitle}
+        description={confirmDescription}
+        confirmLabel="Delete product"
+        cancelLabel="Keep product"
+        tone="danger"
+        loading={deleteLoading}
+        onConfirm={handleConfirmDelete}
+        onClose={handleCancelDelete}
+      />
     </div>
   );
 };

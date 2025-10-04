@@ -37,6 +37,7 @@ import path from 'path';
 import fs from 'fs';
 import swaggerUI from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
+// Note: Using the global fetch available in Node 18+. Removed 'node-fetch' import to avoid missing dependency errors.
 
 // Load environment variables
 dotenv.config();
@@ -87,7 +88,17 @@ const uploadsDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
-app.use('/uploads', express.static(uploadsDir));
+// Serve uploaded files with error handling
+app.use('/uploads', (req, res) => {
+  const filePath = path.join(uploadsDir, req.path);
+  fs.stat(filePath, (err, stats) => {
+    if (err || !stats.isFile()) {
+      return res.status(404).send('Image not found');
+    } else {
+      return res.sendFile(filePath);
+    }
+  });
+});
 
 // Swagger API docs
 app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
@@ -125,6 +136,71 @@ app.use('/api/damages', damageRoutes);
 app.use('/api/warranty', warrantyRoutes);
 app.use('/api/warranty-claims', warrantyClaimRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+
+// Simple image proxy to avoid third-party cookies / set-cookie headers leaking to browser
+// Usage: /api/proxy/img?url=<encoded remote url>
+// Limits: only http/https, max 5MB, content-type must start with image/
+app.get('/api/proxy/img', async (req, res): Promise<void> => {
+  try {
+    const rawUrl = String(req.query.url || '').trim();
+    if (!rawUrl) {
+      res.status(400).json({ error: 'Missing url parameter' });
+      return;
+    }
+    if (!/^https?:\/\//i.test(rawUrl)) {
+      res.status(400).json({ error: 'Only http(s) URLs allowed' });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const upstream = await fetch(rawUrl, { redirect: 'follow', signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!upstream.ok) {
+      res.status(upstream.status).json({ error: 'Upstream error', status: upstream.status });
+      return;
+    }
+
+    const ct = upstream.headers.get('content-type') || '';
+    if (!ct.startsWith('image/')) {
+      res.status(415).json({ error: 'Not an image resource' });
+      return;
+    }
+
+    // Enforce size limit by buffering up to 5MB
+    const MAX = 5 * 1024 * 1024;
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for await (const chunk of upstream.body as any) {
+      const buf = Buffer.from(chunk);
+      total += buf.length;
+      if (total > MAX) {
+        res.status(413).json({ error: 'Image too large (limit 5MB)' });
+        return; // stop processing further
+      }
+      chunks.push(buf);
+    }
+    const data = Buffer.concat(chunks);
+
+    res.setHeader('Content-Type', ct);
+    // Cache for 1 hour; customize if needed
+    res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=3600');
+    // NEVER forward upstream set-cookie
+    res.removeHeader('Set-Cookie');
+    res.send(data);
+    return; // explicit to satisfy TS
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      res.status(504).json({ error: 'Upstream timeout' });
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.error('[proxy][img] error', err);
+    res.status(500).json({ error: 'Proxy failure' });
+    return;
+  }
+});
 
 // Dev seed route for products and categories
 app.get('/api/dev/seed-products', async (_req, res) => {

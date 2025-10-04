@@ -14,6 +14,68 @@ import { sendPasswordResetEmail, sendOtpEmail, sendResetOtpEmail } from '../serv
 import { toCanonicalRole, requiresOtpForLogin } from '../utils/roles';
 
 export class AuthController {
+  // Face login: receive embedding and match against users
+  static async loginFace(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { embedding } = req.body as { embedding?: number[] };
+      if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+        return res.status(400).json({ success: false, message: 'Face embedding is required' });
+      }
+
+      // Fetch users that have stored embeddings
+      const users = await User.find({ faceEmbedding: { $exists: true, $type: 'array' } });
+      if (!users.length) {
+        return res.status(404).json({ success: false, message: 'No users with face data' });
+      }
+
+      // Compute cosine similarity and find best match
+      const norm = (v: number[]) => Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+      const dot = (a: number[], b: number[]) => a.reduce((s, x, i) => s + x * (b[i] || 0), 0);
+      const embA = embedding;
+      const normA = norm(embA);
+      let bestUser: typeof users[number] | null = null;
+      let bestScore = -1;
+
+      for (const u of users) {
+        const embB = (u as any).faceEmbedding as number[] | undefined;
+        if (!embB || embB.length !== embA.length) continue;
+        const score = dot(embA, embB) / (normA * norm(embB) || 1);
+        if (score > bestScore) {
+          bestScore = score;
+          bestUser = u;
+        }
+      }
+
+      // Strict threshold to reduce false accepts (cosine similarity close to 1 is more similar)
+      const COSINE_THRESHOLD = Number(process.env.FACE_COSINE_THRESHOLD || 0.9);
+      if (!bestUser || bestScore < COSINE_THRESHOLD) {
+        return res.status(401).json({ success: false, message: 'Face not recognized' });
+      }
+
+      // Enforce OTP after face match: do NOT issue tokens here
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      bestUser.otpCode = otp;
+      bestUser.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+      bestUser.otpAttempts = (bestUser.otpAttempts || 0) + 1;
+      await bestUser.save();
+      const emailResult = await sendOtpEmail(bestUser.email, otp);
+
+      return res.json({
+        success: true,
+        message: 'Face matched. OTP required to complete login',
+        data: {
+          requiresOtp: true,
+          user: { id: bestUser._id, username: bestUser.username, role: toCanonicalRole(bestUser.role) || bestUser.role },
+          similarity: bestScore,
+          emailSent: !!emailResult?.ok,
+          emailError: emailResult?.error,
+          emailPreviewUrl: (emailResult as any)?.preview,
+        },
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
   // Password reset via OTP flow
   static async passwordResetInit(req: Request, res: Response, next: NextFunction) {
     try {
@@ -87,7 +149,7 @@ export class AuthController {
   // Register new user
   static async register(req: Request, res: Response, next: NextFunction) {
     try {
-      const { username, email, password, firstName, lastName, role, phone } = req.body;
+      const { username, email, password, firstName, lastName, role, phone, faceEmbedding } = req.body;
 
       // Check if user already exists
       const existingUser = await User.findOne({
@@ -110,6 +172,7 @@ export class AuthController {
         lastName,
         role: role || 'cashier',
         phone,
+        ...(Array.isArray(faceEmbedding) && faceEmbedding.length ? { faceEmbedding } : {}),
       });
 
       await user.save();

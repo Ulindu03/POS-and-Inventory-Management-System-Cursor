@@ -10,6 +10,8 @@ export interface IUser extends Document {
 	lastName: string;
 	phone?: string;
 	avatar?: string;
+	// Optional face embedding vector for biometric login (stored as array of numbers)
+	faceEmbedding?: number[];
 	role: 'store_owner' | 'admin' | 'cashier' | 'sales_rep'; // 'admin' kept for legacy; normalized elsewhere
 	language: 'en' | 'si';
 	isActive: boolean;
@@ -64,6 +66,10 @@ const userSchema = new Schema<IUser>({
 	},
 	avatar: {
 		type: String
+	},
+	faceEmbedding: {
+		type: [Number],
+		default: undefined
 	},
 	role: {
 		type: String,

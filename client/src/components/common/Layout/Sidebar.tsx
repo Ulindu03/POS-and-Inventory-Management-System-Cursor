@@ -4,7 +4,7 @@ import { LayoutDashboard, ShoppingCart, Users, Package, Truck, FileText, Setting
 import { useAuthStore } from '@/store/auth.store';
 import { BrandLogo } from '@/components/common/BrandLogo';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 // Define all navigation menu items with their permissions
 const menuItems = [
@@ -38,6 +38,15 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
   // Get current page location and user role for filtering menu items
   const location = useLocation();
   const role = useAuthStore((s) => s.user?.role);
+  // Sidebar now fully controlled by parent for all breakpoints (no desktop pinning)
+
+  // Normalize role (case-insensitive) and map legacy/alias roles
+  const normalized = role ? role.toLowerCase() : undefined;
+  const effectiveRole = normalized === 'admin' ? 'store_owner' : normalized;
+
+  // Safe fallback subset (always allowed) used if filtering returns zero items
+  const fallbackLabels = new Set(['Dashboard', 'POS', 'Inventory', 'Products', 'Customers', 'Reports']);
+  const fallbackItems = menuItems.filter(mi => fallbackLabels.has(mi.label));
 
   // Animation variants for staggered menu item appearance
   const containerVariants = {
@@ -99,18 +108,20 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
       </motion.div>
 
-      {/* Navigation menu with role-based filtering */}
-      <motion.nav className="p-4 space-y-2" variants={containerVariants} initial="hidden" animate="show">
-        {menuItems
-          .filter((item: any) => {
-            // Filter menu items based on user role permissions
+    {/* Navigation menu with role-based filtering + guaranteed fallback
+      Added scroll container (overflow-y-auto) and hidden scrollbar styling. */}
+    <motion.nav className="p-4 space-y-2 flex-1 min-h-0 overflow-y-auto scrollbar-hide" variants={containerVariants} initial="hidden" animate="show">
+        {(function resolveMenu() {
+          const filtered = menuItems.filter((item: any) => {
             if (item.allowedRoles) {
-              return role ? item.allowedRoles.includes(role) : false;
+              return effectiveRole ? item.allowedRoles.includes(effectiveRole) : false;
             }
-            if (item.adminOnly && role !== 'admin') return false;
+            if (item.adminOnly && effectiveRole !== 'store_owner') return false; // after normalization
             return true;
-          })
-          .map((item) => {
+          });
+          const list = filtered.length > 0 ? filtered : fallbackItems;
+          return list;
+        })().map((item) => {
           const Icon = item.icon;
           const active = location.pathname.startsWith(item.path);
           return (
@@ -129,6 +140,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
               {/* Navigation link with icon and label */}
               <Link
                 to={item.path}
+                onClick={() => { onClose(); }}
                 className={`relative flex items-center gap-3 px-3 py-2 rounded-xl transition-colors group ${
                   active ? 'text-white' : 'text-[#F8F8F8]/80 hover:text-white'
                 }`}
@@ -155,7 +167,8 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
             </motion.div>
           );
         })}
-      </motion.nav>
+  </motion.nav>
+  <style>{`.scrollbar-hide{scrollbar-width:none;} .scrollbar-hide::-webkit-scrollbar{display:none;}`}</style>
     </motion.aside>
     </>
   );

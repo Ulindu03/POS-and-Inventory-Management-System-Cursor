@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/common/Layout/Layout';
 import { settingsApi } from '@/lib/api/settings.api';
 import { replaceSupabasePublicImage, deleteSupabasePublicImage } from '@/lib/supabase';
 import { useTranslation } from 'react-i18next';
+import { proxyImage } from '@/lib/proxyImage';
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<any>(null);
@@ -43,7 +44,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-3">
                   <div className="w-20 h-20 rounded-lg overflow-hidden bg-white/10 flex items-center justify-center">
                     {settings?.branding?.logoUrl ? (
-                      <img src={settings.branding.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                      <img src={proxyImage(settings.branding.logoUrl)} alt="Logo" className="w-full h-full object-contain" />
                     ) : (
                       <span className="text-xs opacity-70">{t('settings.logoNone')}</span>
                     )}

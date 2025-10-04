@@ -76,6 +76,11 @@ button:focus-visible {
   }
 }
 
+/* Hide native number input spinners (we provide custom +/- controls) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
 /* Ensure native select dropdown options are readable on dark UI */
 .vz-select { color: #F8F8F8; }
 .vz-select option { color: #111 !important; background-color: #ffffff !important; }
