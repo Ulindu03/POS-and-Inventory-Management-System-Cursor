@@ -17,6 +17,7 @@ router.get('/bulk/export', authenticate, authorize('store_owner'), ProductContro
 // Sticker batches
 router.post('/stickers/batch', authenticate, authorize('store_owner', 'cashier', 'sales_rep'), ProductController.createStickerBatch);
 router.get('/stickers/batch', authenticate, authorize('store_owner', 'cashier', 'sales_rep'), ProductController.getStickerBatch);
+router.get('/discounts/summary', authenticate, authorize('store_owner', 'cashier', 'sales_rep'), ProductController.discountSummary);
 
 // Protected routes (require authentication)
 router.get('/:id', authenticate, ProductController.getById);
@@ -27,6 +28,8 @@ router.post('/', authenticate, authorize('store_owner'), ProductController.creat
 router.put('/:id', authenticate, authorize('store_owner'), ProductController.update);
 router.delete('/:id', authenticate, authorize('store_owner'), ProductController.delete);
 router.patch('/:id/stock', authenticate, authorize('store_owner'), ProductController.updateStock);
+router.put('/:id/discount', authenticate, authorize('store_owner'), ProductController.upsertDiscount);
+router.delete('/:id/discount', authenticate, authorize('store_owner'), ProductController.removeDiscount);
 
 export default router;
 

@@ -1,5 +1,5 @@
 // Products management page for creating, editing, and organizing inventory items
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { ProductList } from '@/features/products/ProductList';
@@ -9,9 +9,21 @@ import ProductDeleteDialog from '../components/products/ProductDeleteDialog';
 import { CategoryManager } from '@/features/products/CategoryManager';
 import { productsApi } from '@/lib/api/products.api';
 import { useAuthStore } from '@/store/auth.store';
+// import { DiscountManager } from '@/features/products/DiscountManager';
+// Update the path below if DiscountManager exists elsewhere, for example:
+import { DiscountManager } from '../features/products/DiscountManager';
+// Or, if the file does not exist, comment out or remove this line and all usages of <DiscountManager />
+import { BadgePercent, Package, Tags } from '@/lib/safe-lucide-react';
 
-type ProductTab = 'list' | 'categories';
+type ProductTab = 'list' | 'discounts' | 'categories';
 type ProductModal = 'create' | 'edit' | 'category' | null;
+
+type ListedProduct = Parameters<ComponentProps<typeof ProductList>['onEdit']>[0];
+type ProductFormProduct = ComponentProps<typeof ProductForm>['product'];
+type EditableProduct = NonNullable<ProductFormProduct>;
+type ManagedProduct = ListedProduct;
+
+type StickerOpenDetail = { product?: ManagedProduct };
 
 const Products = () => {
   // State for active tab (products list or categories)
@@ -19,11 +31,11 @@ const Products = () => {
   // State for which modal is currently open
   const [activeModal, setActiveModal] = useState<ProductModal>(null);
   // State for product being edited
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedProduct, setSelectedProduct] = useState<EditableProduct | null>(null);
   // State for product being deleted
-  const [deletingProduct, setDeletingProduct] = useState<any>(null);
+  const [deletingProduct, setDeletingProduct] = useState<ManagedProduct | null>(null);
   // State for product sticker printing
-  const [stickerProduct, setStickerProduct] = useState<any>(null); // null allowed implicitly
+  const [stickerProduct, setStickerProduct] = useState<ManagedProduct | null>(null);
   
   // Get user role for access control
   const userRole = useAuthStore((s) => s.user?.role);
@@ -31,22 +43,46 @@ const Products = () => {
 
   // Listen for sticker printing events from other components
   useEffect(() => {
-    const handler = (e: any) => setStickerProduct(e.detail.product);
-    window.addEventListener('vz-stickers-open', handler as any);
-    return () => window.removeEventListener('vz-stickers-open', handler as any);
+    const handleStickerOpen = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail = (event as CustomEvent<StickerOpenDetail>).detail;
+      if (detail?.product) {
+        setStickerProduct(detail.product);
+      }
+    };
+    window.addEventListener('vz-stickers-open', handleStickerOpen);
+    return () => window.removeEventListener('vz-stickers-open', handleStickerOpen);
   }, []);
 
   const { t } = useTranslation();
 
   // Tab configuration for switching between products and categories
-  const tabs = [
-    { id: 'list' as const, label: t('productsPage.tabs.products'), icon: '📦' },
-    ...(isAdmin ? [{ id: 'categories' as const, label: t('productsPage.tabs.categories'), icon: '🏷️' }] : []),
-  ];
+  const canManageDiscounts = userRole === 'store_owner';
+
+  const tabs = useMemo<Array<{ id: ProductTab; label: string; icon: ReactNode }>>(() => {
+    const entries: Array<{ id: ProductTab; label: string; icon: ReactNode }> = [
+      { id: 'list', label: t('productsPage.tabs.products'), icon: <Package className="w-4 h-4" /> },
+  { id: 'discounts', label: t('productsPage.tabs.discounts', { defaultValue: 'Discount' }), icon: <BadgePercent className="w-4 h-4" /> },
+    ];
+
+    if (isAdmin) {
+      entries.push({ id: 'categories', label: t('productsPage.tabs.categories'), icon: <Tags className="w-4 h-4" /> });
+    }
+
+    return entries;
+  }, [isAdmin, t]);
 
   // Open edit modal for existing product
-  const handleEditProduct = (product: any) => {
-    setSelectedProduct(product);
+  const handleEditProduct = (product: ManagedProduct) => {
+    const categoryValue = (product as { category?: { _id?: string } | string }).category;
+    const normalizedCategory = typeof categoryValue === 'object' && categoryValue !== null
+      ? categoryValue._id ?? ''
+      : categoryValue;
+
+    setSelectedProduct({
+      ...(product as unknown as EditableProduct),
+      category: normalizedCategory,
+    });
     setActiveModal('edit');
   };
 
@@ -62,37 +98,6 @@ const Products = () => {
   const handleCloseModal = () => {
     setActiveModal(null);
     setSelectedProduct(null);
-  };
-
-  // Export all products to CSV file
-  const handleExport = async () => {
-    try {
-      const blob = await productsApi.bulkExport();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'products-export.csv';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('Export failed', e);
-      alert('Export failed');
-    }
-  };
-
-  // Import products from CSV file
-  const handleImport = async (file: File | null) => {
-    if (!file) return;
-    try {
-      const res = await productsApi.bulkImport(file);
-      alert(`Imported ${((res as any)?.data?.created) ?? 0} products`);
-      window.location.reload();
-    } catch (e) {
-      console.error('Import failed', e);
-      alert('Import failed');
-    }
   };
 
   return (
@@ -116,27 +121,6 @@ const Products = () => {
             >
               <span className="drop-shadow-sm">➕ {t('productsPage.addProduct')}</span>
             </button>
-            <button
-              onClick={() => setActiveModal('category')}
-              className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all"
-            >
-              🏷️ {t('productsPage.manageCategories')}
-            </button>
-            <button
-              onClick={handleExport}
-              className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all"
-            >
-              ⬇️ {t('productsPage.exportCsv')}
-            </button>
-            <label className="px-5 py-2.5 rounded-2xl font-semibold text-sm tracking-wide bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 hover:border-white/20 backdrop-blur-sm transition-all cursor-pointer">
-              <span>⬆️ {t('productsPage.importCsv')}</span>
-              <input
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={(e) => handleImport(e.target.files?.[0] || null)}
-              />
-            </label>
           </div>
         </div>
 
@@ -155,7 +139,7 @@ const Products = () => {
                 }`}
               >
                 <span className="relative z-10 flex items-center gap-2">
-                  <span>{tab.icon}</span>
+                  <span className="flex items-center justify-center">{tab.icon}</span>
                   {tab.label}
                 </span>
                 {active && (
@@ -176,6 +160,9 @@ const Products = () => {
               canDelete={isAdmin}
               canCreate={isAdmin}
             />
+          )}
+          {activeTab === 'discounts' && (
+            <DiscountManager canManage={canManageDiscounts} />
           )}
           {activeTab === 'categories' && (
             <CategoryManager />

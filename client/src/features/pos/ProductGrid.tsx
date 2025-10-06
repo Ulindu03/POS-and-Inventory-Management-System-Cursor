@@ -3,6 +3,7 @@ import { productsApi, categoriesApi, type ProductListItem, type CategoryItem } f
 import { motion } from 'framer-motion';
 import { proxyImage } from '@/lib/proxyImage';
 import { useEffect, useState } from 'react';
+import { formatLKR } from '@/lib/utils/currency';
 
 export const ProductGrid = () => {
   const addItem = useCartStore((s) => s.addItem);
@@ -65,7 +66,7 @@ export const ProductGrid = () => {
       {loading ? (
         <div className="opacity-80">Loading...</div>
     ) : (
-  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 md:gap-3 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 md:gap-3 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
           {items.map((p) => {
             // Prefer inventory/effectiveStock where available
             const eff = p.effectiveStock || undefined;
@@ -74,12 +75,39 @@ export const ProductGrid = () => {
             const out = current <= 0; // hard stop
             const low = !out && min > 0 && current <= min; // low-stock hint only
 
+            const basePrice = p.price?.retail ?? 0;
+            const finalPrice = p.pricing?.final ?? basePrice;
+            const perUnitSavings = Math.max(0, (p.pricing?.discountAmount ?? 0));
+            const hasActiveDiscount = Boolean(p.pricing?.hasActiveDiscount && perUnitSavings > 0);
+            const discountLabel = (() => {
+              if (!hasActiveDiscount) return '';
+              if (p.discount?.type === 'percentage') {
+                return `-${p.discount.value}%`;
+              }
+              if (perUnitSavings > 0) {
+                return `-${formatLKR(perUnitSavings)}`;
+              }
+              return 'Promo';
+            })();
+
             return (
               <motion.button
                 key={p._id}
                 whileHover={{ scale: out ? 1 : 1.02 }}
                 whileTap={{ scale: out ? 1 : 0.98 }}
-                onClick={() => { if (!out) addItem({ id: p._id, name: p.name.en, price: p.price.retail }); }}
+                onClick={() => {
+                  if (!out) {
+                    addItem({
+                      id: p._id,
+                      name: p.name.en,
+                      price: finalPrice,
+                      basePrice,
+                      discountAmount: perUnitSavings,
+                      discountType: p.discount?.type,
+                      discountValue: p.discount?.value,
+                    });
+                  }
+                }}
                 disabled={out}
                 className={`relative text-left rounded-2xl p-4 border border-white/10 bg-white/5 backdrop-blur-md ${out ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/10'} transition`}
               >
@@ -112,10 +140,24 @@ export const ProductGrid = () => {
                   <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-sm">Out of stock</span>
                 )}
                 {low && (
-                  <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/90 text-black shadow-sm">Low</span>
+                  <span className="absolute bottom-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/90 text-black shadow-sm">Low</span>
+                )}
+                {hasActiveDiscount && (
+                  <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/90 text-black shadow-sm">
+                    {discountLabel}
+                  </span>
                 )}
                 <div className="font-medium text-[#F8F8F8]">{p.name.en}</div>
-                <div className="text-sm opacity-80">LKR {p.price.retail.toLocaleString('en-LK', { minimumFractionDigits: 2 })}</div>
+                <div className="text-sm opacity-80">
+                  {hasActiveDiscount ? (
+                    <div className="space-y-0.5">
+                      <span className="line-through text-white/40 block text-xs">{formatLKR(basePrice)}</span>
+                      <span className="text-emerald-300 font-semibold block">{formatLKR(finalPrice)}</span>
+                    </div>
+                  ) : (
+                    formatLKR(basePrice)
+                  )}
+                </div>
               </motion.button>
             );
           })}

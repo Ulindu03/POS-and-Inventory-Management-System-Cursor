@@ -4,10 +4,10 @@ import { formatLKR } from '@/lib/utils/currency';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 
 export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void; onClear?: () => void; onDamage?: () => void; onHold?: () => void }) => {
-  const { items, inc, dec, remove, subtotal, tax, total, discount, setDiscount } = useCartStore();
+  const { items, inc, dec, remove, subtotal, tax, total, autoDiscount, totalDiscount } = useCartStore();
+  const promoSavings = autoDiscount();
+  const couponSavings = Math.max(0, totalDiscount() - promoSavings);
   const totalAmount = total();
-  const role = useAuthStore((s) => s.user?.role);
-  const canDiscount = role === 'admin' || role === 'store_owner';
 
   return (
     <div className="flex flex-col h-full min-h-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
@@ -18,7 +18,26 @@ export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void;
           <div key={i.id} className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-[#F8F8F8]">{i.name}</div>
-              <div className="text-xs opacity-80">{`${formatLKR(i.price)} x ${i.qty}`} = <span className="font-medium text-[#F8F8F8]">{formatLKR(i.price * i.qty)}</span></div>
+              <div className="text-xs opacity-80 space-y-0.5">
+                {i.basePrice && i.basePrice > i.price ? (
+                  <>
+                    <span className="line-through text-white/40 block">{formatLKR(i.basePrice)}</span>
+                    <span className="text-emerald-300 font-semibold block">{formatLKR(i.price)}</span>
+                    <span>
+                      × {i.qty} ={' '}
+                      <span className="font-medium text-[#F8F8F8]">{formatLKR(i.price * i.qty)}</span>
+                    </span>
+                    {i.discountAmount && i.discountAmount > 0 ? (
+                      <span className="block text-emerald-300">Saving {formatLKR(i.discountAmount * i.qty)}</span>
+                    ) : null}
+                  </>
+                ) : (
+                  <span>
+                    {formatLKR(i.price)} x {i.qty} ={' '}
+                    <span className="font-medium text-[#F8F8F8]">{formatLKR(i.price * i.qty)}</span>
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => dec(i.id)} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20">
@@ -37,18 +56,19 @@ export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void;
       </div>
   <div className="mt-auto p-4 border-t border-white/10 space-y-2 shrink-0">
         <div className="flex justify-between text-sm opacity-90"><span>Subtotal</span><span>{formatLKR(subtotal())}</span></div>
-        <div className="flex justify-between text-sm opacity-90"><span>Tax</span><span>{formatLKR(tax())}</span></div>
-        {canDiscount && (
-          <div className="flex justify-between items-center text-sm opacity-90">
-            <span>Discount</span>
-            <input
-              type="number"
-              value={discount}
-              onChange={(e) => setDiscount(Number(e.target.value || 0))}
-              className="w-28 bg-white/10 border border-white/10 rounded-lg px-2 py-1 focus:outline-none"
-            />
+        {promoSavings > 0 && (
+          <div className="flex justify-between text-sm text-emerald-300">
+            <span>Promo savings</span>
+            <span>-{formatLKR(promoSavings)}</span>
           </div>
         )}
+        {couponSavings > 0 && (
+          <div className="flex justify-between text-sm text-emerald-200">
+            <span>Coupon discount</span>
+            <span>-{formatLKR(couponSavings)}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-sm opacity-90"><span>Tax</span><span>{formatLKR(tax())}</span></div>
         <div className="flex justify-between font-semibold text-[#F8F8F8] pt-2 border-t border-white/10">
           <span>Total</span><span>{formatLKR(totalAmount)}</span>
         </div>

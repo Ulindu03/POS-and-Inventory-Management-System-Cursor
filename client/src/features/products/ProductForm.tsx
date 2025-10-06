@@ -29,7 +29,7 @@ type ImageItem = { url: string; alt?: string; isPrimary?: boolean };
 type FormDataType = {
   _id?: string;
   sku: string;
-  name: { en: string; si: string };
+  name: { en: string; si?: string };
   category: string;
   brand: string;
   supplier: string;
@@ -57,6 +57,9 @@ type ProductFormProps = {
 };
 
 const MAX_IMAGES = 10;
+const SKU_MIN_LENGTH = 12;
+const SKU_MAX_LENGTH = 24;
+const SKU_PATTERN = /^[A-Z]{3}-[A-Z]{2,3}-[A-Z0-9]{2,4}(?:-[A-Z0-9]{2,4})?-\d{3,}$/;
 
 function PriceInput({ id, label, value, onChange, required, invalid }: { id: string; label: string; value: number; onChange: (v: number) => void; required?: boolean; invalid?: boolean }) {
   return (
@@ -118,7 +121,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
   const [formData, setFormData] = useState<FormDataType>({
     _id: product?._id,
     sku: product?.sku || '',
-    name: { en: product?.name?.en || '', si: product?.name?.si || '' },
+    name: { en: product?.name?.en || '' },
     category: product?.category || '',
     brand: (product as any)?.brand || '',
     supplier: (product as any)?.supplier || '',
@@ -231,7 +234,18 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
     let normalized = value.toUpperCase().replace(/[^A-Z0-9-]/g, '-').replace(/--+/g, '-');
     normalized = normalized.replace(/^-+/, '');
     if (!allowTrailingDash) normalized = normalized.replace(/-+$/g, '');
-    return normalized.slice(0, 32);
+    return normalized.slice(0, SKU_MAX_LENGTH);
+  };
+
+  const getSkuValidationError = (sku: string) => {
+    if (!sku) return 'SKU is required.';
+    if (sku.length < SKU_MIN_LENGTH || sku.length > SKU_MAX_LENGTH) {
+      return `SKU must be between ${SKU_MIN_LENGTH} and ${SKU_MAX_LENGTH} characters.`;
+    }
+    if (!SKU_PATTERN.test(sku)) {
+      return 'SKU must follow CAT-BRD-SPEC(-VAR optional)-### pattern.';
+    }
+    return null;
   };
 
   const abbreviate = (text: string, length = 3) => {
@@ -259,72 +273,127 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
   };
 
   const deriveCategoryCode = () => {
-    if (!formData.category) return '';
+    if (!formData.category) return 'GEN';
     const match = categories.find((cat) => cat._id === formData.category);
-    return abbreviate(match?.name?.en || '', 3);
+    const code = abbreviate(match?.name?.en || '', 3);
+    return code.length === 3 ? code : (code + 'GEN').slice(0, 3);
   };
 
-  const deriveDescriptorCode = () => {
-    const brandSource = formData.brand ? abbreviate(formData.brand, 3) : '';
-    if (brandSource) return brandSource;
-
-    const nameWords = formData.name.en?.split(/\s+/).filter((word) => /[A-Za-z]/.test(word)) || [];
-    if (!nameWords.length) return '';
-    return abbreviate(nameWords[0], 3);
+  const deriveBrandCode = () => {
+    const primary = formData.brand || '';
+    const fallbackWords = (formData.name.en || '').split(/\s+/).filter(Boolean);
+    const fallback = fallbackWords.length > 1 ? fallbackWords[1] : fallbackWords[0] || '';
+    const source = primary || fallback;
+    let code = abbreviate(source, 3);
+    if (code.length < 2) {
+      const extra = abbreviate(fallback || primary || 'GEN', 3);
+      code = (code + extra).slice(0, 3);
+    }
+    if (code.length < 2) code = 'GEN';
+    return code.slice(0, 3);
   };
 
   const deriveSpecCode = () => {
-    const tokens = (formData.name.en || '')
+    const nameTokens = (formData.name.en || '')
       .split(/[\s/]+/)
-      .flatMap((token) => token.split('-'));
-    for (const token of tokens) {
-      if (!token) continue;
-      if (/\d/.test(token)) {
-        const normalized = token.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (normalized) return normalized;
-      }
+      .flatMap((token) => token.split('-'))
+      .map((token) => token.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+      .filter(Boolean);
+
+    let candidate = nameTokens.find((token) => /\d/.test(token));
+    if (!candidate) {
+      candidate = nameTokens[1] || nameTokens[0] || '';
     }
-    return '';
+    if (!candidate) {
+      candidate = abbreviate(formData.unit || 'STD', 3);
+    }
+
+    let normalized = candidate.replace(/[^A-Z0-9]/g, '').slice(0, 4);
+    if (normalized.length < 2) {
+      normalized = (normalized + '00').slice(0, 2);
+    }
+    return normalized;
   };
 
-  const buildStandardSkuBase = () => {
-    const spec = deriveSpecCode();
+  const buildStandardSkuBase = (sequenceWidth = 3) => {
     const categoryCode = deriveCategoryCode();
-    const descriptor = deriveDescriptorCode();
-    const segments: string[] = [];
-    if (spec) segments.push(spec);
-    if (categoryCode) segments.push(categoryCode);
-    if (descriptor && !segments.includes(descriptor)) segments.push(descriptor);
-    const base = segments.filter(Boolean).join('-');
-    return normalizeSku(base || 'ITEM', { allowTrailingDash: false });
+    const brandCode = deriveBrandCode();
+    let specCode = deriveSpecCode();
+    const maxBaseLength = SKU_MAX_LENGTH - (sequenceWidth + 1);
+
+    const compose = (spec: string) => normalizeSku([categoryCode, brandCode, spec].join('-'), { allowTrailingDash: false });
+    let base = compose(specCode);
+
+    while (base.length > maxBaseLength && specCode.length > 2) {
+      specCode = specCode.slice(0, -1);
+      base = compose(specCode);
+    }
+
+    if (base.length > maxBaseLength) {
+      base = base.slice(0, maxBaseLength).replace(/-+$/g, '');
+    }
+
+    return base;
   };
 
   async function handleGenerateSku() {
     if (generatingSku) return;
     setGeneratingSku(true);
     try {
-      const base = buildStandardSkuBase();
-      const res = await productsApi.list({ q: base } as any);
-      const items: any[] = (res as any).data?.items || [];
-      const existing = items.map((it) => String((it as any).sku || '')).filter((s) => s.toUpperCase().startsWith(base));
+      const fetchExisting = async (prefix: string) => {
+        const res = await productsApi.list({ q: prefix } as any);
+        const items: any[] = (res as any).data?.items || [];
+        return items
+          .map((it) => String((it as any).sku || '').toUpperCase())
+          .filter((sku) => sku.startsWith(prefix.toUpperCase()));
+      };
 
-      const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const suffixRegex = new RegExp(`^${escapedBase}-(\\d+)$`);
-      const suffixes = existing
-        .map((s) => {
-          if (s.toUpperCase() === base) return 0;
-          const match = s.toUpperCase().match(suffixRegex);
-          return match ? parseInt(match[1], 10) : null;
-        })
-        .filter((n): n is number => typeof n === 'number' && !Number.isNaN(n));
+      const calculateNextSequence = (prefix: string, candidates: string[]) => {
+        const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`^${escaped}-(\\d+)$`, 'i');
+        const suffixes = candidates
+          .map((sku) => {
+            const match = sku.match(regex);
+            if (match) return parseInt(match[1], 10);
+            if (sku === prefix.toUpperCase()) return 0;
+            return null;
+          })
+          .filter((n): n is number => typeof n === 'number' && !Number.isNaN(n));
 
-      const hasBase = existing.some((s) => s.toUpperCase() === base);
-      const maxSuffix = suffixes.length ? Math.max(...suffixes) : 0;
-      const width = Math.max(3, ...suffixes.map((n) => String(n).length));
-      const nextNumber = (hasBase || suffixes.length) ? maxSuffix + 1 : 0;
-      const sku = nextNumber > 0 ? `${base}-${String(nextNumber).padStart(width, '0')}` : base;
+        const maxSuffix = suffixes.length ? Math.max(...suffixes) : 0;
+        const nextNumber = suffixes.length ? maxSuffix + 1 : 1;
+        const width = Math.max(3, ...suffixes.map((n) => String(n).length), String(nextNumber).length);
+        return { nextNumber, width };
+      };
 
-      setFormData((p) => ({ ...p, sku }));
+      let base = buildStandardSkuBase();
+      let existing = await fetchExisting(base);
+      let { nextNumber, width } = calculateNextSequence(base, existing);
+
+      if (width > 3) {
+        base = buildStandardSkuBase(width);
+        existing = width > 3 ? await fetchExisting(base) : existing;
+        ({ nextNumber, width } = calculateNextSequence(base, existing));
+      }
+
+      const sequence = String(nextNumber).padStart(width, '0');
+      let sku = `${base}-${sequence}`;
+
+      if (sku.length > SKU_MAX_LENGTH) {
+        const allowedBaseLength = SKU_MAX_LENGTH - (width + 1);
+        const [categoryCode, brandCode] = base.split('-');
+        let specCode = base.split('-').slice(2).join('-');
+        if (!specCode) {
+          specCode = deriveSpecCode();
+        }
+        while (`${categoryCode}-${brandCode}-${specCode}`.length > allowedBaseLength && specCode.length > 2) {
+          specCode = specCode.slice(0, -1);
+        }
+        const trimmedBase = normalizeSku(`${categoryCode}-${brandCode}-${specCode}`, { allowTrailingDash: false }).slice(0, allowedBaseLength).replace(/-+$/g, '');
+        sku = `${trimmedBase}-${sequence}`;
+      }
+
+      setFormData((p) => ({ ...p, sku: normalizeSku(sku, { allowTrailingDash: false }) }));
     } catch (e) {
       console.error('generate sku failed', e);
     } finally {
@@ -409,7 +478,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
   function validate(): boolean {
     const errs: string[] = [];
     if (!formData.name.en) errs.push('name.en');
-    if (!formData.sku) errs.push('sku');
+    if (getSkuValidationError(formData.sku)) errs.push('sku');
     if (!formData.category) errs.push('category');
     if ((formData.price.cost || 0) <= 0) errs.push('price.cost');
     if ((formData.price.retail || 0) <= 0) errs.push('price.retail');
@@ -456,6 +525,9 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
     }
   }
 
+  const skuError = getSkuValidationError(formData.sku);
+  const shouldShowSkuError = (touched.sku || submitAttempted) && Boolean(skuError);
+
   if (!isOpen) return null;
 
   return (
@@ -493,13 +565,6 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                       )}
                     </div>
                     <div>
-                      <label htmlFor="name_si" className="block text-sm font-medium text-white mb-2">Product Name (Sinhala)</label>
-                      <div className="relative">
-                        <FileText className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
-                        <input type="text" id="name_si" value={formData.name.si} onChange={(e) => setFormData(prev => ({ ...prev, name: { ...prev.name, si: e.target.value } }))} className="w-full h-12 pl-12 pr-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20" placeholder="නිෂ්පාදන නම සිංහලෙන්" />
-                      </div>
-                    </div>
-                    <div>
                       <label htmlFor="sku" className="block text-sm font-medium text-white mb-2">SKU <span className="text-rose-400">*</span></label>
                       <div className="relative flex gap-2">
                         <div className="relative flex-1">
@@ -517,19 +582,19 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                               setFormData(prev => ({ ...prev, sku: normalizeSku(prev.sku || '', { allowTrailingDash: false }) }));
                               setTouched(t => ({ ...t, sku: true }));
                             }}
-                            aria-invalid={Boolean((touched.sku||submitAttempted) && !formData.sku)}
-                            aria-describedby={(touched.sku||submitAttempted) && !formData.sku ? 'sku-error' : undefined}
-                            className={`w-full h-12 pl-12 pr-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border ${((touched.sku||submitAttempted) && !formData.sku) ? 'border-rose-400' : 'border-white/20 hover:border-white/30 focus:border-white/40'} focus:outline-none focus:ring-2 focus:ring-white/20`}
-                            placeholder="e.g., LED-001"
-                            title="A unique Stock Keeping Unit code"
+                            aria-invalid={shouldShowSkuError}
+                            aria-describedby={shouldShowSkuError ? 'sku-error' : undefined}
+                            className={`w-full h-12 pl-12 pr-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border ${shouldShowSkuError ? 'border-rose-400' : 'border-white/20 hover:border-white/30 focus:border-white/40'} focus:outline-none focus:ring-2 focus:ring-white/20`}
+                            placeholder="e.g., FAN-PAN-16W-001"
+                            title="Follow CAT-BRD-SPEC-### format (optional variant before digits)"
                           />
                         </div>
-                        <button type="button" onClick={handleGenerateSku} disabled={generatingSku} className="h-12 px-4 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 transition-colors" title="Generate SKU from product name">{generatingSku ? '...' : (<><Wand2 className="w-4 h-4" /> Generate</>)}</button>
+                        <button type="button" onClick={handleGenerateSku} disabled={generatingSku} className="h-12 px-4 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 transition-colors" title="Generate SKU using CAT-BRD-SPEC-### pattern">{generatingSku ? '...' : (<><Wand2 className="w-4 h-4" /> Generate</>)}</button>
                       </div>
-                      {(touched.sku || submitAttempted) && !formData.sku && (
-                        <p id="sku-error" className="mt-1 text-xs text-rose-400">SKU is required.</p>
+                      {shouldShowSkuError && skuError && (
+                        <p id="sku-error" className="mt-1 text-xs text-rose-400">{skuError}</p>
                       )}
-                      <p className="text-xs text-white/70 mt-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-400/20">💡 Tip: Click Generate to suggest a unique SKU based on the name.</p>
+                      <p className="text-xs text-white/70 mt-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-400/20">💡 Format: <span className="font-semibold text-white">CAT-BRD-SPEC-###</span> (e.g., <span className="text-white">FAN-PAN-16W-001</span>). Add an optional variant like <span className="text-white">-WHT</span> before the number when needed.</p>
                     </div>
                     <div>
                       <label htmlFor="category" className="block text-sm font-medium text-white mb-2">Category <span className="text-rose-400">*</span></label>
@@ -721,6 +786,85 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                     )}
                   </div>
                 </div>
+
+                {/* Inventory */}
+                <div className="rounded-2xl shadow-lg border border-white/10 p-6 md:p-8" style={{ backgroundColor: '#252526' }}>
+                  <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2"><Package className="w-5 h-5 text-indigo-300" /> Inventory</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="flex flex-col">
+                      <label htmlFor="stock_current" className="block text-sm font-medium text-white mb-2">Current Stock</label>
+                      <input type="number" min={0} id="stock_current" value={formData.stock.current} onChange={(e) => setFormData(prev => ({ ...prev, stock: { ...prev.stock, current: parseInt(e.target.value) || 0 } }))} className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20 text-center" placeholder="0" />
+                    </div>
+                    <div className="flex flex-col">
+                      <label htmlFor="minimum_stock" className="block text-sm font-medium text-white mb-2">Minimum Stock</label>
+                      <input type="number" min={0} id="minimum_stock" value={formData.minimumStock} onChange={(e) => setFormData(prev => ({ ...prev, minimumStock: parseInt(e.target.value) || 0 }))} className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20 text-center" placeholder="0" />
+                    </div>
+                    <div className="flex flex-col">
+                      <label htmlFor="reorder_point" className="block text-sm font-medium text-white mb-2">Reorder Point</label>
+                      <input type="number" min={0} id="reorder_point" value={formData.reorderPoint} onChange={(e) => setFormData(prev => ({ ...prev, reorderPoint: parseInt(e.target.value) || 0 }))} className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20 text-center" placeholder="0" />
+                    </div>
+                    <div className="flex flex-col">
+                      <label htmlFor="unit" className="block text-sm font-medium text-white mb-2">Unit</label>
+                      <div className="relative">
+                        <div className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white border border-white/20 hover:border-white/30 focus-within:border-white/40 focus-within:ring-2 focus-within:ring-white/20 flex items-center justify-center cursor-pointer group">
+                          <span className="text-center text-white text-sm font-medium truncate">
+                            {getUnitDisplayName(formData.unit)}
+                          </span>
+                          <select 
+                            id="unit" 
+                            value={formData.unit} 
+                            onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))} 
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          >
+                            <option value="pcs">Pieces</option>
+                            <option value="kg">Kilograms</option>
+                            <option value="g">Grams</option>
+                            <option value="m">Meters</option>
+                            <option value="cm">Centimeters</option>
+                            <option value="l">Liters</option>
+                            <option value="ml">Milliliters</option>
+                            <option value="box">Box</option>
+                            <option value="pack">Pack</option>
+                            <option value="pair">Pair</option>
+                            <option value="set">Set</option>
+                            <option value="roll">Roll</option>
+                            <option value="bottle">Bottle</option>
+                            <option value="sheet">Sheet</option>
+                          </select>
+                          <div className="pointer-events-none">
+                            <svg className="h-4 w-4 text-white/60 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {!product && (
+                    <div className="mt-4 grid grid-cols-1 gap-4">
+                      <div className="text-sm text-white">Generate Barcodes:</div>
+                      <div className="flex flex-col gap-2 text-white">
+                        <label className="inline-flex items-center gap-2">
+                          <input type="radio" name="barcodeMode" value="single" checked={barcodeMode==='single'} onChange={() => setBarcodeMode('single')} />
+                          <span>Single barcode for all units (faster)</span>
+                        </label>
+                        <label className="inline-flex items-center gap-2">
+                          <input type="radio" name="barcodeMode" value="unique" checked={barcodeMode==='unique'} onChange={() => setBarcodeMode('unique')} />
+                          <span>Unique barcode per unit (tracking)</span>
+                        </label>
+                      </div>
+                      {barcodeMode === 'unique' && (
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <label htmlFor="stickers_qty" className="block text-sm font-medium text-white mb-2">Quantity to barcode</label>
+                            <input type="number" id="stickers_qty" min={0} value={stickersQty || formData.stock.current} onChange={(e) => setStickersQty(parseInt(e.target.value) || 0)} className="w-full h-12 px-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20" placeholder="e.g. 24" />
+                            <p className="text-xs text-white/70 mt-1">Per-unit barcodes enable individual item tracking but take longer to generate.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* RIGHT: media & others */}
@@ -804,85 +948,6 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Inventory */}
-                <div className="rounded-2xl shadow-lg border border-white/10 p-6 md:p-8" style={{ backgroundColor: '#252526' }}>
-                  <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2"><Package className="w-5 h-5 text-indigo-300" /> Inventory</h3>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="flex flex-col">
-                      <label htmlFor="stock_current" className="block text-sm font-medium text-white mb-2">Current Stock</label>
-                      <input type="number" min={0} id="stock_current" value={formData.stock.current} onChange={(e) => setFormData(prev => ({ ...prev, stock: { ...prev.stock, current: parseInt(e.target.value) || 0 } }))} className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20 text-center" placeholder="0" />
-                    </div>
-                    <div className="flex flex-col">
-                      <label htmlFor="minimum_stock" className="block text-sm font-medium text-white mb-2">Minimum Stock</label>
-                      <input type="number" min={0} id="minimum_stock" value={formData.minimumStock} onChange={(e) => setFormData(prev => ({ ...prev, minimumStock: parseInt(e.target.value) || 0 }))} className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20 text-center" placeholder="0" />
-                    </div>
-                    <div className="flex flex-col">
-                      <label htmlFor="reorder_point" className="block text-sm font-medium text-white mb-2">Reorder Point</label>
-                      <input type="number" min={0} id="reorder_point" value={formData.reorderPoint} onChange={(e) => setFormData(prev => ({ ...prev, reorderPoint: parseInt(e.target.value) || 0 }))} className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20 text-center" placeholder="0" />
-                    </div>
-                    <div className="flex flex-col">
-                      <label htmlFor="unit" className="block text-sm font-medium text-white mb-2">Unit</label>
-                      <div className="relative">
-                        <div className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white border border-white/20 hover:border-white/30 focus-within:border-white/40 focus-within:ring-2 focus-within:ring-white/20 flex items-center justify-center cursor-pointer group">
-                          <span className="text-center text-white text-sm font-medium truncate">
-                            {getUnitDisplayName(formData.unit)}
-                          </span>
-                          <select 
-                            id="unit" 
-                            value={formData.unit} 
-                            onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))} 
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          >
-                            <option value="pcs">Pieces</option>
-                            <option value="kg">Kilograms</option>
-                            <option value="g">Grams</option>
-                            <option value="m">Meters</option>
-                            <option value="cm">Centimeters</option>
-                            <option value="l">Liters</option>
-                            <option value="ml">Milliliters</option>
-                            <option value="box">Box</option>
-                            <option value="pack">Pack</option>
-                            <option value="pair">Pair</option>
-                            <option value="set">Set</option>
-                            <option value="roll">Roll</option>
-                            <option value="bottle">Bottle</option>
-                            <option value="sheet">Sheet</option>
-                          </select>
-                          <div className="pointer-events-none">
-                            <svg className="h-4 w-4 text-white/60 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {!product && (
-                    <div className="mt-4 grid grid-cols-1 gap-4">
-                      <div className="text-sm text-white">Generate Barcodes:</div>
-                      <div className="flex flex-col gap-2 text-white">
-                        <label className="inline-flex items-center gap-2">
-                          <input type="radio" name="barcodeMode" value="single" checked={barcodeMode==='single'} onChange={() => setBarcodeMode('single')} />
-                          <span>Single barcode for all units (faster)</span>
-                        </label>
-                        <label className="inline-flex items-center gap-2">
-                          <input type="radio" name="barcodeMode" value="unique" checked={barcodeMode==='unique'} onChange={() => setBarcodeMode('unique')} />
-                          <span>Unique barcode per unit (tracking)</span>
-                        </label>
-                      </div>
-                      {barcodeMode === 'unique' && (
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1">
-                            <label htmlFor="stickers_qty" className="block text-sm font-medium text-white mb-2">Quantity to barcode</label>
-                            <input type="number" id="stickers_qty" min={0} value={stickersQty || formData.stock.current} onChange={(e) => setStickersQty(parseInt(e.target.value) || 0)} className="w-full h-12 px-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20" placeholder="e.g. 24" />
-                            <p className="text-xs text-white/70 mt-1">Per-unit barcodes enable individual item tracking but take longer to generate.</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

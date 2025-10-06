@@ -17,7 +17,10 @@ import {
   Mail,
   ArrowLeft,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ScanFace,
+  CheckCircle2,
+  Lightbulb
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -148,6 +151,40 @@ const Aurora = () => (
     />
   </>
 );
+
+type FaceScanTone = 'idle' | 'active' | 'loading' | 'success';
+
+const FACE_SCAN_TONE_STYLES: Record<FaceScanTone, {
+  container: string;
+  iconWrap: string;
+  label: string;
+  detail: string;
+}> = {
+  idle: {
+    container: 'bg-gradient-to-r from-white/10 via-white/5 to-transparent border border-white/10',
+    iconWrap: 'bg-white/10 text-white',
+    label: 'text-white',
+    detail: 'text-white/60',
+  },
+  active: {
+    container: 'bg-gradient-to-r from-amber-400/20 via-amber-400/10 to-transparent border border-amber-300/25',
+    iconWrap: 'bg-amber-500/15 text-amber-200',
+    label: 'text-amber-100',
+    detail: 'text-amber-100/70',
+  },
+  loading: {
+    container: 'bg-gradient-to-r from-amber-500/25 via-amber-500/15 to-transparent border border-amber-400/25',
+    iconWrap: 'bg-amber-500/15 text-amber-100',
+    label: 'text-amber-100',
+    detail: 'text-amber-100/70',
+  },
+  success: {
+    container: 'bg-gradient-to-r from-emerald-500/20 via-emerald-500/10 to-transparent border border-emerald-400/25',
+    iconWrap: 'bg-emerald-500/15 text-emerald-100',
+    label: 'text-emerald-100',
+    detail: 'text-emerald-100/70',
+  },
+};
 
 // Separate, smaller components to keep the main component simple
 type TText = ReturnType<typeof buildText>;
@@ -738,6 +775,35 @@ const LoginPage = () => {
     return () => { document.body.style.overflow = prevOverflow; };
   }, []);
 
+  let faceScanTone: FaceScanTone = 'idle';
+  let faceScanTitle = 'Align your face with the golden frame.';
+  let faceScanDetail = 'We’ll begin scanning automatically once you are centered.';
+  let faceScanIcon: React.ReactNode = <ScanFace className="w-5 h-5" />;
+
+  if (!modelsLoaded) {
+    faceScanTone = 'loading';
+    faceScanTitle = 'Loading face detection models…';
+    faceScanDetail = 'Hang tight—this only happens the first time.';
+    faceScanIcon = <Loader2 className="w-5 h-5 animate-spin" />;
+  } else if (isLoading) {
+    faceScanTone = 'loading';
+    faceScanTitle = 'Verifying your face…';
+    faceScanDetail = 'Keep still while we match you to your account.';
+    faceScanIcon = <Loader2 className="w-5 h-5 animate-spin" />;
+  } else if (faceDetected) {
+    faceScanTone = 'success';
+    faceScanTitle = 'Face detected! Matching now…';
+    faceScanDetail = 'Nice and steady—this only takes a second.';
+    faceScanIcon = <CheckCircle2 className="w-5 h-5" />;
+  } else if (isScanning) {
+    faceScanTone = 'active';
+    faceScanTitle = 'Scanning for your face…';
+    faceScanDetail = 'Fill the frame and look straight ahead until we lock on.';
+    faceScanIcon = <ScanFace className="w-5 h-5" />;
+  }
+
+  const faceScanToneStyles = FACE_SCAN_TONE_STYLES[faceScanTone];
+
   // Prevent UI flash: while authenticated but before navigation, render minimal placeholder
   if (isAuthenticated) {
     return <div className="min-h-screen flex items-center justify-center bg-black text-white">Redirecting...</div>;
@@ -750,57 +816,152 @@ const LoginPage = () => {
       <AnimatePresence>
         {showFaceModal && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6 bg-black/70 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
+              initial={{ scale: 0.94, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="w-[92vw] max-w-md rounded-2xl p-4 sm:p-6"
-              style={{ backgroundColor: 'rgba(248,248,248,0.06)', border: '1px solid rgba(248,248,248,0.12)' }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="relative w-full max-w-lg overflow-hidden rounded-[34px] border border-white/15 bg-white/10 backdrop-blur-2xl shadow-[0_26px_90px_rgba(0,0,0,0.55)]"
+              style={{ maxHeight: 'calc(100vh - 3rem)' }}
             >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold" style={{ color: '#F8F8F8' }}>Face Login</h3>
-                <button
-                  onClick={() => setShowFaceModal(false)}
-                  className="text-sm px-2 py-1 rounded-md"
-                  style={{ background: 'rgba(0,0,0,0.25)', color: '#F8F8F8' }}
-                >Close</button>
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,225,0,0.14),transparent_55%)] opacity-80" />
+                <div className="absolute -inset-16 bg-[conic-gradient(from_140deg_at_50%_50%,rgba(255,225,0,0.12),transparent_60%)] opacity-40 blur-2xl" />
               </div>
-              <div className="rounded-xl overflow-hidden mb-4" style={{ background: '#000' }}>
-                <Webcam
-                  ref={webcamRef as any}
-                  audio={false}
-                  screenshotFormat="image/jpeg"
-                  videoConstraints={{ facingMode: 'user' }}
-                  style={{ width: '100%', height: 'auto' }}
-                />
-              </div>
-              <p className="text-xs mb-4" style={{ color: '#F8F8F8B3' }}>
-                Center your face in the box. Ensure good lighting. Avoid multiple faces in frame.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  disabled={isLoading || !modelsLoaded}
-                  onClick={handleFaceLogin}
-                  className="flex-1 py-2.5 rounded-lg font-semibold shadow-md disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg, #FFE100 0%, #FFD100 100%)', color: '#000000' }}
+              <div className="relative z-10 flex max-h-[calc(100vh-3.5rem)] flex-col gap-6 overflow-y-auto px-6 py-6 sm:max-h-[calc(100vh-4.5rem)] sm:px-8 sm:py-7 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center justify-center rounded-[18px] bg-amber-500/25 p-2.5 text-amber-100 shadow-inner shadow-amber-500/30">
+                      <ScanFace className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Face Login</h3>
+                      <p className="text-xs text-white/70">Auto-scan signs you in the moment we see a match.</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
+                    <span
+                      className={`inline-flex min-w-[9.5rem] items-center justify-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold shadow-inner transition ${modelsLoaded ? 'bg-emerald-500/20 text-emerald-100 shadow-emerald-500/20' : 'bg-white/10 text-white/70 shadow-white/10'}`}
+                    >
+                      <span className={`inline-block h-2.5 w-2.5 rounded-full ${modelsLoaded ? 'bg-emerald-200 animate-pulse' : 'bg-white/60 animate-pulse'}`} />
+                      {modelsLoaded ? 'Auto-scan ready' : 'Preparing scanner…'}
+                    </span>
+                    <button
+                      onClick={() => setShowFaceModal(false)}
+                      className="rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 text-xs font-semibold text-white/70 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-amber-300/60"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  className="relative w-full overflow-hidden rounded-[32px] border border-white/12 bg-black/60"
+                  style={{ aspectRatio: '4 / 3' }}
                 >
-                  {isLoading ? 'Signing in...' : 'Sign in with Face'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowFaceModal(false)}
-                  className="px-4 py-2.5 rounded-lg font-semibold"
-                  style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%)', color: '#F8F8F8', border: '1px solid rgba(255,225,0,0.25)' }}
+                  <Webcam
+                    ref={webcamRef as any}
+                    audio={false}
+                    screenshotFormat="image/jpeg"
+                    videoConstraints={{ facingMode: 'user' }}
+                    className="h-full w-full object-cover"
+                    style={{ borderRadius: 'inherit' }}
+                  />
+                  <div
+                    className={`pointer-events-none absolute inset-[6%] rounded-[44px] border-[4px] transition-all duration-700 ${faceDetected ? 'border-emerald-400/80 shadow-[0_0_55px_rgba(16,185,129,0.45)]' : 'border-amber-400/85 shadow-[0_0_55px_rgba(255,225,0,0.4)]'}`}
+                  />
+                  {modelsLoaded && !faceDetected && (
+                    <motion.div
+                      className="absolute left-[14%] right-[14%] top-[18%] h-[2px] rounded-full bg-gradient-to-r from-transparent via-amber-200 to-transparent"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: [0.1, 0.7, 0.1], y: ['0%', '60%', '0%'] }}
+                      transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                  )}
+                  <AnimatePresence>
+                    {faceDetected && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        className="absolute inset-0 flex items-center justify-center"
+                      >
+                        <div className="flex items-center gap-2 rounded-full border border-emerald-400/40 bg-black/60 px-4 py-2 text-emerald-100 shadow-lg">
+                          <CheckCircle2 className="w-5 h-5" />
+                          <span className="text-sm font-semibold">Face locked</span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div
+                  className={`flex items-start gap-3 rounded-[28px] px-5 py-4 ${faceScanToneStyles.container}`}
+                  aria-live="polite"
                 >
-                  Cancel
-                </button>
+                  <span className={`mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-[22px] ${faceScanToneStyles.iconWrap}`}>
+                    {faceScanIcon}
+                  </span>
+                  <div>
+                    <p className={`text-sm font-semibold ${faceScanToneStyles.label}`}>{faceScanTitle}</p>
+                    <p className={`mt-1 text-xs leading-relaxed ${faceScanToneStyles.detail}`}>We’ll automatically attempt sign-in once your face is verified.</p>
+                    <p className={`text-[0.7rem] tracking-wide ${faceScanToneStyles.detail} mt-1`}>{faceScanDetail}</p>
+                  </div>
+                </div>
+
+                <ul className="space-y-2 text-xs text-white/70">
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-amber-200">
+                      <Lightbulb className="h-3.5 w-3.5" />
+                    </span>
+                    <span>Use bright, even lighting and keep the camera at eye level.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-amber-200">
+                      <ScanFace className="h-3.5 w-3.5" />
+                    </span>
+                    <span>Fill the golden frame with your face and look straight ahead.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-amber-200">
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </span>
+                    <span>Remove hats, masks, or tinted glasses for the most accurate match.</span>
+                  </li>
+                </ul>
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={isLoading || !modelsLoaded}
+                    onClick={handleFaceLogin}
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 py-3 font-semibold text-black shadow-[0_18px_40px_rgba(255,225,0,0.35)] transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-amber-300/70 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>Signing in…</span>
+                      </>
+                    ) : (
+                      <>
+                        <ScanFace className="h-5 w-5" />
+                        <span>Sign in with Face</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowFaceModal(false)}
+                    className="inline-flex items-center justify-center rounded-full border border-white/15 bg-black/40 px-6 py-3 font-semibold text-white/80 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/40"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

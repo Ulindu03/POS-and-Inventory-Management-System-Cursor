@@ -7,7 +7,7 @@ type ProductImage = { url: string };
 type ProductFormData = {
   _id?: string;
   sku: string;
-  name: { en: string; si: string };
+  name: { en: string; si?: string };
   price: { retail: number };
   category: string;
   unit: string;
@@ -23,7 +23,7 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
   const [form, setForm] = useState<ProductFormData>(
     product || {
       sku: '',
-      name: { en: '', si: '' },
+      name: { en: '' },
       price: { retail: 0 },
       category: '',
       unit: 'pcs',
@@ -74,14 +74,17 @@ export default function ProductForm({ product, onClose }: ProductFormProps) {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    mutation.mutate(form);
+    const payload: ProductFormData = {
+      ...form,
+      name: { en: form.name.en, si: form.name.si ?? form.name.en },
+    };
+    mutation.mutate(payload);
   }
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       <input name="sku" value={form.sku} onChange={handleChange} placeholder="SKU" className="input input-bordered w-full" required />
       <input name="name.en" value={form.name.en} onChange={handleChange} placeholder="Name (English)" className="input input-bordered w-full" required />
-      <input name="name.si" value={form.name.si} onChange={handleChange} placeholder="Name (Sinhala)" className="input input-bordered w-full" required />
       <input name="price.retail" type="number" value={form.price.retail} onChange={handleChange} placeholder="Retail Price" className="input input-bordered w-full" required />
       <select name="category" value={form.category} onChange={handleChange} className="input input-bordered w-full" required>
         <option value="">Select Category</option>

@@ -12,6 +12,64 @@ import { emit as emitRealtime } from '../services/realtime.service';
 import fs from 'fs';
 import { getPublicUrl } from '../utils/upload';
 
+type DiscountStatus = 'disabled' | 'scheduled' | 'active' | 'expired';
+
+interface DiscountSnapshot {
+  status: DiscountStatus;
+  type: 'percentage' | 'fixed';
+  value: number;
+  amount: number;
+  finalPrice: number;
+  startsAt?: Date | null;
+  endsAt?: Date | null;
+  isEnabled: boolean;
+}
+
+const evaluateDiscount = (product: any): DiscountSnapshot | null => {
+  const raw = product?.discount;
+  const baseRetail = Number(product?.price?.retail ?? 0);
+  if (!raw || raw.isEnabled === false) {
+    return raw ? {
+      status: 'disabled',
+      type: raw.type || 'percentage',
+      value: Number(raw.value || 0),
+      amount: 0,
+      finalPrice: baseRetail,
+      startsAt: raw.startAt ? new Date(raw.startAt) : null,
+      endsAt: raw.endAt ? new Date(raw.endAt) : null,
+      isEnabled: false,
+    } : null;
+  }
+  const start = raw.startAt ? new Date(raw.startAt) : null;
+  const end = raw.endAt ? new Date(raw.endAt) : null;
+  const now = new Date();
+  let status: DiscountStatus = 'scheduled';
+  if (start && now < start) status = 'scheduled';
+  else if (end && now > end) status = 'expired';
+  else status = 'active';
+
+  const type = raw.type === 'fixed' ? 'fixed' : 'percentage';
+  let amount = 0;
+  if (type === 'percentage') {
+    amount = (baseRetail * Number(raw.value || 0)) / 100;
+  } else {
+    amount = Number(raw.value || 0);
+  }
+  amount = Math.max(0, Math.min(amount, baseRetail));
+  const finalPrice = Math.max(0, baseRetail - amount);
+
+  return {
+    status: raw.isEnabled ? status : 'disabled',
+    type,
+    value: Number(raw.value || 0),
+    amount,
+    finalPrice,
+    startsAt: start,
+    endsAt: end,
+    isEnabled: Boolean(raw.isEnabled),
+  };
+};
+
 interface AuthRequest extends Request {
   user?: {
     userId: string;
@@ -45,7 +103,7 @@ export class ProductController {
         Product.find(filters)
           .populate('category', 'name')
           .populate('supplier', 'name supplierCode')
-          .select('sku barcode name description price stock category supplier images brand unit isActive createdAt updatedAt warranty')
+          .select('sku barcode name description price stock discount category supplier images brand unit isActive createdAt updatedAt warranty')
           .sort({ updatedAt: -1 })
           .skip(skip)
           .limit(take)
@@ -61,7 +119,8 @@ export class ProductController {
       const invMap = new Map(invList.map((i: any) => [String(i.product), i]));
       const items = productsRaw.map((p: any) => {
         const inv = invMap.get(String(p._id));
-        if (inv) {
+        const withInventory = (() => {
+          if (!inv) return { ...p };
           const merged = { ...p } as any;
           // Add inventory snapshot
           merged.inventory = {
@@ -85,8 +144,53 @@ export class ProductController {
             available: merged.inventory.availableStock,
           };
           return merged;
+        })();
+
+        const snapshot = evaluateDiscount(withInventory);
+        const baseRetail = Number(withInventory?.price?.retail ?? 0);
+        if (withInventory.discount) {
+          withInventory.discount = {
+            isEnabled: Boolean(withInventory.discount.isEnabled),
+            type: withInventory.discount.type === 'fixed' ? 'fixed' : 'percentage',
+            value: Number(withInventory.discount.value || 0),
+            startAt: withInventory.discount.startAt || null,
+            endAt: withInventory.discount.endAt || null,
+            notes: withInventory.discount.notes || '',
+            status: snapshot?.status ?? (withInventory.discount.isEnabled ? 'scheduled' : 'disabled'),
+            amount: snapshot?.amount ?? 0,
+            finalPrice: snapshot?.finalPrice ?? baseRetail,
+            createdBy: withInventory.discount.createdBy || null,
+            updatedBy: withInventory.discount.updatedBy || null,
+            createdAt: withInventory.discount.createdAt || null,
+            updatedAt: withInventory.discount.updatedAt || null,
+          };
+        } else {
+          withInventory.discount = snapshot ? {
+            isEnabled: snapshot.isEnabled,
+            type: snapshot.type,
+            value: snapshot.value,
+            startAt: snapshot.startsAt ?? null,
+            endAt: snapshot.endsAt ?? null,
+            notes: '',
+            status: snapshot.status,
+            amount: snapshot.amount,
+            finalPrice: snapshot.finalPrice,
+            createdBy: null,
+            updatedBy: null,
+            createdAt: null,
+            updatedAt: null,
+          } : null;
         }
-        return p;
+
+        withInventory.pricing = {
+          base: baseRetail,
+          final: snapshot?.finalPrice ?? baseRetail,
+          discountAmount: snapshot?.amount ?? 0,
+          status: snapshot?.status ?? (withInventory.discount?.isEnabled ? withInventory.discount.status : 'none'),
+          hasActiveDiscount: snapshot?.status === 'active',
+        };
+
+        return withInventory;
       });
 
   return res.json({ success: true, data: { items, total, page: parseInt(page, 10) || 1, limit: take } });
@@ -380,13 +484,58 @@ export class ProductController {
       // Get inventory data
       const inventory = await Inventory.findOne({ product: id });
 
-  return res.json({ 
+    const payload = product.toObject() as any;
+      if (inventory) {
+        payload.inventory = inventory;
+      }
+      const snapshot = evaluateDiscount(payload);
+      const baseRetail = Number(payload?.price?.retail ?? 0);
+      if (payload.discount) {
+        payload.discount = {
+          isEnabled: Boolean(payload.discount.isEnabled),
+          type: payload.discount.type === 'fixed' ? 'fixed' : 'percentage',
+          value: Number(payload.discount.value || 0),
+          startAt: payload.discount.startAt || null,
+          endAt: payload.discount.endAt || null,
+          notes: payload.discount.notes || '',
+          status: snapshot?.status ?? (payload.discount.isEnabled ? 'scheduled' : 'disabled'),
+          amount: snapshot?.amount ?? 0,
+          finalPrice: snapshot?.finalPrice ?? baseRetail,
+          createdBy: payload.discount.createdBy || null,
+          updatedBy: payload.discount.updatedBy || null,
+          createdAt: payload.discount.createdAt || null,
+          updatedAt: payload.discount.updatedAt || null,
+        };
+      } else if (snapshot) {
+        payload.discount = {
+          isEnabled: snapshot.isEnabled,
+          type: snapshot.type,
+          value: snapshot.value,
+          startAt: snapshot.startsAt ?? null,
+          endAt: snapshot.endsAt ?? null,
+          notes: '',
+          status: snapshot.status,
+          amount: snapshot.amount,
+          finalPrice: snapshot.finalPrice,
+          createdBy: null,
+          updatedBy: null,
+          createdAt: null,
+          updatedAt: null,
+        };
+      }
+
+      payload.pricing = {
+        base: baseRetail,
+        final: snapshot?.finalPrice ?? baseRetail,
+        discountAmount: snapshot?.amount ?? 0,
+        status: snapshot?.status ?? (payload.discount?.isEnabled ? payload.discount.status : 'none'),
+        hasActiveDiscount: snapshot?.status === 'active',
+      };
+
+      return res.json({ 
         success: true, 
         data: { 
-          product: {
-            ...product.toObject(),
-    inventory: inventory ?? null
-          }
+          product: payload
         }
       });
     } catch (err) {
@@ -399,11 +548,183 @@ export class ProductController {
     try {
       const { code } = req.params as { code: string };
       const product = await Product.findOne({ barcode: code, isActive: true })
-        .select('sku barcode name price.retail stock');
+        .select('sku barcode name price stock discount images');
       if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
-  return res.json({ success: true, data: { product } });
+
+    const payload = product.toObject() as any;
+      const snapshot = evaluateDiscount(payload);
+      const baseRetail = Number(payload?.price?.retail ?? 0);
+
+      if (payload.discount) {
+        payload.discount = {
+          isEnabled: Boolean(payload.discount.isEnabled),
+          type: payload.discount.type === 'fixed' ? 'fixed' : 'percentage',
+          value: Number(payload.discount.value || 0),
+          startAt: payload.discount.startAt || null,
+          endAt: payload.discount.endAt || null,
+          notes: payload.discount.notes || '',
+          status: snapshot?.status ?? (payload.discount.isEnabled ? 'scheduled' : 'disabled'),
+          amount: snapshot?.amount ?? 0,
+          finalPrice: snapshot?.finalPrice ?? baseRetail,
+        };
+      }
+
+      payload.pricing = {
+        base: baseRetail,
+        final: snapshot?.finalPrice ?? baseRetail,
+        discountAmount: snapshot?.amount ?? 0,
+        status: snapshot?.status ?? (payload.discount?.isEnabled ? payload.discount.status : 'none'),
+        hasActiveDiscount: snapshot?.status === 'active',
+      };
+
+      return res.json({ success: true, data: { product: payload } });
     } catch (err) {
   return next(err);
+    }
+  }
+
+  static async upsertDiscount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const { type, value, startAt, endAt, notes, isEnabled = true } = req.body as any;
+
+      if (!['percentage', 'fixed'].includes(type)) {
+        return res.status(400).json({ success: false, message: 'Invalid discount type' });
+      }
+
+      const numericValue = Number(value);
+      if (Number.isNaN(numericValue) || numericValue <= 0) {
+        return res.status(400).json({ success: false, message: 'Discount value must be greater than 0' });
+      }
+
+      if (!startAt || !endAt) {
+        return res.status(400).json({ success: false, message: 'Start and end dates are required' });
+      }
+
+      const start = new Date(startAt);
+      const end = new Date(endAt);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid date range' });
+      }
+
+      if (start >= end) {
+        return res.status(400).json({ success: false, message: 'End date must be after start date' });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({ success: false, message: 'Product not found' });
+      }
+
+      const now = new Date();
+      const existing = (product as any).discount || {};
+
+      (product as any).discount = {
+        isEnabled: Boolean(isEnabled),
+        type,
+        value: numericValue,
+        startAt: start,
+        endAt: end,
+        notes: typeof notes === 'string' ? notes.slice(0, 500) : existing.notes || '',
+        createdBy: existing.createdBy || req.user?.userId || null,
+        updatedBy: req.user?.userId || null,
+        createdAt: existing.createdAt || now,
+        updatedAt: now,
+      };
+
+      await product.save();
+
+    const payload = product.toObject() as any;
+      const snapshot = evaluateDiscount(payload);
+      const baseRetail = Number(payload?.price?.retail ?? 0);
+      const responseDiscount = {
+        isEnabled: Boolean((payload as any).discount?.isEnabled),
+        type: (payload as any).discount?.type === 'fixed' ? 'fixed' : 'percentage',
+        value: Number((payload as any).discount?.value || 0),
+        startAt: (payload as any).discount?.startAt || null,
+        endAt: (payload as any).discount?.endAt || null,
+        notes: (payload as any).discount?.notes || '',
+        status: snapshot?.status ?? ((payload as any).discount?.isEnabled ? 'scheduled' : 'disabled'),
+        amount: snapshot?.amount ?? 0,
+        finalPrice: snapshot?.finalPrice ?? baseRetail,
+        createdBy: (payload as any).discount?.createdBy || null,
+        updatedBy: (payload as any).discount?.updatedBy || null,
+        createdAt: (payload as any).discount?.createdAt || null,
+        updatedAt: (payload as any).discount?.updatedAt || null,
+      };
+
+      return res.json({
+        success: true,
+        message: 'Discount updated',
+        data: {
+          discount: responseDiscount,
+          pricing: {
+            base: baseRetail,
+            final: snapshot?.finalPrice ?? baseRetail,
+            discountAmount: snapshot?.amount ?? 0,
+            status: snapshot?.status ?? responseDiscount.status,
+            hasActiveDiscount: snapshot?.status === 'active',
+          },
+        },
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  static async removeDiscount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({ success: false, message: 'Product not found' });
+      }
+
+      product.set('discount', undefined);
+      await product.save();
+
+      return res.json({ success: true, message: 'Discount removed', data: { discount: null } });
+    } catch (error) {
+      return next(error);
+    }
+  }
+
+  static async discountSummary(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const now = new Date();
+      const products = await Product.find({ 'discount.isEnabled': { $in: [true] } })
+        .select('price discount');
+
+      let activeCount = 0;
+      let totalValue = 0;
+      let expiringSoon = 0;
+
+      products.forEach((doc: any) => {
+        const snapshot = evaluateDiscount(doc);
+        if (!snapshot) return;
+        if (snapshot.status === 'active') {
+          activeCount += 1;
+          totalValue += snapshot.amount;
+          if (snapshot.endsAt && snapshot.endsAt >= now) {
+            const diff = snapshot.endsAt.getTime() - now.getTime();
+            if (diff <= 7 * 24 * 60 * 60 * 1000) {
+              expiringSoon += 1;
+            }
+          }
+        }
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          totalDiscountedProducts: activeCount,
+          activeDiscounts: activeCount,
+          totalDiscountValue: Number(totalValue.toFixed(2)),
+          expiringSoon,
+        },
+      });
+    } catch (error) {
+      return next(error);
     }
   }
 

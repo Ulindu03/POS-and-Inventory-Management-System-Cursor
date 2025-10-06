@@ -66,6 +66,49 @@ const productSchema = new mongoose.Schema({
       min: 0
     }
   },
+  discount: {
+    isEnabled: {
+      type: Boolean,
+      default: false
+    },
+    type: {
+      type: String,
+      enum: ['percentage', 'fixed'],
+      default: 'percentage'
+    },
+    value: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+    startAt: {
+      type: Date
+    },
+    endAt: {
+      type: Date
+    },
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: 500
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
   tax: {
     vat: {
       type: Number,
@@ -258,5 +301,17 @@ productSchema.index({ 'stock.current': 1 });
 productSchema.index({ 'price.retail': 1 });
 productSchema.index({ tags: 1 });
 productSchema.index({ supplier: 1 });
+productSchema.index({ 'discount.isEnabled': 1, 'discount.endAt': 1 });
+
+productSchema.pre('save', function productDiscountHooks(next) {
+  if (this.isModified('discount') && this.discount) {
+    const now = new Date();
+    if (!this.discount.createdAt) {
+      this.discount.createdAt = now;
+    }
+    this.discount.updatedAt = now;
+  }
+  next();
+});
 
 export const Product = mongoose.model('Product', productSchema);

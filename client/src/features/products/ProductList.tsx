@@ -22,14 +22,14 @@ interface Product {
   barcode?: string;
   name: {
     en: string;
-    si: string;
+    si?: string;
   };
   images?: { url: string; alt?: string; isPrimary?: boolean }[];
   category: {
     _id: string;
     name: {
       en: string;
-      si: string;
+      si?: string;
     };
   };
   price: {
@@ -122,11 +122,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
   }, []);
 
   const filteredProducts = products.filter(product => {
-    const matchesSearch = !searchTerm || 
-      product.name.en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.name.si.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  product.barcode?.toLowerCase().includes(searchTerm.toLowerCase());
+    const search = searchTerm.trim().toLowerCase();
+    const matchesSearch = !search || 
+      product.name.en.toLowerCase().includes(search) ||
+      product.sku.toLowerCase().includes(search) ||
+      (product.barcode ? product.barcode.toLowerCase().includes(search) : false);
 
     const matchesCategory = !categoryFilter || product.category._id === categoryFilter;
 

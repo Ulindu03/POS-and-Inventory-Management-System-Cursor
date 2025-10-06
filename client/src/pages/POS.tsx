@@ -44,7 +44,8 @@ const POS = () => {
   const clear = useCartStore((s) => s.clear);
   const items = useCartStore((s) => s.items);
   const subtotal = useCartStore((s) => s.subtotal());
-  const discount = useCartStore((s) => s.discount);
+  const manualDiscount = useCartStore((s) => s.discount);
+  const totalDiscount = useCartStore((s) => s.totalDiscount());
   const tax = useCartStore((s) => s.tax());
   const total = useCartStore((s) => s.total());
   const setHold = useCartStore((s) => s.setHold);
@@ -87,7 +88,7 @@ const POS = () => {
               onDamage={() => setOpenDamage(true)}
               onHold={async () => {
                 // Save current cart as a "hold" ticket for later retrieval (park the sale)
-                const payload = { items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })), discount };
+                const payload = { items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })), discount: manualDiscount };
                 const res = await salesApi.hold(payload);
                 setHold(res.data.ticket);
               }}
@@ -111,7 +112,7 @@ const POS = () => {
           // Capture totals now (before clearing cart) so the receipt shows correct values
           const snapshot = {
             subtotal,
-            discount,
+            discount: totalDiscount,
             tax,
             total,
           };

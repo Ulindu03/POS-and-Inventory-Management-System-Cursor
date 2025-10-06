@@ -1,6 +1,32 @@
 import client from './client';
 import { uploadToSupabaseImages } from '@/lib/supabase';
 
+export type DiscountStatus = 'disabled' | 'scheduled' | 'active' | 'expired' | 'none';
+
+export interface ProductDiscountInfo {
+  isEnabled: boolean;
+  type: 'percentage' | 'fixed';
+  value: number;
+  startAt: string | null;
+  endAt: string | null;
+  notes: string;
+  status: DiscountStatus;
+  amount: number;
+  finalPrice: number;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface ProductPricingSummary {
+  base: number;
+  final: number;
+  discountAmount: number;
+  status: DiscountStatus;
+  hasActiveDiscount: boolean;
+}
+
 export interface ProductListItem {
   _id: string;
   sku: string;
@@ -11,6 +37,8 @@ export interface ProductListItem {
   stock?: { current?: number; minimum?: number; reorderPoint?: number };
   inventory?: { currentStock?: number; minimumStock?: number; reorderPoint?: number; reservedStock?: number; availableStock?: number };
   effectiveStock?: { current?: number; minimum?: number; reorderPoint?: number; reserved?: number; available?: number };
+  discount?: ProductDiscountInfo | null;
+  pricing?: ProductPricingSummary;
 }
 
 export const productsApi = {
@@ -20,7 +48,7 @@ export const productsApi = {
   },
   getByBarcode: async (code: string) => {
     const { data } = await client.get(`/products/barcode/${encodeURIComponent(code)}`);
-    return data as { success: true; data: { product: ProductListItem } };
+    return data as { success: true; data: { product: ProductListItem & { pricing?: ProductPricingSummary; discount?: ProductDiscountInfo | null } } };
   },
   create: async (payload: any) => {
     const { data } = await client.post('/products', payload);
@@ -33,6 +61,10 @@ export const productsApi = {
   getHistory: async (id: string, params?: { startDate?: string; endDate?: string; limit?: number }) => {
     const { data } = await client.get(`/products/${id}/history`, { params });
     return data as { success: true; data: { summary: { purchasedQty: number; purchasedCost: number; soldQty: number; revenue: number }; purchases: any[]; sales: any[] } };
+  },
+  getById: async (id: string) => {
+    const { data } = await client.get(`/products/${id}`);
+    return data as { success: true; data: { product: ProductListItem & { pricing?: ProductPricingSummary; discount?: ProductDiscountInfo | null } } };
   },
   delete: async (id: string) => {
     const { data } = await client.delete(`/products/${id}`);
@@ -78,6 +110,18 @@ export const productsApi = {
   getStickerBatch: async (params: { batchId?: string; productId?: string }) => {
     const { data } = await client.get('/products/stickers/batch', { params });
     return data;
+  },
+  discountSummary: async () => {
+    const { data } = await client.get('/products/discounts/summary');
+    return data as { success: true; data: { totalDiscountedProducts: number; activeDiscounts: number; totalDiscountValue: number; expiringSoon: number } };
+  },
+  upsertDiscount: async (productId: string, payload: { type: 'percentage' | 'fixed'; value: number; startAt: string; endAt: string; notes?: string; isEnabled?: boolean }) => {
+    const { data } = await client.put(`/products/${productId}/discount`, payload);
+    return data as { success: boolean; message: string; data: { discount: ProductDiscountInfo | null; pricing: ProductPricingSummary } };
+  },
+  removeDiscount: async (productId: string) => {
+    const { data } = await client.delete(`/products/${productId}/discount`);
+    return data as { success: boolean; message: string; data: { discount: null } };
   }
 };
 

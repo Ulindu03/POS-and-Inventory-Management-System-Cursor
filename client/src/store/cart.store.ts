@@ -4,14 +4,18 @@ import { create } from 'zustand';
 export interface CartItem {
 	id: string;
 	name: string;
-	price: number; // LKR per unit
+	price: number; // Effective unit price (after discounts)
 	qty: number;
 	barcode?: string;
+	basePrice?: number; // Original unit price before discounts
+	discountAmount?: number; // Per-unit savings
+	discountType?: 'percentage' | 'fixed';
+	discountValue?: number;
 }
 
 interface CartState {
 	items: CartItem[];
-	discount: number; // absolute amount in LKR
+	discount: number; // manual discount (e.g., promo code)
 	taxRate: number; // as decimal, e.g., 0.0 for now
 	promoCode?: string | null;
 	holdTicketId?: string | null;
@@ -22,10 +26,12 @@ interface CartState {
 	remove: (id: string) => void;
 	clear: () => void;
 	setDiscount: (amount: number) => void;
-		setPromoCode: (code: string | null) => void;
+	setPromoCode: (code: string | null) => void;
 	setHold: (ticket: { id: string; invoiceNo: string } | null) => void;
 	subtotal: () => number;
 	tax: () => number;
+	autoDiscount: () => number;
+	totalDiscount: () => number;
 	total: () => number;
 }
 
@@ -55,41 +61,97 @@ const persist = (state: CartState) => {
 export const useCartStore = create<CartState>((set, get) => ({
 	...loadInitial(),
 	// Set hold ticket information for saving cart state
-	setHold: (ticket) => set(() => ({ holdTicketId: ticket?.id || null, holdTicketNo: ticket?.invoiceNo || null })),
+	setHold: (ticket) => {
+		set(() => ({ holdTicketId: ticket?.id || null, holdTicketNo: ticket?.invoiceNo || null }));
+		persist(get());
+	},
 
 	// Add item to cart or increase quantity if already exists
 	addItem: (item, qty = 1) => {
+		const basePrice = typeof item.basePrice === 'number' ? item.basePrice : item.price;
+		const discountAmount = typeof item.discountAmount === 'number' ? item.discountAmount : Math.max(0, basePrice - item.price);
+		const discountType = item.discountType;
+		const discountValue = item.discountValue;
 		set((state) => {
 			const existing = state.items.find((i) => i.id === item.id);
 			if (existing) {
 				return {
-					items: state.items.map((i) => (i.id === item.id ? { ...i, qty: i.qty + qty } : i)),
+					items: state.items.map((i) => (i.id === item.id ? {
+						...i,
+						qty: i.qty + qty,
+						price: item.price,
+						basePrice,
+						discountAmount,
+						discountType: discountType ?? i.discountType,
+						discountValue: discountValue ?? i.discountValue,
+					} : i)),
 				};
 			}
-			return { items: [...state.items, { ...item, qty }] };
+			return {
+				items: [
+					...state.items,
+					{
+						...item,
+						qty,
+						basePrice,
+						discountAmount,
+						discountType,
+						discountValue,
+					},
+				],
+			};
 		});
 		persist(get());
 	},
 
 	// Increase quantity of item by 1
-	inc: (id) => set((s) => { const next = { items: s.items.map((i) => (i.id === id ? { ...i, qty: i.qty + 1 } : i)), discount: s.discount, taxRate: s.taxRate } as any; persist({ ...s, ...next } as CartState); return next; }),
+	inc: (id) => {
+		set((state) => ({ items: state.items.map((i) => (i.id === id ? { ...i, qty: i.qty + 1 } : i)) }));
+		persist(get());
+	},
 	// Decrease quantity of item by 1, remove if quantity becomes 0
-	dec: (id) => set((s) => { const items = s.items.map((i) => (i.id === id ? { ...i, qty: i.qty - 1 } : i)).filter((i) => i.qty > 0); const next = { items, discount: s.discount, taxRate: s.taxRate } as any; persist({ ...s, ...next } as CartState); return next; }),
+	dec: (id) => {
+		set((state) => ({ items: state.items.map((i) => (i.id === id ? { ...i, qty: i.qty - 1 } : i)).filter((i) => i.qty > 0) }));
+		persist(get());
+	},
 	// Remove item completely from cart
-	remove: (id) => set((s) => { const next = { items: s.items.filter((i) => i.id !== id), discount: s.discount, taxRate: s.taxRate } as any; persist({ ...s, ...next } as CartState); return next; }),
+	remove: (id) => {
+		set((state) => ({ items: state.items.filter((i) => i.id !== id) }));
+		persist(get());
+	},
 	// Clear all items from cart
-	clear: () => { set({ items: [], discount: 0, promoCode: null }); persist({ ...get(), items: [], discount: 0, promoCode: null } as CartState); },
-	// Set discount amount (absolute value in LKR)
-	setDiscount: (amount) => { set({ discount: Math.max(0, amount) }); persist(get()); },
+	clear: () => {
+		set({ items: [], discount: 0, promoCode: null });
+		persist(get());
+	},
+	// Set discount amount (e.g., promo codes)
+	setDiscount: (amount) => {
+		set({ discount: Math.max(0, amount) });
+		persist(get());
+	},
 	// Set promo code for discounts
-	setPromoCode: (code) => { set({ promoCode: code }); persist(get()); },
+	setPromoCode: (code) => {
+		set({ promoCode: code });
+		persist(get());
+	},
 
-	// Calculate subtotal (sum of all item prices * quantities)
-	subtotal: () => get().items.reduce((sum, i) => sum + i.price * i.qty, 0),
-	// Calculate tax amount based on subtotal and tax rate
-	tax: () => get().subtotal() * get().taxRate,
-	// Calculate final total (subtotal + tax - discount)
-	total: () => Math.max(0, get().subtotal() + get().tax() - get().discount),
+	// Calculate subtotal (pre-discount sum)
+	subtotal: () => get().items.reduce((sum, i) => {
+		const unit = typeof i.basePrice === 'number' ? i.basePrice : i.price;
+		return sum + unit * i.qty;
+	}, 0),
+	// Automatic discount derived from product promos
+	autoDiscount: () => get().items.reduce((sum, i) => {
+		const base = typeof i.basePrice === 'number' ? i.basePrice : i.price;
+		const diff = base - i.price;
+		return diff > 0 ? sum + diff * i.qty : sum;
+	}, 0),
+	// Calculate total discount combining automatic + manual adjustments
+	totalDiscount: () => Math.max(0, get().autoDiscount() + get().discount),
+	// Calculate tax amount based on discounted subtotal
+	tax: () => Math.max(0, (get().subtotal() - get().totalDiscount()) * get().taxRate),
+	// Calculate final total (subtotal + tax - discounts)
+	total: () => Math.max(0, get().subtotal() + get().tax() - get().totalDiscount()),
 }));
 
 

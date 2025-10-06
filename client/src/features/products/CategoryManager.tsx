@@ -2,11 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { categoriesApi } from '@/lib/api/products.api';
 import FormModal from '@/components/ui/FormModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { toast } from '@/components/ui/toasts/toastService';
 import { Folder, Save } from 'lucide-react';
 
 type Category = {
   _id?: string;
-  name: { en: string; si: string };
+  name: { en: string; si?: string };
   description?: { en?: string; si?: string };
   parent?: string | null;
   color?: string;
@@ -19,6 +21,7 @@ export const CategoryManager: React.FC = () => {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['categories'],
@@ -36,14 +39,22 @@ export const CategoryManager: React.FC = () => {
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => categoriesApi.remove(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['categories'] }),
+    onSuccess: async (_, __, id) => {
+      await qc.invalidateQueries({ queryKey: ['categories'] });
+      toast.success('The category was removed from your catalog.', 'Category deleted');
+      setDeleteTarget(null);
+    },
+    onError: (err: any) => {
+      const message = err?.response?.data?.message || err?.message || 'Failed to delete category.';
+      toast.error(message, 'Delete failed');
+    },
   });
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter((c) =>
-      (c.name?.en || '').toLowerCase().includes(q) || (c.name?.si || '').toLowerCase().includes(q)
+      (c.name?.en || '').toLowerCase().includes(q)
     );
   }, [items, search]);
 
@@ -55,10 +66,29 @@ export const CategoryManager: React.FC = () => {
     setEditing(cat);
     setShowForm(true);
   };
-  const doDelete = (id?: string) => {
-    if (!id) return;
-    if (confirm('Delete this category?')) deleteMutation.mutate(id);
+  const requestDelete = (category: Category) => {
+    if (!category?._id) return;
+    setDeleteTarget(category);
   };
+
+  const confirmDelete = () => {
+    if (!deleteTarget?._id) return;
+    deleteMutation.mutate(deleteTarget._id);
+  };
+
+  const dismissDeleteDialog = () => {
+    if (deleteMutation.isPending) return;
+    setDeleteTarget(null);
+  };
+
+  const deleteChildrenCount = useMemo(() => {
+    if (!deleteTarget?._id) return 0;
+    return items.filter((c) => c.parent === deleteTarget._id).length;
+  }, [deleteTarget, items]);
+
+  const deleteDescription = deleteTarget
+    ? `Removing "${deleteTarget.name?.en || 'Untitled category'}" will permanently delete it.${deleteChildrenCount ? ` It currently has ${deleteChildrenCount} nested ${deleteChildrenCount === 1 ? 'category' : 'categories'} that will also be affected.` : ''} Products using this category may need to be reassigned afterward.`
+    : '';
 
   let tableContent: React.ReactNode;
   if (isLoading) {
@@ -74,11 +104,10 @@ export const CategoryManager: React.FC = () => {
       <table className="w-full">
         <thead className="bg-white/5 border-b border-white/10">
           <tr>
-            <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Name (EN)</th>
-            <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Name (SI)</th>
+            <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Name</th>
             <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Parent</th>
             <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Color</th>
-            <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Active</th>
+            <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Available</th>
             <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Actions</th>
           </tr>
         </thead>
@@ -88,7 +117,6 @@ export const CategoryManager: React.FC = () => {
             return (
               <tr key={c._id as string} className="hover:bg-white/5">
                 <td className="px-4 py-2 text-[#F8F8F8]">{c.name?.en}</td>
-                <td className="px-4 py-2 text-[#F8F8F8]/80">{c.name?.si}</td>
                 <td className="px-4 py-2 text-[#F8F8F8]/80">{parentName}</td>
                 <td className="px-4 py-2">
                   <span className="inline-flex items-center gap-2">
@@ -100,7 +128,7 @@ export const CategoryManager: React.FC = () => {
                 <td className="px-4 py-2">
                   <div className="flex gap-2">
                     <button className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20" onClick={() => startEdit(c)}>Edit</button>
-                    <button className="px-3 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300" onClick={() => doDelete(c._id)}>Delete</button>
+                    <button className="px-3 py-1 rounded-lg bg-gradient-to-r from-rose-500/20 via-rose-500/10 to-transparent hover:from-rose-500/30 hover:via-rose-500/20 text-rose-200 border border-rose-500/30 transition-all duration-200" onClick={() => requestDelete(c)}>Delete</button>
                   </div>
                 </td>
               </tr>
@@ -150,6 +178,17 @@ export const CategoryManager: React.FC = () => {
           }}
         />
       )}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={deleteTarget ? `Delete "${deleteTarget.name?.en || 'Untitled category'}"?` : 'Delete category'}
+        description={deleteDescription}
+        confirmLabel="Delete category"
+        cancelLabel="Keep category"
+        tone="danger"
+        loading={deleteMutation.isPending}
+        onConfirm={confirmDelete}
+        onClose={dismissDeleteDialog}
+      />
     </div>
   );
 };
@@ -171,8 +210,8 @@ function CategoryForm({
 }: CategoryFormProps) {
   const [form, setForm] = useState<Category>(
     initial || {
-      name: { en: '', si: '' },
-      description: { en: '', si: '' },
+      name: { en: '' },
+      description: { en: '' },
       parent: null,
       color: '#667eea',
       isActive: true,
@@ -218,51 +257,40 @@ function CategoryForm({
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
-          onSubmit(form);
+          const payload: Category = {
+            ...form,
+            name: {
+              ...form.name,
+              si: form.name.si ?? form.name.en,
+            },
+            description: form.description?.en
+              ? { ...form.description, en: form.description.en }
+              : undefined,
+          };
+          onSubmit(payload);
         }}
       >
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <h4 className="text-[#F8F8F8] font-semibold mb-3">Basic Information</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-[#F8F8F8] mb-2" htmlFor="cat-name-en">Name (English) *</label>
+              <label className="block text-sm font-medium text-[#F8F8F8] mb-2" htmlFor="cat-name-en">Name *</label>
               <input
                 id="cat-name-en"
                 value={form.name.en}
                 onChange={(e) => setForm({ ...form, name: { ...form.name, en: e.target.value } })}
-                placeholder="Enter category name (EN)"
+                placeholder="Enter category name"
                 className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#F8F8F8] mb-2" htmlFor="cat-name-si">Name (Sinhala) *</label>
-              <input
-                id="cat-name-si"
-                value={form.name.si}
-                onChange={(e) => setForm({ ...form, name: { ...form.name, si: e.target.value } })}
-                placeholder="වර්ග නාමය (සිංහල)"
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                required
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-[#F8F8F8] mb-2" htmlFor="cat-desc-en">Description (EN)</label>
+              <label className="block text-sm font-medium text-[#F8F8F8] mb-2" htmlFor="cat-desc-en">Description</label>
               <textarea
                 id="cat-desc-en"
                 value={form.description?.en || ''}
                 onChange={(e) => setForm({ ...form, description: { ...(form.description || {}), en: e.target.value } })}
-                placeholder="Short description in English"
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-[#F8F8F8] mb-2" htmlFor="cat-desc-si">Description (SI)</label>
-              <textarea
-                id="cat-desc-si"
-                value={form.description?.si || ''}
-                onChange={(e) => setForm({ ...form, description: { ...(form.description || {}), si: e.target.value } })}
-                placeholder="ස්කන්ධ විස්තරය (සිංහල)"
+                placeholder="Short description"
                 className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
               />
             </div>
