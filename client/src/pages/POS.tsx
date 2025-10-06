@@ -17,6 +17,7 @@ import { useAuthStore } from '@/store/auth.store';
 import QuickDamageModal from '@/features/damage/QuickDamageModal';
 import QuickReturnModal from '@/features/pos/QuickReturnModal';
 import { useCartStore } from '@/store/cart.store';
+import { usePosStore } from '@/store/pos.store';
 import { salesApi } from '@/lib/api/sales.api';
 import { getAccessToken } from '@/lib/api/token';
 // Replaced lucide icons with custom FS.png from public
@@ -27,13 +28,19 @@ const POS = () => {
   // State for receipt data after successful payment
   const [receipt, setReceipt] = useState<{
     invoiceNo: string;
-  saleId: string;
+    saleId: string;
     items: { name: string; qty: number; price: number; total: number }[];
     subtotal: number;
     discount: number;
     tax: number;
     total: number;
-  warranties?: Array<{ warrantyNo: string; status: string; periodDays: number; endDate?: string; requiresActivation?: boolean }>;
+    warranties?: Array<{
+      warrantyNo: string;
+      status: string;
+      periodDays: number;
+      endDate?: string;
+      requiresActivation?: boolean;
+    }>;
   } | null>(null);
   // State for damage reporting modal
   const [openDamage, setOpenDamage] = useState(false);
@@ -49,6 +56,8 @@ const POS = () => {
   const tax = useCartStore((s) => s.tax());
   const total = useCartStore((s) => s.total());
   const setHold = useCartStore((s) => s.setHold);
+  const customerType = usePosStore((s) => s.customerType);
+  const setCustomerType = usePosStore((s) => s.setCustomerType);
   
   // Get current user info for receipt
   const user = useAuthStore((s) => s.user);
@@ -59,16 +68,46 @@ const POS = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-h-0 h-[calc(100vh-3.5rem-1.5rem)] md:h-[calc(100vh-3.5rem-1.5rem)]">
         {/* Left side: Product selection area */}
         <div className="md:col-span-1 lg:col-span-2 space-y-4 min-h-0 overflow-auto">
-          <div className="mb-3 font-semibold flex items-center justify-between gap-2">
-            <span>{t('pos.productsHeader')}</span>
+          <div className="mb-3 font-semibold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span>{t('pos.productsHeader')}</span>
+              <div className="inline-flex rounded-full bg-black/60 border border-white/10 p-0.5 shadow-inner text-xs">
+                {(['retail', 'wholesale'] as const).map((type) => {
+                  const active = customerType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setCustomerType(type)}
+                      className={`px-3 py-1 text-xs font-semibold rounded-full transition-all ${
+                        active
+                          ? 'bg-gradient-to-br from-yellow-400 via-yellow-300 to-yellow-400 text-black shadow-[0_4px_12px_rgba(255,225,0,0.35)]'
+                          : 'text-white/70 hover:text-white'
+                      }`}
+                    >
+                      {type === 'retail' ? 'Retail' : 'Wholesale'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="flex items-center gap-2 text-xs">
               {/* Quick access to warranty management */}
-              <Link to="/warranty" className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[#F8F8F8] transition" title={t('pos.warrantyTooltip')}>
+              <Link
+                to="/warranty"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[#F8F8F8] transition"
+                title={t('pos.warrantyTooltip')}
+              >
                 <img src="/warranty.png" alt="Warranty" className="w-4 h-4" />
                 <span className="hidden sm:inline">{t('pos.warrantyButton')}</span>
               </Link>
               {/* Quick Return / Refund button */}
-              <button type="button" onClick={() => setOpenReturn(true)} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[#F8F8F8] transition" title="Quick Return / Refund">
+              <button
+                type="button"
+                onClick={() => setOpenReturn(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-[#F8F8F8] transition"
+                title="Quick Return / Refund"
+              >
                 <img src="/returns.png" alt="Return" className="w-4 h-4" />
                 <span className="hidden sm:inline">Return</span>
               </button>
@@ -96,7 +135,7 @@ const POS = () => {
           </div>
         </div>
       </div>
-  {/* Fullscreen UI removed per request */}
+      {/* Fullscreen UI removed per request */}
       
       {/* Damage reporting modal */}
       <QuickDamageModal open={openDamage} onClose={() => setOpenDamage(false)} />
@@ -160,15 +199,15 @@ const POS = () => {
       <ReceiptModal
         open={Boolean(receipt)}
         onClose={() => setReceipt(null)}
-  invoiceNo={receipt?.invoiceNo || ''}
-  warranties={receipt?.warranties || []}
+        invoiceNo={receipt?.invoiceNo || ''}
+        warranties={receipt?.warranties || []}
         items={receipt?.items || []}
         subtotal={receipt?.subtotal ?? 0}
         discount={receipt?.discount ?? 0}
         tax={receipt?.tax ?? 0}
         total={receipt?.total ?? 0}
-      // method prop passes an internal payment method key; display components should localize label via something like t('pos.paymentMethod.cash')
-      method="cash"
+        // method prop passes an internal payment method key; display components should localize label via something like t('pos.paymentMethod.cash')
+        method="cash"
         cashierName={user?.firstName || user?.username}
         paperWidth={80}
       />

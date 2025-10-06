@@ -1,4 +1,5 @@
 import { useCartStore } from '@/store/cart.store';
+import { usePosStore } from '@/store/pos.store';
 import { productsApi, categoriesApi, type ProductListItem, type CategoryItem } from '@/lib/api/products.api';
 import { motion } from 'framer-motion';
 import { proxyImage } from '@/lib/proxyImage';
@@ -12,6 +13,7 @@ export const ProductGrid = () => {
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [category, setCategory] = useState<string>('');
+  const customerType = usePosStore((s) => s.customerType);
 
   useEffect(() => {
     let mounted = true;
@@ -75,14 +77,22 @@ export const ProductGrid = () => {
             const out = current <= 0; // hard stop
             const low = !out && min > 0 && current <= min; // low-stock hint only
 
-            const basePrice = p.price?.retail ?? 0;
-            const finalPrice = p.pricing?.final ?? basePrice;
-            const perUnitSavings = Math.max(0, (p.pricing?.discountAmount ?? 0));
-            const hasActiveDiscount = Boolean(p.pricing?.hasActiveDiscount && perUnitSavings > 0);
+            const retailTier = p.pricing?.retail;
+            const wholesaleTier = p.pricing?.wholesale;
+            const wholesaleAvailable = Boolean(wholesaleTier?.configured && wholesaleTier.base > 0);
+            const prefersWholesale = customerType === 'wholesale' && wholesaleAvailable;
+            const activeTier = prefersWholesale ? wholesaleTier : retailTier ?? wholesaleTier;
+            const activeTierName = prefersWholesale && activeTier ? 'wholesale' : 'retail';
+            const basePrice = activeTier?.base ?? (prefersWholesale ? wholesaleTier?.base : retailTier?.base) ?? p.price?.retail ?? 0;
+            const finalPrice = activeTier?.final ?? basePrice;
+            const perUnitSavings = Math.max(0, activeTier?.discountAmount ?? 0);
+            const hasActiveDiscount = Boolean(activeTier?.hasActiveDiscount && perUnitSavings > 0);
+            const discountType = activeTier?.discountType ?? null;
+            const discountValue = activeTier?.discountValue ?? null;
             const discountLabel = (() => {
               if (!hasActiveDiscount) return '';
-              if (p.discount?.type === 'percentage') {
-                return `-${p.discount.value}%`;
+              if (discountType === 'percentage' && discountValue != null) {
+                return `-${discountValue}%`;
               }
               if (perUnitSavings > 0) {
                 return `-${formatLKR(perUnitSavings)}`;
@@ -103,8 +113,9 @@ export const ProductGrid = () => {
                       price: finalPrice,
                       basePrice,
                       discountAmount: perUnitSavings,
-                      discountType: p.discount?.type,
-                      discountValue: p.discount?.value,
+                      discountType: discountType ?? undefined,
+                      discountValue: discountValue ?? undefined,
+                      priceTier: activeTierName,
                     });
                   }
                 }}
@@ -150,12 +161,16 @@ export const ProductGrid = () => {
                 <div className="font-medium text-[#F8F8F8]">{p.name.en}</div>
                 <div className="text-sm opacity-80">
                   {hasActiveDiscount ? (
-                    <div className="space-y-0.5">
-                      <span className="line-through text-white/40 block text-xs">{formatLKR(basePrice)}</span>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="line-through text-white/40 block text-xs">{formatLKR(basePrice)}</span>
+                      </div>
                       <span className="text-emerald-300 font-semibold block">{formatLKR(finalPrice)}</span>
                     </div>
                   ) : (
-                    formatLKR(basePrice)
+                    <div className="flex items-center gap-2">
+                      <span>{formatLKR(basePrice)}</span>
+                    </div>
                   )}
                 </div>
               </motion.button>

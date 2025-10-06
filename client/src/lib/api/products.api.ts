@@ -19,12 +19,39 @@ export interface ProductDiscountInfo {
   updatedAt?: string | null;
 }
 
-export interface ProductPricingSummary {
+export interface TierPricingSummary {
+  tier: 'retail' | 'wholesale';
   base: number;
   final: number;
   discountAmount: number;
   status: DiscountStatus;
   hasActiveDiscount: boolean;
+  configured: boolean;
+  discountType?: 'percentage' | 'fixed' | null;
+  discountValue?: number | null;
+}
+
+export interface ProductPricingSummary {
+  retail: TierPricingSummary;
+  wholesale: TierPricingSummary;
+  defaultTier: 'retail' | 'wholesale';
+}
+
+export interface MarginBreakdown {
+  amount: number;
+  percent: number | null;
+}
+
+export interface TierMarginSummary {
+  configured: boolean;
+  base: MarginBreakdown;
+  final: MarginBreakdown;
+}
+
+export interface ProductMarginSummary {
+  cost: number;
+  retail: TierMarginSummary;
+  wholesale: TierMarginSummary;
 }
 
 export interface ProductListItem {
@@ -32,13 +59,14 @@ export interface ProductListItem {
   sku: string;
   barcode?: string;
   name: { en: string; si: string };
-  price: { retail: number };
+  price: { cost: number; retail: number; wholesale?: number };
   images?: { url: string; isPrimary?: boolean }[];
   stock?: { current?: number; minimum?: number; reorderPoint?: number };
   inventory?: { currentStock?: number; minimumStock?: number; reorderPoint?: number; reservedStock?: number; availableStock?: number };
   effectiveStock?: { current?: number; minimum?: number; reorderPoint?: number; reserved?: number; available?: number };
   discount?: ProductDiscountInfo | null;
   pricing?: ProductPricingSummary;
+  margins?: ProductMarginSummary;
 }
 
 export const productsApi = {
@@ -48,7 +76,7 @@ export const productsApi = {
   },
   getByBarcode: async (code: string) => {
     const { data } = await client.get(`/products/barcode/${encodeURIComponent(code)}`);
-    return data as { success: true; data: { product: ProductListItem & { pricing?: ProductPricingSummary; discount?: ProductDiscountInfo | null } } };
+    return data as { success: true; data: { product: ProductListItem & { pricing?: ProductPricingSummary; margins?: ProductMarginSummary; discount?: ProductDiscountInfo | null } } };
   },
   create: async (payload: any) => {
     const { data } = await client.post('/products', payload);
@@ -64,7 +92,7 @@ export const productsApi = {
   },
   getById: async (id: string) => {
     const { data } = await client.get(`/products/${id}`);
-    return data as { success: true; data: { product: ProductListItem & { pricing?: ProductPricingSummary; discount?: ProductDiscountInfo | null } } };
+    return data as { success: true; data: { product: ProductListItem & { pricing?: ProductPricingSummary; margins?: ProductMarginSummary; discount?: ProductDiscountInfo | null } } };
   },
   delete: async (id: string) => {
     const { data } = await client.delete(`/products/${id}`);
@@ -117,11 +145,11 @@ export const productsApi = {
   },
   upsertDiscount: async (productId: string, payload: { type: 'percentage' | 'fixed'; value: number; startAt: string; endAt: string; notes?: string; isEnabled?: boolean }) => {
     const { data } = await client.put(`/products/${productId}/discount`, payload);
-    return data as { success: boolean; message: string; data: { discount: ProductDiscountInfo | null; pricing: ProductPricingSummary } };
+    return data as { success: boolean; message: string; data: { discount: ProductDiscountInfo | null; pricing: ProductPricingSummary; margins: ProductMarginSummary } };
   },
   removeDiscount: async (productId: string) => {
     const { data } = await client.delete(`/products/${productId}/discount`);
-    return data as { success: boolean; message: string; data: { discount: null } };
+    return data as { success: boolean; message: string; data: { discount: null; pricing: ProductPricingSummary; margins: ProductMarginSummary } };
   }
 };
 

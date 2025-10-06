@@ -377,9 +377,26 @@ export const exportReport = async (req: Request, res: Response): Promise<void> =
       columns.forEach((c, i) => {
         const raw = r[c.key];
         let txt: string;
-        if (c.key === 'date') txt = asDate(raw);
-        else if (typeof raw === 'number') txt = `LKR ${Math.round(raw).toLocaleString('en-LK')}`;
-        else txt = String(raw ?? '');
+        if (c.key === 'date') {
+          txt = asDate(raw);
+        } else if (typeof raw === 'number') {
+          const header = String(c.header).toLowerCase();
+          const key = String(c.key).toLowerCase();
+          const isCurrencyHeader = header.includes('(lkr)');
+          const isCountKey = ['stock', 'orders', 'items', 'quantity', 'qty', 'count'].includes(key);
+          if (isCountKey) {
+            // Show pure count with no currency
+            txt = Math.round(raw).toLocaleString('en-LK');
+          } else if (isCurrencyHeader) {
+            // Currency columns explicitly marked with (LKR)
+            txt = `LKR ${Math.round(raw).toLocaleString('en-LK')}`;
+          } else {
+            // Fallback: plain number
+            txt = Math.round(raw).toLocaleString('en-LK');
+          }
+        } else {
+          txt = String(raw ?? '');
+        }
         const colWidth = scaled[i];
         const maxW = colWidth - colPadding * 2;
         // Do not clip numeric or date values—allow them to shrink font if needed

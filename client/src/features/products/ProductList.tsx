@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { ProductHistoryModal } from './ProductHistoryModal';
 import { formatLKR } from '@/lib/utils/currency';
-import { productsApi, categoriesApi } from '@/lib/api/products.api';
+import { productsApi, categoriesApi, type ProductMarginSummary, type ProductPricingSummary } from '@/lib/api/products.api';
 import { proxyImage } from '@/lib/proxyImage';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -35,6 +35,7 @@ interface Product {
   price: {
     cost: number;
     retail: number;
+    wholesale?: number;
   };
   stock: {
     current: number;
@@ -47,6 +48,8 @@ interface Product {
   createdAt: string;
   updatedAt: string;
   warranty?: { enabled?: boolean; periodDays?: number; type?: string; requiresSerial?: boolean };
+  pricing?: ProductPricingSummary;
+  margins?: ProductMarginSummary;
 }
 
 interface ProductListProps {
@@ -334,6 +337,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                 filteredProducts.map((product) => {
                   const thumbUrl = product.images?.find((i) => i.isPrimary)?.url || product.images?.[0]?.url || '';
                   const stockInfo = getStockStatus(product.stock.current);
+                  const hasWholesalePrice = Boolean(product.price?.wholesale && product.price.wholesale > 0);
                   return (
                     <motion.tr
                       key={product._id}
@@ -371,11 +375,18 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-[#F8F8F8]">
-                          <div className="font-medium">{formatLKR(product.price.retail)}</div>
-                          <div className="text-xs text-[#F8F8F8]/50">
-                            Cost: {formatLKR(product.price.cost)}
+                        <div className="text-sm text-[#F8F8F8] space-y-1">
+                          <div>
+                            <span>{formatLKR(product.price.retail)}</span>
                           </div>
+                          {hasWholesalePrice ? (
+                            <div>
+                              <span>{formatLKR(product.price.wholesale || 0)}</span>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-[#F8F8F8]/40">Wholesale not set</div>
+                          )}
+                          <div className="text-xs text-[#F8F8F8]/50">Cost {formatLKR(product.price.cost)}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4">

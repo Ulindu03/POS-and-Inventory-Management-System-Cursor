@@ -12,7 +12,7 @@ import { emit as emitRealtime } from '../services/realtime.service';
 import fs from 'fs';
 import { getPublicUrl } from '../utils/upload';
 
-type DiscountStatus = 'disabled' | 'scheduled' | 'active' | 'expired';
+type DiscountStatus = 'disabled' | 'scheduled' | 'active' | 'expired' | 'none';
 
 interface DiscountSnapshot {
   status: DiscountStatus;
@@ -25,16 +25,16 @@ interface DiscountSnapshot {
   isEnabled: boolean;
 }
 
-const evaluateDiscount = (product: any): DiscountSnapshot | null => {
+const evaluateDiscount = (product: any, basePriceOverride?: number): DiscountSnapshot | null => {
   const raw = product?.discount;
-  const baseRetail = Number(product?.price?.retail ?? 0);
+  const basePrice = Number(basePriceOverride ?? product?.price?.retail ?? 0);
   if (!raw || raw.isEnabled === false) {
     return raw ? {
       status: 'disabled',
       type: raw.type || 'percentage',
       value: Number(raw.value || 0),
       amount: 0,
-      finalPrice: baseRetail,
+      finalPrice: basePrice,
       startsAt: raw.startAt ? new Date(raw.startAt) : null,
       endsAt: raw.endAt ? new Date(raw.endAt) : null,
       isEnabled: false,
@@ -51,12 +51,12 @@ const evaluateDiscount = (product: any): DiscountSnapshot | null => {
   const type = raw.type === 'fixed' ? 'fixed' : 'percentage';
   let amount = 0;
   if (type === 'percentage') {
-    amount = (baseRetail * Number(raw.value || 0)) / 100;
+    amount = (basePrice * Number(raw.value || 0)) / 100;
   } else {
     amount = Number(raw.value || 0);
   }
-  amount = Math.max(0, Math.min(amount, baseRetail));
-  const finalPrice = Math.max(0, baseRetail - amount);
+  amount = Math.max(0, Math.min(amount, basePrice));
+  const finalPrice = Math.max(0, basePrice - amount);
 
   return {
     status: raw.isEnabled ? status : 'disabled',
@@ -67,6 +67,112 @@ const evaluateDiscount = (product: any): DiscountSnapshot | null => {
     startsAt: start,
     endsAt: end,
     isEnabled: Boolean(raw.isEnabled),
+  };
+};
+
+type TierPricingSummary = {
+  tier: 'retail' | 'wholesale';
+  base: number;
+  final: number;
+  discountAmount: number;
+  status: DiscountStatus;
+  hasActiveDiscount: boolean;
+  configured: boolean;
+  discountType?: 'percentage' | 'fixed' | null;
+  discountValue?: number | null;
+};
+
+interface MarginSummary {
+  configured: boolean;
+  base: {
+    amount: number;
+    percent: number | null;
+  };
+  final: {
+    amount: number;
+    percent: number | null;
+  };
+}
+
+const toNumber = (value: any, fallback = 0) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const computeMargin = (cost: number, price: number): { amount: number; percent: number | null } => {
+  const amount = Number((price - cost).toFixed(2));
+  const percent = cost > 0 ? Number((((price - cost) / cost) * 100).toFixed(2)) : null;
+  return { amount, percent };
+};
+
+const buildTierSummary = (
+  product: any,
+  tier: 'retail' | 'wholesale',
+  base: number,
+  configured: boolean
+): TierPricingSummary => {
+  const snapshot = evaluateDiscount(product, base);
+  const status = snapshot?.status ?? (product?.discount?.isEnabled ? 'scheduled' : 'none');
+  const final = snapshot?.finalPrice ?? base;
+  return {
+    tier,
+    base,
+    final,
+    discountAmount: snapshot?.amount ?? 0,
+    status,
+    hasActiveDiscount: snapshot?.status === 'active',
+    configured,
+    discountType: snapshot?.type ?? (product?.discount?.type ?? null),
+    discountValue: snapshot?.value ?? (product?.discount?.value ?? null),
+  };
+};
+
+const buildPricingAndMargins = (product: any): {
+  pricing: {
+    retail: TierPricingSummary;
+    wholesale: TierPricingSummary;
+    defaultTier: 'retail' | 'wholesale';
+  };
+  margins: {
+    cost: number;
+    retail: MarginSummary;
+    wholesale: MarginSummary;
+  };
+} => {
+  const cost = toNumber(product?.price?.cost, 0);
+  const retailBase = toNumber(product?.price?.retail, 0);
+  const wholesaleRaw = product?.price?.wholesale;
+  const wholesaleConfigured = wholesaleRaw !== undefined && wholesaleRaw !== null && wholesaleRaw !== '';
+  const wholesaleBase = wholesaleConfigured ? toNumber(wholesaleRaw, retailBase) : retailBase;
+
+  const retailSummary = buildTierSummary(product, 'retail', retailBase, true);
+  const wholesaleSummary = buildTierSummary(product, 'wholesale', wholesaleBase, wholesaleConfigured);
+
+  const margins = {
+    cost,
+    retail: {
+      configured: true,
+      base: computeMargin(cost, retailSummary.base),
+      final: computeMargin(cost, retailSummary.final),
+    },
+    wholesale: {
+      configured: wholesaleConfigured,
+      base: computeMargin(cost, wholesaleSummary.base),
+      final: computeMargin(cost, wholesaleSummary.final),
+    },
+  } satisfies {
+    cost: number;
+    retail: MarginSummary;
+    wholesale: MarginSummary;
+  };
+
+  return {
+    pricing: {
+      retail: retailSummary,
+      wholesale: wholesaleSummary,
+      defaultTier: 'retail',
+    },
+    margins,
   };
 };
 
@@ -146,8 +252,8 @@ export class ProductController {
           return merged;
         })();
 
-        const snapshot = evaluateDiscount(withInventory);
-        const baseRetail = Number(withInventory?.price?.retail ?? 0);
+        const { pricing, margins } = buildPricingAndMargins(withInventory);
+        const retailTier = pricing.retail;
         if (withInventory.discount) {
           withInventory.discount = {
             isEnabled: Boolean(withInventory.discount.isEnabled),
@@ -156,25 +262,25 @@ export class ProductController {
             startAt: withInventory.discount.startAt || null,
             endAt: withInventory.discount.endAt || null,
             notes: withInventory.discount.notes || '',
-            status: snapshot?.status ?? (withInventory.discount.isEnabled ? 'scheduled' : 'disabled'),
-            amount: snapshot?.amount ?? 0,
-            finalPrice: snapshot?.finalPrice ?? baseRetail,
+            status: retailTier.status ?? (withInventory.discount.isEnabled ? 'scheduled' : 'disabled'),
+            amount: retailTier.discountAmount ?? 0,
+            finalPrice: retailTier.final ?? retailTier.base,
             createdBy: withInventory.discount.createdBy || null,
             updatedBy: withInventory.discount.updatedBy || null,
             createdAt: withInventory.discount.createdAt || null,
             updatedAt: withInventory.discount.updatedAt || null,
           };
         } else {
-          withInventory.discount = snapshot ? {
-            isEnabled: snapshot.isEnabled,
-            type: snapshot.type,
-            value: snapshot.value,
-            startAt: snapshot.startsAt ?? null,
-            endAt: snapshot.endsAt ?? null,
+          withInventory.discount = retailTier.discountAmount > 0 ? {
+            isEnabled: true,
+            type: retailTier.discountType || 'percentage',
+            value: retailTier.discountValue ?? 0,
+            startAt: null,
+            endAt: null,
             notes: '',
-            status: snapshot.status,
-            amount: snapshot.amount,
-            finalPrice: snapshot.finalPrice,
+            status: retailTier.status,
+            amount: retailTier.discountAmount,
+            finalPrice: retailTier.final,
             createdBy: null,
             updatedBy: null,
             createdAt: null,
@@ -182,13 +288,8 @@ export class ProductController {
           } : null;
         }
 
-        withInventory.pricing = {
-          base: baseRetail,
-          final: snapshot?.finalPrice ?? baseRetail,
-          discountAmount: snapshot?.amount ?? 0,
-          status: snapshot?.status ?? (withInventory.discount?.isEnabled ? withInventory.discount.status : 'none'),
-          hasActiveDiscount: snapshot?.status === 'active',
-        };
+        withInventory.pricing = pricing;
+        withInventory.margins = margins;
 
         return withInventory;
       });
@@ -488,8 +589,8 @@ export class ProductController {
       if (inventory) {
         payload.inventory = inventory;
       }
-      const snapshot = evaluateDiscount(payload);
-      const baseRetail = Number(payload?.price?.retail ?? 0);
+      const { pricing, margins } = buildPricingAndMargins(payload);
+      const retailTier = pricing.retail;
       if (payload.discount) {
         payload.discount = {
           isEnabled: Boolean(payload.discount.isEnabled),
@@ -498,25 +599,25 @@ export class ProductController {
           startAt: payload.discount.startAt || null,
           endAt: payload.discount.endAt || null,
           notes: payload.discount.notes || '',
-          status: snapshot?.status ?? (payload.discount.isEnabled ? 'scheduled' : 'disabled'),
-          amount: snapshot?.amount ?? 0,
-          finalPrice: snapshot?.finalPrice ?? baseRetail,
+          status: retailTier.status ?? (payload.discount.isEnabled ? 'scheduled' : 'disabled'),
+          amount: retailTier.discountAmount ?? 0,
+          finalPrice: retailTier.final ?? retailTier.base,
           createdBy: payload.discount.createdBy || null,
           updatedBy: payload.discount.updatedBy || null,
           createdAt: payload.discount.createdAt || null,
           updatedAt: payload.discount.updatedAt || null,
         };
-      } else if (snapshot) {
+      } else if (retailTier.discountAmount > 0) {
         payload.discount = {
-          isEnabled: snapshot.isEnabled,
-          type: snapshot.type,
-          value: snapshot.value,
-          startAt: snapshot.startsAt ?? null,
-          endAt: snapshot.endsAt ?? null,
+          isEnabled: true,
+          type: retailTier.discountType || 'percentage',
+          value: retailTier.discountValue ?? 0,
+          startAt: null,
+          endAt: null,
           notes: '',
-          status: snapshot.status,
-          amount: snapshot.amount,
-          finalPrice: snapshot.finalPrice,
+          status: retailTier.status,
+          amount: retailTier.discountAmount,
+          finalPrice: retailTier.final,
           createdBy: null,
           updatedBy: null,
           createdAt: null,
@@ -524,13 +625,8 @@ export class ProductController {
         };
       }
 
-      payload.pricing = {
-        base: baseRetail,
-        final: snapshot?.finalPrice ?? baseRetail,
-        discountAmount: snapshot?.amount ?? 0,
-        status: snapshot?.status ?? (payload.discount?.isEnabled ? payload.discount.status : 'none'),
-        hasActiveDiscount: snapshot?.status === 'active',
-      };
+      payload.pricing = pricing;
+      payload.margins = margins;
 
       return res.json({ 
         success: true, 
@@ -551,9 +647,9 @@ export class ProductController {
         .select('sku barcode name price stock discount images');
       if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
-    const payload = product.toObject() as any;
-      const snapshot = evaluateDiscount(payload);
-      const baseRetail = Number(payload?.price?.retail ?? 0);
+      const payload = product.toObject() as any;
+      const { pricing, margins } = buildPricingAndMargins(payload);
+      const retailTier = pricing.retail;
 
       if (payload.discount) {
         payload.discount = {
@@ -563,19 +659,14 @@ export class ProductController {
           startAt: payload.discount.startAt || null,
           endAt: payload.discount.endAt || null,
           notes: payload.discount.notes || '',
-          status: snapshot?.status ?? (payload.discount.isEnabled ? 'scheduled' : 'disabled'),
-          amount: snapshot?.amount ?? 0,
-          finalPrice: snapshot?.finalPrice ?? baseRetail,
+          status: retailTier.status ?? (payload.discount.isEnabled ? 'scheduled' : 'disabled'),
+          amount: retailTier.discountAmount ?? 0,
+          finalPrice: retailTier.final ?? retailTier.base,
         };
       }
 
-      payload.pricing = {
-        base: baseRetail,
-        final: snapshot?.finalPrice ?? baseRetail,
-        discountAmount: snapshot?.amount ?? 0,
-        status: snapshot?.status ?? (payload.discount?.isEnabled ? payload.discount.status : 'none'),
-        hasActiveDiscount: snapshot?.status === 'active',
-      };
+      payload.pricing = pricing;
+      payload.margins = margins;
 
       return res.json({ success: true, data: { product: payload } });
     } catch (err) {
@@ -635,22 +726,22 @@ export class ProductController {
       await product.save();
 
     const payload = product.toObject() as any;
-      const snapshot = evaluateDiscount(payload);
-      const baseRetail = Number(payload?.price?.retail ?? 0);
+      const { pricing, margins } = buildPricingAndMargins(payload);
+      const retailTier = pricing.retail;
       const responseDiscount = {
-        isEnabled: Boolean((payload as any).discount?.isEnabled),
-        type: (payload as any).discount?.type === 'fixed' ? 'fixed' : 'percentage',
-        value: Number((payload as any).discount?.value || 0),
-        startAt: (payload as any).discount?.startAt || null,
-        endAt: (payload as any).discount?.endAt || null,
-        notes: (payload as any).discount?.notes || '',
-        status: snapshot?.status ?? ((payload as any).discount?.isEnabled ? 'scheduled' : 'disabled'),
-        amount: snapshot?.amount ?? 0,
-        finalPrice: snapshot?.finalPrice ?? baseRetail,
-        createdBy: (payload as any).discount?.createdBy || null,
-        updatedBy: (payload as any).discount?.updatedBy || null,
-        createdAt: (payload as any).discount?.createdAt || null,
-        updatedAt: (payload as any).discount?.updatedAt || null,
+        isEnabled: Boolean(payload.discount?.isEnabled),
+        type: retailTier.discountType ?? type,
+        value: retailTier.discountValue ?? numericValue,
+        startAt: payload.discount?.startAt || start,
+        endAt: payload.discount?.endAt || end,
+        notes: (product as any).discount?.notes || '',
+        status: retailTier.status ?? 'scheduled',
+        amount: retailTier.discountAmount ?? 0,
+        finalPrice: retailTier.final ?? retailTier.base,
+        createdBy: (product as any).discount?.createdBy || null,
+        updatedBy: (product as any).discount?.updatedBy || null,
+        createdAt: (product as any).discount?.createdAt || null,
+        updatedAt: (product as any).discount?.updatedAt || null,
       };
 
       return res.json({
@@ -658,13 +749,8 @@ export class ProductController {
         message: 'Discount updated',
         data: {
           discount: responseDiscount,
-          pricing: {
-            base: baseRetail,
-            final: snapshot?.finalPrice ?? baseRetail,
-            discountAmount: snapshot?.amount ?? 0,
-            status: snapshot?.status ?? responseDiscount.status,
-            hasActiveDiscount: snapshot?.status === 'active',
-          },
+          pricing,
+          margins,
         },
       });
     } catch (error) {
@@ -680,10 +766,13 @@ export class ProductController {
         return res.status(404).json({ success: false, message: 'Product not found' });
       }
 
-      product.set('discount', undefined);
-      await product.save();
+  product.set('discount', undefined);
+  await product.save();
 
-      return res.json({ success: true, message: 'Discount removed', data: { discount: null } });
+  const payload = product.toObject();
+  const { pricing, margins } = buildPricingAndMargins(payload);
+
+  return res.json({ success: true, message: 'Discount removed', data: { discount: null, pricing, margins } });
     } catch (error) {
       return next(error);
     }

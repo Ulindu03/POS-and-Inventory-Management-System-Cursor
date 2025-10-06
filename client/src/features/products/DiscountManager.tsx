@@ -240,7 +240,6 @@ export const DiscountManager: React.FC<DiscountManagerProps> = ({ canManage }) =
   }, [refreshMetrics, refreshProducts]);
 
   const handleOpenModal = useCallback(async (product: ProductListItem) => {
-    if (!canManage) return;
     try {
       const res = await productsApi.getById(product._id);
       const current = res.data.product;
@@ -373,6 +372,7 @@ export const DiscountManager: React.FC<DiscountManagerProps> = ({ canManage }) =
             ...item,
             discount: updatedDiscount,
             pricing: updatedPricing,
+            margins: res.data.margins,
           };
         }
         return item;
@@ -394,21 +394,16 @@ export const DiscountManager: React.FC<DiscountManagerProps> = ({ canManage }) =
     if (!removingProduct) return;
     setRemoving(true);
     try {
-      await productsApi.removeDiscount(removingProduct._id);
+      const res = await productsApi.removeDiscount(removingProduct._id);
+      const nextPricing = res.data.pricing;
       setProducts((prev) => prev.map((item) => {
         if (item._id === removingProduct._id) {
-          const clone: ProductListItem = {
+          return {
             ...item,
             discount: null,
-            pricing: item.pricing ? ({
-              ...item.pricing,
-              discountAmount: 0,
-              final: item.pricing.base,
-              hasActiveDiscount: false,
-              status: 'none',
-            } satisfies ProductPricingSummary) : item.pricing,
-          };
-          return clone;
+            pricing: nextPricing,
+            margins: res.data.margins,
+          } satisfies ProductListItem;
         }
         return item;
       }));
@@ -584,6 +579,8 @@ export const DiscountManager: React.FC<DiscountManagerProps> = ({ canManage }) =
                 computedProducts.map((product) => {
                   const discount = product.discount as ProductDiscountInfo | null;
                   const pricing = product.pricing as ProductPricingSummary | undefined;
+                  const retailTier = pricing?.retail;
+                  const wholesaleTier = pricing?.wholesale;
                   const status = discount?.status ?? 'none';
                   const hasDiscount = !!discount && discount.isEnabled && discount.status !== 'none';
                   const primaryImage = product.images?.find((image) => image.isPrimary)?.url || product.images?.[0]?.url;
@@ -644,16 +641,37 @@ export const DiscountManager: React.FC<DiscountManagerProps> = ({ canManage }) =
                       </td>
 
                       <td className="px-6 py-4">
-                        <div className="space-y-1 text-sm">
-                          <p className="text-white/80">{t('discounts.labels.retailPrice', 'Retail price')}: {formatLKR(pricing?.base ?? product.price?.retail ?? 0)}</p>
-                          <p className="text-emerald-300">
-                            {t('discounts.labels.finalPrice', 'Promo price')}: {formatLKR(pricing?.final ?? product.price?.retail ?? 0)}
-                          </p>
-                          {pricing?.discountAmount ? (
-                            <p className="text-xs text-emerald-200">
-                              {t('discounts.labels.youSave', 'Saving')}: {formatLKR(pricing.discountAmount)}
+                        <div className="space-y-2 text-sm">
+                          <div className="space-y-1">
+                            <p className="text-white/80">
+                              {formatLKR(retailTier?.base ?? product.price?.retail ?? 0)}
                             </p>
-                          ) : null}
+                            <p className="text-emerald-300">
+                              {t('discounts.labels.finalPrice', 'Promo price')}: {formatLKR(retailTier?.final ?? retailTier?.base ?? product.price?.retail ?? 0)}
+                            </p>
+                            {retailTier?.discountAmount ? (
+                              <p className="text-xs text-emerald-200">
+                                {t('discounts.labels.youSave', 'Saving')}: {formatLKR(retailTier.discountAmount)}
+                              </p>
+                            ) : null}
+                          </div>
+                          {wholesaleTier?.configured || product.price?.wholesale ? (
+                            <div className="space-y-1 pt-2 border-t border-white/10">
+                              <p className="text-white/70">
+                                {formatLKR(product.price?.wholesale ?? wholesaleTier?.base ?? 0)}
+                              </p>
+                              <p className="text-emerald-200">
+                                {t('discounts.labels.wholesalePromo', 'Wholesale promo price')}: {formatLKR(wholesaleTier?.final ?? wholesaleTier?.base ?? product.price?.wholesale ?? 0)}
+                              </p>
+                              {wholesaleTier?.discountAmount ? (
+                                <p className="text-xs text-emerald-200">
+                                  {t('discounts.labels.youSave', 'Saving')}: {formatLKR(wholesaleTier.discountAmount)}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="pt-2 text-xs text-white/40">{t('discounts.labels.noWholesale', 'No wholesale price configured')}</p>
+                          )}
                         </div>
                       </td>
 
@@ -665,13 +683,8 @@ export const DiscountManager: React.FC<DiscountManagerProps> = ({ canManage }) =
                         <div className="flex flex-wrap justify-end gap-2">
                           <button
                             type="button"
-                            disabled={!canManage}
                             onClick={() => handleOpenModal(product)}
-                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold transition-all ${
-                              canManage
-                                ? 'border-purple-400/40 text-white hover:bg-purple-500/20'
-                                : 'border-white/10 text-white/40 cursor-not-allowed'
-                            }`}
+                            className="inline-flex items-center gap-2 rounded-full border border-purple-400/40 px-4 py-1.5 text-xs font-semibold text-white hover:bg-purple-500/20 transition-all"
                           >
                             <NotebookPen className="w-4 h-4" />
                             {t('discounts.actions.manage', 'Manage')}

@@ -17,7 +17,20 @@ export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void;
         {items.map((i) => (
           <div key={i.id} className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-medium text-[#F8F8F8]">{i.name}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-medium text-[#F8F8F8]">{i.name}</div>
+                {i.priceTier ? (
+                  <span
+                    className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border ${
+                      i.priceTier === 'wholesale'
+                        ? 'border-emerald-400/60 text-emerald-200 bg-emerald-400/10'
+                        : 'border-white/15 text-white/60 bg-white/5'
+                    }`}
+                  >
+                    {i.priceTier === 'wholesale' ? 'Wholesale' : 'Retail'}
+                  </span>
+                ) : null}
+              </div>
               <div className="text-xs opacity-80 space-y-0.5">
                 {i.basePrice && i.basePrice > i.price ? (
                   <>

@@ -2,11 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { productsApi } from '@/lib/api/products.api';
 import { useCartStore } from '@/store/cart.store';
+import { usePosStore } from '@/store/pos.store';
 
 export const BarcodeScanner = () => {
   const divId = useRef(`scanner-${Math.random().toString(36).slice(2)}`);
   const [active, setActive] = useState(false);
   const addItem = useCartStore((s) => s.addItem);
+  const customerType = usePosStore((s) => s.customerType);
+  const customerTypeRef = useRef(customerType);
+
+  useEffect(() => {
+    customerTypeRef.current = customerType;
+  }, [customerType]);
 
   useEffect(() => {
     let scanner: Html5Qrcode | null = null;
@@ -20,7 +27,30 @@ export const BarcodeScanner = () => {
           async (text) => {
           try {
             const res = await productsApi.getByBarcode(text.trim());
-            addItem({ id: (res.data.product as any)._id || (res.data.product as any).id, name: res.data.product.name.en, price: res.data.product.price.retail });
+            const product: any = res.data.product;
+            const pricing = product.pricing as any;
+            const retailTier = pricing?.retail;
+            const wholesaleTier = pricing?.wholesale;
+            const wholesaleAvailable = Boolean(wholesaleTier?.configured && wholesaleTier.base > 0);
+            const prefersWholesale = customerTypeRef.current === 'wholesale' && wholesaleAvailable;
+            const activeTier = prefersWholesale ? wholesaleTier : retailTier ?? wholesaleTier;
+            const priceTier: 'retail' | 'wholesale' = prefersWholesale && activeTier ? 'wholesale' : 'retail';
+            const basePrice = activeTier?.base ?? (priceTier === 'wholesale' ? wholesaleTier?.base : retailTier?.base) ?? product.price?.retail ?? 0;
+            const finalPrice = activeTier?.final ?? basePrice;
+            const discountAmount = Math.max(0, activeTier?.discountAmount ?? 0);
+            const discountType = activeTier?.discountType ?? null;
+            const discountValue = activeTier?.discountValue ?? null;
+
+            addItem({
+              id: product._id || product.id,
+              name: product.name.en,
+              price: finalPrice,
+              basePrice,
+              discountAmount,
+              discountType: discountType ?? undefined,
+              discountValue: discountValue ?? undefined,
+              priceTier,
+            });
             // vibrate lightly to confirm
             if (navigator.vibrate) navigator.vibrate(60);
           } catch {

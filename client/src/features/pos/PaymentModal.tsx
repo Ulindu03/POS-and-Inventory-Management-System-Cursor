@@ -1,4 +1,5 @@
 import { useCartStore } from '@/store/cart.store';
+import { usePosStore } from '@/store/pos.store';
 import { formatLKR } from '@/lib/utils/currency';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -6,20 +7,21 @@ import { salesApi, PaymentMethod } from '@/lib/api/sales.api';
 import client from '@/lib/api/client';
 import { getAccessToken } from '@/lib/api/token';
 
+type CheckoutMethod = Extract<PaymentMethod, 'cash' | 'card'>;
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  onComplete: (sale: { invoiceNo: string; id: string; method: 'cash' | 'card' | 'digital'; customerId?: string | null }) => void;
+  onComplete: (sale: { invoiceNo: string; id: string; method: CheckoutMethod; customerId?: string | null }) => void;
 }
 
 export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const total = useCartStore((s) => s.total());
   const items = useCartStore((s) => s.items);
   const discount = useCartStore((s) => s.discount);
-  const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [payments, setPayments] = useState<Array<{ method: PaymentMethod; amount: number }>>([]);
-  const [promo, setPromo] = useState('');
-  const setDiscount = useCartStore((s) => s.setDiscount);
+  const customerType = usePosStore((s) => s.customerType);
+  const isWholesaleMode = customerType === 'wholesale';
+  const [method, setMethod] = useState<CheckoutMethod>('cash');
   const [loading, setLoading] = useState(false);
   const [warrantySelections, setWarrantySelections] = useState<Record<string, { optionName?: string; additionalDays: number; fee: number }[]>>({});
   // Separate panels: existing lookup vs new retail registration
@@ -35,7 +37,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const [linkedName, setLinkedName] = useState('');
   const [linkedType, setLinkedType] = useState<string | undefined>(undefined);
   const [saveHover, setSaveHover] = useState(false);
-  let customerButtonLabel = 'Save Customer';
+  let customerButtonLabel = isWholesaleMode ? 'Save Wholesale Customer' : 'Save Customer';
   if (creatingCustomer) customerButtonLabel = 'Saving...';
   if (customerId) customerButtonLabel = 'Customer Linked';
   const toggleExtendedOption = (cartItemId: string, opt: any) => {
@@ -46,7 +48,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
       return { ...prev, [cartItemId]: nextList };
     });
   };
-  async function createRetailCustomerIfNeeded(): Promise<string | null> {
+  async function createCustomerIfNeeded(): Promise<string | null> {
     if (customerId || !newName || !newPhone) return customerId;
     setCreatingCustomer(true);
     try {
@@ -60,7 +62,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
           phone: digits,
           ...(newEmail ? { email: newEmail } : {}),
           address: { street: '-', city: '-', province: '-', postalCode: '-' },
-          type: 'retail',
+            type: customerType,
           creditLimit: 0,
           loyaltyPoints: 0,
         }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
@@ -92,22 +94,21 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const completeSale = async () => {
     setLoading(true);
     try {
-      const paid = payments.length ? payments : [{ method, amount: total }];
+  const paid: Array<{ method: PaymentMethod; amount: number }> = [{ method, amount: total }];
       // Auto-create retail customer if name + phone provided but not yet linked
       let customerIdToUse: string | null = customerId;
       if (!customerIdToUse && newName && newPhone) {
-        customerIdToUse = await createRetailCustomerIfNeeded();
+        customerIdToUse = await createCustomerIfNeeded();
       }
       const res = await salesApi.create({
         items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })),
         discount,
-        payments: paid,
-        discountCode: promo || undefined,
+  payments: paid,
         extendedWarrantySelections: warrantySelections,
         customer: customerIdToUse || undefined,
       });
       const sale = res.data.sale;
-      onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method: paid[0].method as any, customerId: customerIdToUse });
+  onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method, customerId: customerIdToUse });
       toast.success('Sale completed');
     } catch (err: any) {
       const status = err?.response?.status;
@@ -143,52 +144,55 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
       <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-5 text-[#F8F8F8]">
         <div className="text-lg font-semibold mb-3">Payment</div>
         <div className="opacity-80 mb-4">Amount due: <span className="font-semibold text-[#F8F8F8]">{formatLKR(total)}</span></div>
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <button onClick={() => setMethod('cash')} className={`py-2 rounded-xl ${method==='cash' ? 'bg-white/20' : 'bg-white/10 hover:bg-white/20'}`}>Cash</button>
-          <button onClick={() => setMethod('card')} className={`py-2 rounded-xl ${method==='card' ? 'bg-white/20' : 'bg-white/10 hover:bg-white/20'}`}>Card</button>
-          <button onClick={() => setMethod('digital')} className={`py-2 rounded-xl ${method==='digital' ? 'bg-white/20' : 'bg-white/10 hover:bg-white/20'}`}>Digital</button>
-        </div>
-        {/* Multi-payment adder */}
-        <div className="flex gap-2 mb-3">
-          <input type="number" min={0} placeholder="Amount" className="flex-1 bg-white/10 border border-white/10 rounded-lg px-2 py-1 focus:outline-none" id="pay-amount" />
+        <div className="grid grid-cols-2 gap-3 mb-6">
           <button
-            onClick={() => {
-              const input = document.getElementById('pay-amount') as HTMLInputElement | null;
-              const amt = Number(input?.value || 0);
-              if (!amt || amt <= 0) return;
-              setPayments((prev) => [...prev, { method, amount: amt }]);
-              if (input) input.value = '';
-            }}
-            className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
-          >Add</button>
-        </div>
-        {payments.length > 0 && (
-          <div className="mb-3 space-y-2">
-            <div className="text-sm opacity-80">Applied payments</div>
-            {payments.map((p, idx) => (
-              <div key={`${p.method}-${idx}-${p.amount}`} className="flex items-center justify-between text-sm bg-white/5 rounded-lg px-2 py-1">
-                <div className="opacity-90">{p.method.toUpperCase()}</div>
-                <div className="font-medium">{formatLKR(p.amount)}</div>
-                <button onClick={() => setPayments(payments.filter((_, i) => i !== idx))} className="text-xs opacity-70 hover:opacity-100">Remove</button>
-              </div>
-            ))}
-            <div className="flex justify-between text-sm pt-1 border-t border-white/10">
-              <span>Total paid</span>
-              <span className="font-semibold">{formatLKR(payments.reduce((s, p) => s + p.amount, 0))}</span>
-            </div>
-          </div>
-        )}
-        {/* Promo code */}
-        <div className="flex gap-2 mb-4">
-          <input value={promo} onChange={(e) => setPromo(e.target.value)} placeholder="Promo code" className="flex-1 bg-white/10 border border-white/10 rounded-lg px-2 py-1 focus:outline-none" />
+            onClick={() => setMethod('cash')}
+            className={`group relative overflow-hidden rounded-xl border transition-all duration-200 ${
+              method === 'cash'
+                ? 'border-blue-400 bg-white/20 text-white shadow-[0_0_20px_rgba(0,102,255,0.32)]'
+                : 'border-white/10 bg-white/10 text-[#F8F8F8] hover:border-blue-300/60 hover:bg-white/15 hover:text-white'
+            }`}
+          >
+            <span className="relative z-10 block px-6 py-2 font-medium tracking-wide">Cash</span>
+            <span
+              aria-hidden
+              className={`absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 ${
+                method === 'cash'
+                  ? 'bg-gradient-to-r from-blue-400/20 via-purple-400/10 to-blue-500/20'
+                  : 'bg-gradient-to-r from-blue-400/10 via-purple-400/5 to-blue-500/10'
+              }`}
+            />
+            <span
+              aria-hidden
+              className={`absolute inset-[-3px] rounded-[18px] blur group-hover:opacity-100 transition-opacity duration-200 ${
+                method === 'cash' ? 'opacity-100 bg-blue-400/50' : 'opacity-0 bg-blue-400/40'
+              }`}
+            />
+          </button>
           <button
-            onClick={async () => {
-              if (!promo) return;
-              const res = await salesApi.validateDiscount({ code: promo, subtotal: useCartStore.getState().subtotal() });
-              if (res.data.valid && res.data.amount != null) setDiscount(res.data.amount);
-            }}
-            className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20"
-          >Apply</button>
+            onClick={() => setMethod('card')}
+            className={`group relative overflow-hidden rounded-xl border transition-all duration-200 ${
+              method === 'card'
+                ? 'border-blue-400 bg-white/20 text-white shadow-[0_0_20px_rgba(0,102,255,0.32)]'
+                : 'border-white/10 bg-white/10 text-[#F8F8F8] hover:border-blue-300/60 hover:bg-white/15 hover:text-white'
+            }`}
+          >
+            <span className="relative z-10 block px-6 py-2 font-medium tracking-wide">Card</span>
+            <span
+              aria-hidden
+              className={`absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 ${
+                method === 'card'
+                  ? 'bg-gradient-to-r from-blue-400/20 via-purple-400/10 to-blue-500/20'
+                  : 'bg-gradient-to-r from-blue-400/10 via-purple-400/5 to-blue-500/10'
+              }`}
+            />
+            <span
+              aria-hidden
+              className={`absolute inset-[-3px] rounded-[18px] blur group-hover:opacity-100 transition-opacity duration-200 ${
+                method === 'card' ? 'opacity-100 bg-blue-400/50' : 'opacity-0 bg-blue-400/40'
+              }`}
+            />
+          </button>
         </div>
         {/* Customer section */}
         <div className="mb-4 space-y-3">
@@ -250,7 +254,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
 
           {/* New retail customer registration */}
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="text-xs opacity-80 mb-2">New retail customer</div>
+            <div className="text-xs opacity-80 mb-2">New {isWholesaleMode ? 'wholesale' : 'retail'} customer</div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="col-span-1 space-y-1">
                 <label htmlFor="pos-new-phone" className="block text-[11px] opacity-70">Phone</label>
@@ -268,7 +272,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
                 <button
                   type="button"
                   disabled={creatingCustomer || !newPhone || !newName}
-                  onClick={async ()=>{ await createRetailCustomerIfNeeded(); }}
+                  onClick={async ()=>{ await createCustomerIfNeeded(); }}
                   onMouseEnter={()=>setSaveHover(true)}
                   onMouseLeave={()=>setSaveHover(false)}
                   className="px-3 py-2 rounded disabled:opacity-40 text-xs w-40 transition-colors"

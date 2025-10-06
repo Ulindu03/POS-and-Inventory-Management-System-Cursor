@@ -415,11 +415,11 @@ const Reports = () => {
                             {reportData.periodData.map((period: any) => (
                               <tr key={period.period} className="border-b border-white/5">
                                 <td className="py-2">{period.period}</td>
-                                {period.sales !== undefined && <td className="text-right py-2">{period.sales}</td>}
-                                {period.revenue !== undefined && <td className="text-right py-2">LKR {period.revenue?.toLocaleString()}</td>}
-                                {period.profit !== undefined && <td className="text-right py-2">LKR {period.profit?.toLocaleString()}</td>}
-                                {period.grossProfit !== undefined && <td className="text-right py-2">LKR {period.grossProfit?.toLocaleString()}</td>}
-                                {period.cogs !== undefined && <td className="text-right py-2">LKR {period.cogs?.toLocaleString()}</td>}
+                                {period.sales !== undefined && <td className="text-right py-2 font-semibold text-blue-400 bg-blue-900/10 rounded-lg shadow-sm">{period.sales}</td>}
+                                {period.revenue !== undefined && <td className="text-right py-2 font-semibold text-green-400 bg-green-900/10 rounded-lg shadow-sm">{period.revenue?.toLocaleString()}</td>}
+                                {period.profit !== undefined && <td className="text-right py-2 font-semibold text-emerald-400 bg-emerald-900/10 rounded-lg shadow-sm"> {period.profit?.toLocaleString()}</td>}
+                                {period.grossProfit !== undefined && <td className="text-right py-2 font-semibold text-yellow-400 bg-yellow-900/10 rounded-lg shadow-sm"> {period.grossProfit?.toLocaleString()}</td>}
+                                {period.cogs !== undefined && <td className="text-right py-2 font-semibold text-red-400 bg-red-900/10 rounded-lg shadow-sm">{period.cogs?.toLocaleString()}</td>}
                               </tr>
                             ))}
                           </tbody>
@@ -443,9 +443,18 @@ const Reports = () => {
                           if (item.onTimeDeliveryRate) meta += ` • ${item.onTimeDeliveryRate}% on-time`;
 
                           let amount = '';
+                          // Currency fields
                           if (item.totalValue) amount = `LKR ${item.totalValue?.toLocaleString()}`;
                           else if (item.totalAmount) amount = `LKR ${item.totalAmount?.toLocaleString()}`;
-                          else if (item.totalQuantity) amount = `${item.totalQuantity}`;
+                          // Orders column: show only count, no LKR
+                          else if (item.totalOrders !== undefined) amount = `${Number(item.totalOrders).toLocaleString()}`;
+                          else if (item.orders !== undefined) amount = `${Number(item.orders).toLocaleString()}`;
+                          else if (item.totalQuantity !== undefined) amount = `${Number(item.totalQuantity).toLocaleString()}`;
+                          const keyStr = String(displayName);
+                          // If this row represents Stock, ensure it's quantity only (no LKR)
+                          if (keyStr.toLowerCase().includes('stock') && item.totalQuantity !== undefined) {
+                            amount = `${Number(item.totalQuantity).toLocaleString()}`;
+                          }
 
                           const key = String(displayName);
                           return (

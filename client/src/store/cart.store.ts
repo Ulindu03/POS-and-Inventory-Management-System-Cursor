@@ -11,6 +11,7 @@ export interface CartItem {
 	discountAmount?: number; // Per-unit savings
 	discountType?: 'percentage' | 'fixed';
 	discountValue?: number;
+	priceTier?: 'retail' | 'wholesale';
 }
 
 interface CartState {
@@ -72,6 +73,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 		const discountAmount = typeof item.discountAmount === 'number' ? item.discountAmount : Math.max(0, basePrice - item.price);
 		const discountType = item.discountType;
 		const discountValue = item.discountValue;
+		const priceTier = item.priceTier;
 		set((state) => {
 			const existing = state.items.find((i) => i.id === item.id);
 			if (existing) {
@@ -84,6 +86,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 						discountAmount,
 						discountType: discountType ?? i.discountType,
 						discountValue: discountValue ?? i.discountValue,
+						priceTier: priceTier ?? i.priceTier,
 					} : i)),
 				};
 			}
@@ -97,6 +100,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 						discountAmount,
 						discountType,
 						discountValue,
+						priceTier,
 					},
 				],
 			};

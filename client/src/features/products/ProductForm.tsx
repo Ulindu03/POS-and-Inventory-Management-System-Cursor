@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -21,6 +21,7 @@ import { productsApi, categoriesApi, type CategoryItem } from '@/lib/api/product
 import type { Supplier } from '@/lib/api/suppliers.api';
 import { getSuppliers } from '@/lib/api/suppliers.api';
 import { proxyImage } from '@/lib/proxyImage';
+import { formatLKR } from '@/lib/utils/currency';
 
 type WarrantyUnit = 'days' | 'months' | 'years';
 
@@ -33,7 +34,7 @@ type FormDataType = {
   category: string;
   brand: string;
   supplier: string;
-  price: { cost: number; retail: number };
+  price: { cost: number; retail: number; wholesale?: number };
   stock: { current: number };
   minimumStock: number;
   reorderPoint: number;
@@ -61,12 +62,26 @@ const SKU_MIN_LENGTH = 12;
 const SKU_MAX_LENGTH = 24;
 const SKU_PATTERN = /^[A-Z]{3}-[A-Z]{2,3}-[A-Z0-9]{2,4}(?:-[A-Z0-9]{2,4})?-\d{3,}$/;
 
-function PriceInput({ id, label, value, onChange, required, invalid }: { id: string; label: string; value: number; onChange: (v: number) => void; required?: boolean; invalid?: boolean }) {
+function PriceInput({ id, label, value, onChange, required, invalid, invalidMessage, onBlur, placeholder = '0.00', helper, hideLabel = false }: {
+  id: string;
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  required?: boolean;
+  invalid?: boolean;
+  invalidMessage?: string;
+  onBlur?: () => void;
+  placeholder?: string;
+  helper?: ReactNode;
+  hideLabel?: boolean;
+}) {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-white mb-2">
-        {label} {required && <span className="text-rose-400">*</span>}
-      </label>
+      {!hideLabel && (
+        <label htmlFor={id} className="block text-sm font-medium text-white mb-2">
+          {label} {required && <span className="text-rose-400">*</span>}
+        </label>
+      )}
       <div className={`flex items-center rounded-xl border bg-white/5 backdrop-blur ${invalid ? 'border-rose-400' : 'border-white/20 hover:border-white/30 focus-within:border-white/40'} focus-within:ring-2 focus-within:ring-white/20`}>
         <input
           id={id}
@@ -76,12 +91,14 @@ function PriceInput({ id, label, value, onChange, required, invalid }: { id: str
           step="0.01"
           value={value ?? 0}
           onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          onBlur={onBlur}
           className="w-full h-12 px-4 rounded-l-xl bg-transparent text-white placeholder-white/50 outline-none"
-          placeholder="0.00"
+          placeholder={placeholder}
         />
         <span className="px-4 h-12 inline-flex items-center rounded-r-xl bg-white/10 border-l border-white/20 text-white/80 text-sm font-medium">LKR</span>
       </div>
-      {invalid && <p className="mt-1 text-xs text-rose-400">Selling price is below cost.</p>}
+      {invalid && <p className="mt-1 text-xs text-rose-400">{invalidMessage || `${label} is below cost.`}</p>}
+      {helper ? (<div className="mt-1 text-xs">{helper}</div>) : null}
     </div>
   );
 }
@@ -125,7 +142,11 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
     category: product?.category || '',
     brand: (product as any)?.brand || '',
     supplier: (product as any)?.supplier || '',
-    price: { cost: (product as any)?.price?.cost || 0, retail: (product as any)?.price?.retail || 0 },
+    price: {
+      cost: (product as any)?.price?.cost || 0,
+      retail: (product as any)?.price?.retail || 0,
+      wholesale: (product as any)?.price?.wholesale || 0,
+    },
     stock: { current: (product as any)?.stock?.current || 0 },
     minimumStock: (product as any)?.minimumStock || 0,
     reorderPoint: (product as any)?.reorderPoint || 0,
@@ -138,6 +159,12 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [imageMsg, setImageMsg] = useState<string | null>(null);
+
+  const costPrice = formData.price.cost || 0;
+  const retailValue = formData.price.retail || 0;
+  const wholesaleValue = formData.price.wholesale || 0;
+  const retailProfit = costPrice > 0 && retailValue > 0 ? retailValue - costPrice : null;
+  const wholesaleProfit = costPrice > 0 && wholesaleValue > 0 ? wholesaleValue - costPrice : null;
 
   const [barcodeMode, setBarcodeMode] = useState<'single' | 'unique'>('single');
   const [stickersQty, setStickersQty] = useState<number>(0);
@@ -220,13 +247,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
     setFormData((p) => ({ ...p, warranty: { ...(p.warranty || {}), periodDays: Math.max(0, Math.floor(days)) } }));
   };
 
-  const calculateMargin = () => {
-    const cost = formData.price.cost || 0;
-    const retail = formData.price.retail || 0;
-    if (!cost) return 0;
-    return Number((((retail - cost) / cost) * 100).toFixed(1));
-  };
-
+  const costValue = formData.price.cost || 0;
   const submitText = product?._id ? 'Save Changes' : 'Create Product';
 
   const normalizeSku = (value: string, { allowTrailingDash = true }: { allowTrailingDash?: boolean } = {}) => {
@@ -246,6 +267,21 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
       return 'SKU must follow CAT-BRD-SPEC(-VAR optional)-### pattern.';
     }
     return null;
+  };
+
+  const evaluateSkuState = () => {
+    const normalizedInitial = normalizeSku(product?.sku || '', { allowTrailingDash: true });
+    const normalizedCurrent = normalizeSku(formData.sku || '', { allowTrailingDash: true });
+    const skuChanged = normalizedCurrent !== normalizedInitial;
+    const skuError = getSkuValidationError(formData.sku);
+    const isEditing = Boolean(product?._id);
+    return {
+      skuError,
+      skuChanged,
+      isEditing,
+      blockingError: Boolean(skuError && (!isEditing || skuChanged)),
+      legacyAllowed: Boolean(isEditing && !skuChanged && skuError),
+    };
   };
 
   const abbreviate = (text: string, length = 3) => {
@@ -478,12 +514,17 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
   function validate(): boolean {
     const errs: string[] = [];
     if (!formData.name.en) errs.push('name.en');
-    if (getSkuValidationError(formData.sku)) errs.push('sku');
+    const { blockingError } = evaluateSkuState();
+    if (blockingError) errs.push('sku');
     if (!formData.category) errs.push('category');
     if ((formData.price.cost || 0) <= 0) errs.push('price.cost');
     if ((formData.price.retail || 0) <= 0) errs.push('price.retail');
+    if ((formData.price.wholesale || 0) < 0) errs.push('price.wholesale');
+    if ((formData.price.wholesale || 0) > 0 && (formData.price.wholesale || 0) < (formData.price.cost || 0)) {
+      errs.push('price.wholesale');
+    }
     if (errs.length) {
-      setTouched((t) => ({ ...t, nameEn: true, sku: true, category: true, priceCost: true, priceRetail: true }));
+      setTouched((t) => ({ ...t, nameEn: true, sku: true, category: true, priceCost: true, priceRetail: true, priceWholesale: true }));
       return false;
     }
     return true;
@@ -498,6 +539,16 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
       const payload = { ...formData, category: formData.category || undefined } as any;
       if (!payload.name?.si) {
         payload.name = { ...payload.name, si: payload.name?.en || '' };
+      }
+      if (payload.price) {
+        payload.price.cost = Number(payload.price.cost || 0);
+        payload.price.retail = Number(payload.price.retail || 0);
+        const wholesaleNumeric = Number(payload.price.wholesale || 0);
+        if (wholesaleNumeric > 0) {
+          payload.price.wholesale = wholesaleNumeric;
+        } else {
+          delete payload.price.wholesale;
+        }
       }
       if (product?._id) {
         await productsApi.update(product._id, payload);
@@ -525,8 +576,17 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
     }
   }
 
-  const skuError = getSkuValidationError(formData.sku);
-  const shouldShowSkuError = (touched.sku || submitAttempted) && Boolean(skuError);
+  const skuState = evaluateSkuState();
+  const skuError = skuState.skuError;
+  const showSkuFeedback = touched.sku || submitAttempted;
+  const shouldShowSkuError = showSkuFeedback && skuState.blockingError;
+  const showLegacySkuNotice = showSkuFeedback && skuState.legacyAllowed;
+  const skuAriaDescribedBy = shouldShowSkuError ? 'sku-error' : showLegacySkuNotice ? 'sku-warning' : undefined;
+  const skuBorderClasses = shouldShowSkuError
+    ? 'border-rose-400 hover:border-rose-300 focus:border-rose-300'
+    : showLegacySkuNotice
+      ? 'border-amber-400/70 hover:border-amber-300 focus:border-amber-300'
+      : 'border-white/20 hover:border-white/30 focus:border-white/40';
 
   if (!isOpen) return null;
 
@@ -583,8 +643,8 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                               setTouched(t => ({ ...t, sku: true }));
                             }}
                             aria-invalid={shouldShowSkuError}
-                            aria-describedby={shouldShowSkuError ? 'sku-error' : undefined}
-                            className={`w-full h-12 pl-12 pr-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border ${shouldShowSkuError ? 'border-rose-400' : 'border-white/20 hover:border-white/30 focus:border-white/40'} focus:outline-none focus:ring-2 focus:ring-white/20`}
+                            aria-describedby={skuAriaDescribedBy}
+                            className={`w-full h-12 pl-12 pr-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border ${skuBorderClasses} focus:outline-none focus:ring-2 focus:ring-white/20`}
                             placeholder="e.g., FAN-PAN-16W-001"
                             title="Follow CAT-BRD-SPEC-### format (optional variant before digits)"
                           />
@@ -593,6 +653,11 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                       </div>
                       {shouldShowSkuError && skuError && (
                         <p id="sku-error" className="mt-1 text-xs text-rose-400">{skuError}</p>
+                      )}
+                      {showLegacySkuNotice && skuError && (
+                        <p id="sku-warning" className="mt-1 text-xs text-amber-300">
+                          This product uses a legacy SKU format. You can keep it, but consider regenerating to adopt the CAT-BRD-SPEC-### pattern.
+                        </p>
                       )}
                       <p className="text-xs text-white/70 mt-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-400/20">💡 Format: <span className="font-semibold text-white">CAT-BRD-SPEC-###</span> (e.g., <span className="text-white">FAN-PAN-16W-001</span>). Add an optional variant like <span className="text-white">-WHT</span> before the number when needed.</p>
                     </div>
@@ -660,29 +725,50 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-white mb-1 flex items-center gap-2"><Tag className="w-5 h-5 text-indigo-300" /> Pricing</h3>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <PriceInput id="price_cost" label="Cost Price" required value={formData.price.cost} onChange={(v) => setFormData(prev => ({ ...prev, price: { ...prev.price, cost: v } }))} />
-                    <PriceInput id="price_retail" label="Selling Price" required value={formData.price.retail} onChange={(v) => setFormData(prev => ({ ...prev, price: { ...prev.price, retail: v } }))} invalid={formData.price.retail > 0 && formData.price.retail < (formData.price.cost || 0)} />
-                    <div>
-                      <span className="block text-sm font-medium text-white mb-2">Profit Margin</span>
-                      <div className="px-4 py-3 rounded-lg bg-black/30 border border-white/10 flex items-center justify-center gap-2" title="Calculated automatically from Cost and Selling Price. Formula: ((Selling - Cost) / Cost × 100)%">
-                        <Lock className="w-4 h-4 text-slate-600" />
-                        {(() => { 
-                          const cost = formData.price.cost || 0; 
-                          const retail = formData.price.retail || 0; 
-                          if (!cost && !retail) return <span className="text-slate-600">--</span>;
-                          if (!cost || !retail) return <span className="text-slate-600">Enter both prices</span>;
-                          const m = Number(calculateMargin()); 
-                          if (isNaN(m) || !isFinite(m)) return <span className="text-slate-600">--</span>;
-                          const negative = m < 0; 
-                          const color = negative ? 'text-rose-600' : 'text-emerald-600';
-                          return <span className={`font-semibold ${color}`}>{negative ? '⚠️ ' : ''}{m}%</span>; 
-                        })()}
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <PriceInput
+                      id="price_cost"
+                      label="Cost Price"
+                      required
+                      value={formData.price.cost}
+                      onChange={(v) => setFormData((prev) => ({ ...prev, price: { ...prev.price, cost: v } }))}
+                      onBlur={() => setTouched((t) => ({ ...t, priceCost: true }))}
+                    />
+                    <PriceInput
+                      id="price_retail"
+                      label=""
+                      required
+                      value={formData.price.retail}
+                      onChange={(v) => setFormData((prev) => ({ ...prev, price: { ...prev.price, retail: v } }))}
+                      onBlur={() => setTouched((t) => ({ ...t, priceRetail: true }))}
+                      invalid={formData.price.retail > 0 && formData.price.retail < (formData.price.cost || 0)}
+                      invalidMessage="Retail price is below cost."
+                      helper={retailProfit !== null ? (
+                        <span className={`font-medium ${retailProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          Profit: {formatLKR(retailProfit)}
+                        </span>
+                      ) : undefined}
+                    />
+                    <PriceInput
+                      id="price_wholesale"
+                      label=""
+                      value={formData.price.wholesale || 0}
+                      onChange={(v) => setFormData((prev) => ({ ...prev, price: { ...prev.price, wholesale: v } }))}
+                      onBlur={() => setTouched((t) => ({ ...t, priceWholesale: true }))}
+                      invalid={(formData.price.wholesale || 0) > 0 && (formData.price.wholesale || 0) < (formData.price.cost || 0)}
+                      invalidMessage="Wholesale price is below cost."
+                      helper={wholesaleProfit !== null ? (
+                        <span className={`font-medium ${wholesaleProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          Profit: {formatLKR(wholesaleProfit)}
+                        </span>
+                      ) : undefined}
+                    />
                   </div>
                   {(submitAttempted || touched.priceCost || touched.priceRetail) && (formData.price.cost <= 0 || formData.price.retail <= 0) && (
-                    <p className="mt-2 text-xs text-rose-300">Both cost price and selling price are required.</p>
+                    <p className="mt-2 text-xs text-rose-300">Cost and retail prices are required.</p>
+                  )}
+                  {(submitAttempted || touched.priceWholesale) && (formData.price.wholesale || 0) > 0 && (formData.price.wholesale || 0) < (formData.price.cost || 0) && (
+                    <p className="mt-2 text-xs text-rose-300">Wholesale price must be above cost or leave it blank.</p>
                   )}
                 </div>
 
@@ -879,18 +965,18 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                     <div>
                       <label htmlFor="product_images" className="block text-sm font-medium text-white mb-2">Upload Images</label>
                       {imageMsg && <p className="text-xs text-emerald-300 mb-1">{imageMsg}</p>}
-                      <input 
-                        ref={fileInputRef} 
-                        id="product_images" 
-                        type="file" 
-                        multiple 
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => handleImagesSelected(e.target.files)} 
-                        className="hidden" 
+                      <input
+                        ref={fileInputRef}
+                        id="product_images"
+                        type="file"
+                        multiple
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => handleImagesSelected(e.target.files)}
+                        className="hidden"
                       />
-                      <div 
-                        onDragOver={handleDragOver} 
-                        onDrop={handleDropImages} 
-                        onClick={() => fileInputRef.current?.click()} 
+                      <div
+                        onDragOver={handleDragOver}
+                        onDrop={handleDropImages}
+                        onClick={() => fileInputRef.current?.click()}
                         className="w-full rounded-xl border-2 border-dashed border-white/20 bg-white/5 backdrop-blur hover:bg-white/10 transition-all cursor-pointer px-6 py-8 flex flex-col items-center justify-center text-center"
                       >
                         <Camera className="w-8 h-8 text-white/60 mb-3" />
@@ -899,7 +985,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                       </div>
                       {uploadingImages && (<p className="text-xs text-white/60 mt-2">Uploading...</p>)}
                     </div>
-                    
+
                     {formData.images && formData.images.length > 0 && (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between text-xs text-white/70">
@@ -907,37 +993,37 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                         </div>
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                           {formData.images.map((img, idx) => (
-                            <div 
-                              key={img.url || `img-${idx}`} 
-                              className="relative rounded-xl overflow-hidden border border-white/20 bg-black/30 group w-24 h-24 shadow-sm" 
-                              draggable 
-                              onDragStart={onImageDragStart(idx)} 
-                              onDragOver={onImageDragOver} 
+                            <div
+                              key={img.url || `img-${idx}`}
+                              className="relative rounded-xl overflow-hidden border border-white/20 bg-black/30 group w-24 h-24 shadow-sm"
+                              draggable
+                              onDragStart={onImageDragStart(idx)}
+                              onDragOver={onImageDragOver}
                               onDrop={onImageDrop(idx)}
                             >
-                              <img 
-                                src={proxyImage(img.url)} 
-                                alt={img.alt || `Image ${idx + 1}`} 
-                                className="w-full h-full object-cover" 
+                              <img
+                                src={proxyImage(img.url)}
+                                alt={img.alt || `Image ${idx + 1}`}
+                                className="w-full h-full object-cover"
                               />
                               <div className="absolute top-1 left-1">
-                                <button 
-                                  type="button" 
-                                  onClick={() => setPrimaryImage(idx)} 
+                                <button
+                                  type="button"
+                                  onClick={() => setPrimaryImage(idx)}
                                   className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded border transition-colors ${
-                                    img.isPrimary 
-                                      ? 'bg-yellow-400 text-black border-yellow-300' 
+                                    img.isPrimary
+                                      ? 'bg-yellow-400 text-black border-yellow-300'
                                       : 'bg-black/40 text-white border-white/20 hover:bg-black/60'
-                                  }`} 
+                                  }`}
                                   title={img.isPrimary ? 'Primary image' : 'Make primary'}
                                 >
                                   <Star className={`w-3 h-3 ${img.isPrimary ? 'fill-black' : 'fill-transparent'}`} />
                                 </button>
                               </div>
-                              <button 
-                                type="button" 
-                                onClick={() => removeImage(idx)} 
-                                className="absolute top-1 right-1 p-1 rounded bg-black/60 hover:bg-black/80 text-white border border-white/20" 
+                              <button
+                                type="button"
+                                onClick={() => removeImage(idx)}
+                                className="absolute top-1 right-1 p-1 rounded bg-black/60 hover:bg-black/80 text-white border border-white/20"
                                 title="Remove image"
                               >
                                 <Trash2 className="w-3 h-3" />
