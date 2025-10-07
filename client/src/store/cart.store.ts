@@ -11,6 +11,7 @@ export interface CartItem {
 	discountAmount?: number; // Per-unit savings
 	discountType?: 'percentage' | 'fixed';
 	discountValue?: number;
+	discountExpiry?: string; // ISO date string for discount expiry
 	priceTier?: 'retail' | 'wholesale';
 }
 

@@ -168,12 +168,13 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
 
   const [barcodeMode, setBarcodeMode] = useState<'single' | 'unique'>('single');
   const [stickersQty, setStickersQty] = useState<number>(0);
+  const [generateBarcode, setGenerateBarcode] = useState(false);
 
   const [warrantyUnit, setWarrantyUnit] = useState<WarrantyUnit>('months');
   const [warrantyValue, setWarrantyValue] = useState<number>(0);
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [newCategory, setNewCategory] = useState<{ en: string; si: string; descEn?: string; descSi?: string }>({ en: '', si: '' });
+  const [newCategory, setNewCategory] = useState<{ en: string; descEn?: string }>({ en: '' });
 
   // Load categories and suppliers when opened
   useEffect(() => {
@@ -615,13 +616,13 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                   <h3 className="text-lg font-semibold text-white mb-1 flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-300" /> Basic Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label htmlFor="name_en" className="block text-sm font-medium text-white mb-2">Product Name (English) <span className="text-rose-400">*</span></label>
+                      <label htmlFor="name_en" className="block text-sm font-medium text-white mb-2">Product Name <span className="text-rose-400">*</span></label>
                       <div className="relative">
                         <FileText className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
-                        <input type="text" required id="name_en" value={formData.name.en} onChange={(e) => setFormData(prev => ({ ...prev, name: { ...prev.name, en: e.target.value } }))} onBlur={() => setTouched(t=>({ ...t, nameEn: true }))} aria-invalid={Boolean((touched.nameEn||submitAttempted) && !formData.name.en)} aria-describedby={(touched.nameEn||submitAttempted) && !formData.name.en ? 'name-en-error' : undefined} className={`w-full h-12 pl-12 pr-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border ${((touched.nameEn||submitAttempted) && !formData.name.en) ? 'border-rose-400' : 'border-white/20 hover:border-white/30 focus:border-white/40'} focus:outline-none focus:ring-2 focus:ring-white/20`} placeholder="Enter product name in English" />
+                        <input type="text" required id="name_en" value={formData.name.en} onChange={(e) => setFormData(prev => ({ ...prev, name: { ...prev.name, en: e.target.value } }))} onBlur={() => setTouched(t=>({ ...t, nameEn: true }))} aria-invalid={Boolean((touched.nameEn||submitAttempted) && !formData.name.en)} aria-describedby={(touched.nameEn||submitAttempted) && !formData.name.en ? 'name-en-error' : undefined} className={`w-full h-12 pl-12 pr-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border ${((touched.nameEn||submitAttempted) && !formData.name.en) ? 'border-rose-400' : 'border-white/20 hover:border-white/30 focus:border-white/40'} focus:outline-none focus:ring-2 focus:ring-white/20`} placeholder="Enter product name" />
                       </div>
                       {(touched.nameEn || submitAttempted) && !formData.name.en && (
-                        <p id="name-en-error" className="mt-1 text-xs text-rose-400">Product name (English) is required.</p>
+                        <p id="name-en-error" className="mt-1 text-xs text-rose-400">Product name is required.</p>
                       )}
                     </div>
                     <div>
@@ -736,7 +737,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                     />
                     <PriceInput
                       id="price_retail"
-                      label=""
+                      label="Retail Price"
                       required
                       value={formData.price.retail}
                       onChange={(v) => setFormData((prev) => ({ ...prev, price: { ...prev.price, retail: v } }))}
@@ -751,7 +752,8 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                     />
                     <PriceInput
                       id="price_wholesale"
-                      label=""
+                      label="Wholesale Price"
+                      required
                       value={formData.price.wholesale || 0}
                       onChange={(v) => setFormData((prev) => ({ ...prev, price: { ...prev.price, wholesale: v } }))}
                       onBlur={() => setTouched((t) => ({ ...t, priceWholesale: true }))}
@@ -846,23 +848,23 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div>
-                            <label htmlFor="warranty_coverage" className="block text-sm font-medium text-white mb-2">Coverage (comma separated)</label>
+                            <label htmlFor="warranty_coverage" className="block text-sm font-medium text-white mb-2">Coverage (comma separated) <span className="text-white/40 text-xs">(optional)</span></label>
                             <input 
                               id="warranty_coverage" 
                               type="text" 
                               value={(formData.warranty?.coverage||[]).join(', ')} 
-                              onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), coverage: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) } }))} 
+                              onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), coverage: e.target.value ? e.target.value.split(',').map(s=>s.trim()).filter(Boolean) : [] } }))} 
                               className="w-full h-12 px-4 rounded-xl bg-white/5 backdrop-blur border border-white/20 hover:border-white/30 focus:border-white/40 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/20" 
                               placeholder="Battery, Speaker, etc." 
                             />
                           </div>
                           <div>
-                            <label htmlFor="warranty_exclusions" className="block text-sm font-medium text-white mb-2">Exclusions (comma separated)</label>
+                            <label htmlFor="warranty_exclusions" className="block text-sm font-medium text-white mb-2">Exclusions (comma separated) <span className="text-white/40 text-xs">(optional)</span></label>
                             <input 
                               id="warranty_exclusions" 
                               type="text" 
                               value={(formData.warranty?.exclusions||[]).join(', ')} 
-                              onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), exclusions: e.target.value.split(',').map(s=>s.trim()).filter(Boolean) } }))} 
+                              onChange={(e) => setFormData(prev => ({ ...prev, warranty: { ...(prev.warranty||{}), exclusions: e.target.value ? e.target.value.split(',').map(s=>s.trim()).filter(Boolean) : [] } }))} 
                               className="w-full h-12 px-4 rounded-xl bg-white/5 backdrop-blur border border-white/20 hover:border-white/30 focus:border-white/40 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/20" 
                               placeholder="Physical damage, Liquid damage, etc." 
                             />
@@ -928,25 +930,33 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                   </div>
                   {!product && (
                     <div className="mt-4 grid grid-cols-1 gap-4">
-                      <div className="text-sm text-white">Generate Barcodes:</div>
-                      <div className="flex flex-col gap-2 text-white">
-                        <label className="inline-flex items-center gap-2">
-                          <input type="radio" name="barcodeMode" value="single" checked={barcodeMode==='single'} onChange={() => setBarcodeMode('single')} />
-                          <span>Single barcode for all units (faster)</span>
-                        </label>
-                        <label className="inline-flex items-center gap-2">
-                          <input type="radio" name="barcodeMode" value="unique" checked={barcodeMode==='unique'} onChange={() => setBarcodeMode('unique')} />
-                          <span>Unique barcode per unit (tracking)</span>
-                        </label>
-                      </div>
-                      {barcodeMode === 'unique' && (
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1">
-                            <label htmlFor="stickers_qty" className="block text-sm font-medium text-white mb-2">Quantity to barcode</label>
-                            <input type="number" id="stickers_qty" min={0} value={stickersQty || formData.stock.current} onChange={(e) => setStickersQty(parseInt(e.target.value) || 0)} className="w-full h-12 px-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20" placeholder="e.g. 24" />
-                            <p className="text-xs text-white/70 mt-1">Per-unit barcodes enable individual item tracking but take longer to generate.</p>
+                      <label className="inline-flex items-center gap-2 text-white">
+                        <input type="checkbox" checked={generateBarcode} onChange={e => setGenerateBarcode(e.target.checked)} />
+                        Generate Barcodes
+                      </label>
+                      {generateBarcode && (
+                        <>
+                          <div className="text-sm text-white">Barcode Options:</div>
+                          <div className="flex flex-col gap-2 text-white">
+                            <label className="inline-flex items-center gap-2">
+                              <input type="radio" name="barcodeMode" value="single" checked={barcodeMode==='single'} onChange={() => setBarcodeMode('single')} />
+                              <span>Single barcode for all units (faster)</span>
+                            </label>
+                            <label className="inline-flex items-center gap-2">
+                              <input type="radio" name="barcodeMode" value="unique" checked={barcodeMode==='unique'} onChange={() => setBarcodeMode('unique')} />
+                              <span>Unique barcode per unit (tracking)</span>
+                            </label>
                           </div>
-                        </div>
+                          {barcodeMode === 'unique' && (
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1">
+                                <label htmlFor="stickers_qty" className="block text-sm font-medium text-white mb-2">Quantity to barcode</label>
+                                <input type="number" id="stickers_qty" min={0} value={stickersQty || formData.stock.current} onChange={(e) => setStickersQty(parseInt(e.target.value) || 0)} className="w-full h-12 px-4 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20" placeholder="e.g. 24" />
+                                <p className="text-xs text-white/70 mt-1">Per-unit barcodes enable individual item tracking but take longer to generate.</p>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -1072,16 +1082,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                   placeholder="Category name"
                 />
               </div>
-              <div>
-                <label htmlFor="new-cat-si" className="block text-sm font-medium text-white mb-2">Name (Sinhala) *</label>
-                <input
-                  id="new-cat-si"
-                  value={newCategory.si}
-                  onChange={(e) => setNewCategory((p) => ({ ...p, si: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl bg-white/5 backdrop-blur border border-white/20 text-white placeholder-white/50 focus:outline-none focus:border-white/30"
-                  placeholder="වර්ග නාමය"
-                />
-              </div>
+              {/* Removed Sinhala name field as requested */}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -1094,11 +1095,11 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                   type="button"
                   className="px-4 py-2 rounded-xl bg-yellow-300 text-black hover:bg-yellow-400 transition-colors"
                   onClick={async () => {
-                    if (!newCategory.en || !newCategory.si) return;
+                    if (!newCategory.en) return;
                     try {
                       const res = await categoriesApi.create({
-                        name: { en: newCategory.en, si: newCategory.si },
-                        description: { en: newCategory.descEn || '', si: newCategory.descSi || '' },
+                        name: { en: newCategory.en },
+                        description: { en: newCategory.descEn || '' },
                       });
                       const cat = (res as any)?.data?.category;
                       // refresh categories and select the new one

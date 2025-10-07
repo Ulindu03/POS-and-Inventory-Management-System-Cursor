@@ -1,3 +1,5 @@
+// This file shows the Settings page.
+// In simple English: It lets users view and change the POS system settings, like logo and preferences.
 import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { settingsApi } from '@/lib/api/settings.api';

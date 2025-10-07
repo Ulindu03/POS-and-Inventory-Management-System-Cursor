@@ -1,3 +1,5 @@
+// This file shows the Users page.
+// In simple English: It lets admins manage user accounts, roles, and permissions in the POS system.
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { Eye, EyeOff, ChevronDown } from 'lucide-react';
 import LanguageSelect from '@/components/ui/LanguageSelect';

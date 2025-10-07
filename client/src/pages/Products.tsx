@@ -1,3 +1,5 @@
+// This file shows the Products page.
+// In simple English: It lets users manage products in the inventory, including creating, editing, and organizing items.
 // Products management page for creating, editing, and organizing inventory items
 import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

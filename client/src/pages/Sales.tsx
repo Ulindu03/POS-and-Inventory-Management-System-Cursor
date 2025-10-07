@@ -1,3 +1,7 @@
+
+// This file shows the Sales page.
+// In simple English:
+// - Lets you view a list of sales, including invoice numbers, totals, and dates.
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { useEffect, useState } from 'react';
 import { salesApi } from '@/lib/api/sales.api';

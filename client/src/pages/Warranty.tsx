@@ -1,3 +1,5 @@
+// This file shows the Warranty page.
+// In simple English: It helps users manage and track product warranties in the POS system.
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { getAccessToken } from '@/lib/api/token';

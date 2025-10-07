@@ -48,12 +48,5 @@ Covers user login, logout, password reset, OTP (store owner), session handling, 
 3. Keep Status/Actual Results columns updated during execution.
 
 ### Next Phases (Preview)
-- Phase 2: Product & Category Management
-- Phase 3: Sales & Payments
-- Phase 4: Returns & Exchanges
-- Phase 5: Inventory & Stock Movements
-- Phase 6: Purchase Orders & Suppliers
-- Phase 7: Delivery & Trip Logistics
-- Phase 8: Warranty & Claims
-- Phase 9: Reporting & Dashboard
-- Phase 10: Settings, Notifications & Security Hardening
+ - Phase 8: Warranty & Claims (`test-cases-phase8.md`)
+ - Phase 10: Settings, Notifications & Security Hardening (`test-cases-phase10.md`)

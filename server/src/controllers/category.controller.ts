@@ -78,10 +78,11 @@ export class CategoryController {
       const { name, description, color, parent, sortOrder } = req.body;
 
       // Check if category name already exists
+      const nameSi = name?.si || '';
       const existingCategory = await Category.findOne({
         $or: [
           { 'name.en': name.en },
-          { 'name.si': name.si }
+          ...(nameSi ? [{ 'name.si': nameSi }] : [])
         ]
       });
 
@@ -106,8 +107,8 @@ export class CategoryController {
       }
 
       const category = new Category({
-        name,
-        description: description || { en: '', si: '' },
+        name: { en: name.en, si: nameSi },
+        description: { en: (description?.en ?? ''), si: (description?.si ?? '') },
         color,
         parent,
         level,
@@ -139,11 +140,12 @@ export class CategoryController {
 
       // Check if updating name conflicts with existing category
       if (updateData.name) {
+        const maybeSi = updateData.name.si || '';
         const existingCategory = await Category.findOne({
           _id: { $ne: id },
           $or: [
             { 'name.en': updateData.name.en },
-            { 'name.si': updateData.name.si }
+            ...(maybeSi ? [{ 'name.si': maybeSi }] : [])
           ]
         });
 

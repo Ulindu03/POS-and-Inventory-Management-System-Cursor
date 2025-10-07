@@ -1,9 +1,8 @@
-// Point of Sale (POS) page for processing customer transactions.
+// This file shows the Point of Sale (POS) page for the app.
 // In simple English:
-// - Left side: choose products (grid + barcode scanner).
-// - Right side: cart with items and checkout.
-// - When payment completes: we build a receipt snapshot and try to fetch any warranties created for this sale.
-// - We also broadcast events so other tabs/pages can refresh (e.g., Warranty page, Customer history).
+// - Lets you pick products and scan barcodes on the left.
+// - Shows the cart and checkout on the right.
+// - After payment, it creates a receipt and updates other pages (like warranty and customer history).
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { ProductGrid } from '@/features/pos/ProductGrid';
 import { Cart } from '@/features/pos/Cart';

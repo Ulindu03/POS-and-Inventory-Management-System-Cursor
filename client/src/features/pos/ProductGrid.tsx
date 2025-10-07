@@ -123,15 +123,15 @@ export const ProductGrid = () => {
                 className={`relative text-left rounded-2xl p-4 border border-white/10 bg-white/5 backdrop-blur-md ${out ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/10'} transition`}
               >
                 {/* Product image thumbnail */}
-                <div className="relative w-full aspect-square rounded-xl overflow-hidden mb-2 bg-white/5">
+                <div className="relative w-full aspect-square rounded-2xl overflow-hidden mb-2 bg-white flex items-center justify-center" style={{ minHeight: 110, maxHeight: 110 }}>
                   {(() => {
                     const thumb = p.images?.find(i => i.isPrimary)?.url || p.images?.[0]?.url || '';
                     return thumb ? (
-                      <img
+                        <img
                         src={proxyImage(thumb)}
                         alt={p.name.en}
                         loading="lazy"
-                        className="w-full h-full object-cover object-center block"
+                          className="w-full h-full aspect-square object-cover object-center block rounded-2xl"
                         onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.jpg'; }}
                       />
                     ) : (
@@ -140,7 +140,7 @@ export const ProductGrid = () => {
                           src="/logo.jpg"
                           alt="No preview available"
                           loading="lazy"
-                          className="w-16 h-16 object-contain opacity-70"
+                          className="w-[50px] h-[50px] object-contain opacity-70"
                         />
                       </div>
                     );
@@ -158,7 +158,8 @@ export const ProductGrid = () => {
                     {discountLabel}
                   </span>
                 )}
-                <div className="font-medium text-[#F8F8F8]">{p.name.en}</div>
+                <div className="font-medium text-[#F8F8F8]" style={{ fontSize: '12px' }}>{p.name.en}</div>
+                <div className="text-[10px] text-white/60 truncate">SKU: {p.sku}</div>
                 <div className="text-sm opacity-80">
                   {hasActiveDiscount ? (
                     <div className="space-y-1">

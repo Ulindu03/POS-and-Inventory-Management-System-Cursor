@@ -1,3 +1,5 @@
+/* This file sets up global styles and fonts for the app. */
+/* In simple English: It controls the basic look and feel for all pages. */
 
 @tailwind base;
 @tailwind components;

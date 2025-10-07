@@ -1,3 +1,7 @@
+
+// This file shows the Suppliers page.
+// In simple English:
+// - Lets you view, add, edit, and manage suppliers and their details.
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, TrendingUp, Star, DollarSign } from 'lucide-react';

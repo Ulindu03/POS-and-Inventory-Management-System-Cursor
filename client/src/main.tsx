@@ -1,5 +1,5 @@
-// Entry point of the React application
-// In simple English: set up global styles, i18n, React Query, error boundary, toasts, and render <App/>.
+// This file is the main entry point for the React app.
+// It sets up global styles, language support, data fetching, error handling, and shows the main App component on the page.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

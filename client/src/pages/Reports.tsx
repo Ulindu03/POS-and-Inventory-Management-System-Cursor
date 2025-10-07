@@ -1,3 +1,7 @@
+
+// This file shows the Reports page.
+// In simple English:
+// - Lets you view and download business reports, charts, and analytics for sales, inventory, and more.
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import reportsApi from '@/lib/api/reports.api';
@@ -433,30 +437,33 @@ const Reports = () => {
                     <div className="rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-6">
                       <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">{getBreakdownTitle()}</h3>
                       <div className="space-y-3">
-                        {(reportData.categoryBreakdown || reportData.typeBreakdown || reportData.supplierPerformance)?.map((item: any) => {
-                          const displayName = item.categoryName || item.supplier?.name || item._id || '';
+                        {(reportData.categoryBreakdown || reportData.typeBreakdown || reportData.supplierPerformance)?.map((item: any, idx: number) => {
+                          // For type breakdown, show type and count fields
+                          let displayName = '';
                           let meta = '';
-                          if (item.productCount) meta = `${item.productCount} products`;
-                          else if (item.totalOrders) meta = `${item.totalOrders} orders`;
-                          else if (item.count) meta = `${item.count} movements`;
-                          else if (item.totalQuantity) meta = `${item.totalQuantity} quantity`;
-                          if (item.onTimeDeliveryRate) meta += ` • ${item.onTimeDeliveryRate}% on-time`;
-
                           let amount = '';
-                          // Currency fields
-                          if (item.totalValue) amount = `LKR ${item.totalValue?.toLocaleString()}`;
-                          else if (item.totalAmount) amount = `LKR ${item.totalAmount?.toLocaleString()}`;
-                          // Orders column: show only count, no LKR
-                          else if (item.totalOrders !== undefined) amount = `${Number(item.totalOrders).toLocaleString()}`;
-                          else if (item.orders !== undefined) amount = `${Number(item.orders).toLocaleString()}`;
-                          else if (item.totalQuantity !== undefined) amount = `${Number(item.totalQuantity).toLocaleString()}`;
-                          const keyStr = String(displayName);
-                          // If this row represents Stock, ensure it's quantity only (no LKR)
-                          if (keyStr.toLowerCase().includes('stock') && item.totalQuantity !== undefined) {
-                            amount = `${Number(item.totalQuantity).toLocaleString()}`;
+                          if (item.type) {
+                            displayName = item.type;
+                            meta = item.count !== undefined ? `${item.count} movements` : '';
+                            amount = item.count !== undefined ? item.count.toLocaleString() : '';
+                          } else if (item.categoryName || item.supplier?.name || item._id) {
+                            displayName = item.categoryName || item.supplier?.name || item._id || '';
+                            if (item.productCount) meta = `${item.productCount} products`;
+                            else if (item.totalOrders) meta = `${item.totalOrders} orders`;
+                            else if (item.count) meta = `${item.count} movements`;
+                            else if (item.totalQuantity) meta = `${item.totalQuantity} quantity`;
+                            if (item.onTimeDeliveryRate) meta += ` • ${item.onTimeDeliveryRate}% on-time`;
+                            if (item.totalValue) amount = `LKR ${item.totalValue?.toLocaleString()}`;
+                            else if (item.totalAmount) amount = `LKR ${item.totalAmount?.toLocaleString()}`;
+                            else if (item.totalOrders !== undefined) amount = `${Number(item.totalOrders).toLocaleString()}`;
+                            else if (item.orders !== undefined) amount = `${Number(item.orders).toLocaleString()}`;
+                            else if (item.totalQuantity !== undefined) amount = `${Number(item.totalQuantity).toLocaleString()}`;
+                            const keyStr = String(displayName);
+                            if (keyStr.toLowerCase().includes('stock') && item.totalQuantity !== undefined) {
+                              amount = `${Number(item.totalQuantity).toLocaleString()}`;
+                            }
                           }
-
-                          const key = String(displayName);
+                          const key = String(displayName) + idx;
                           return (
                             <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
                               <div>

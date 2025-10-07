@@ -1,3 +1,7 @@
+
+// This file shows the Reset Password page.
+// In simple English:
+// - Lets users set a new password after clicking a reset link from their email.
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { authApi } from '@/lib/api/auth.api';

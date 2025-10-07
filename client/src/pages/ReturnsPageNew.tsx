@@ -1,3 +1,7 @@
+
+// This file shows the Returns page (new version).
+// In simple English:
+// - Lets you process product returns, manage exchange slips, handle customer credit, and view return history.
 import React, { useState } from 'react';
 import SaleLookup from '../components/returns/SaleLookup';
 import ReturnProcessor from '../components/returns/ReturnProcessor';

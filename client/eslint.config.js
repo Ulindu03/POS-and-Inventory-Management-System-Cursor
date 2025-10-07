@@ -1,3 +1,5 @@
+// This file configures ESLint for the project.
+// In simple English: It sets up rules to check and improve code quality for JavaScript and TypeScript files.
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'

@@ -1,3 +1,5 @@
+/* This file sets up global CSS rules and animations. */
+/* In simple English: It adds basic styles and special effects used throughout the app. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

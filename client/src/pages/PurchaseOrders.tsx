@@ -1,3 +1,7 @@
+
+// This file shows the Purchase Orders page.
+// In simple English:
+// - Lets you view, create, and manage purchase orders and see related stats.
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, AlertCircle, FileText, DollarSign, Calendar, Truck } from 'lucide-react';
 import { PurchaseOrder, getPurchaseOrders, getPurchaseOrderStats } from '@/lib/api/purchaseOrders.api';

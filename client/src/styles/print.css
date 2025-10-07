@@ -1,3 +1,5 @@
+/* This file styles the app for printing receipts and documents. */
+/* In simple English: It controls how things look when you print from the POS system. */
 @media print {
   /* Print only the designated print area */
   body * { visibility: hidden !important; }

@@ -1,3 +1,7 @@
+
+// This file shows the Deliveries page.
+// In simple English:
+// - Lets you view, create, and manage product deliveries and see delivery details.
 import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { deliveriesApi } from '@/lib/api/deliveries.api';

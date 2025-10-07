@@ -1,8 +1,8 @@
-// Login page for VoltZone POS.
+// This file shows the login page for VoltZone POS.
 // In simple English:
-// - Normal login: user enters username + password, goes to dashboard.
-// - OTP login: some roles (store owner, cashier, sales rep) must also enter a 6-digit code sent to email.
-// - Forgot Password: first we send a 6-digit code to email. After verifying that code, the server emails the reset link.
+// - Lets users log in with username and password.
+// - Some users must enter a 6-digit code sent to their email (OTP login).
+// - If you forget your password, you get a code by email, then a reset link.
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

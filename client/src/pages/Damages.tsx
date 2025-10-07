@@ -1,3 +1,7 @@
+
+// This file shows the Damages page.
+// In simple English:
+// - Lets you view and manage damaged products, add new damage records, and see reasons for damages.
 import { useEffect, useMemo, useState } from 'react';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { damagesApi } from '@/lib/api/damages.api';

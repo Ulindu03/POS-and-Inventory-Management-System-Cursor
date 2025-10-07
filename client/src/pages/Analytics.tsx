@@ -1,3 +1,5 @@
+// This file shows the Analytics page.
+// In simple English: It displays charts and statistics about sales, inventory, staff, and deliveries for the POS system.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import reportsApi from '@/lib/api/reports.api';

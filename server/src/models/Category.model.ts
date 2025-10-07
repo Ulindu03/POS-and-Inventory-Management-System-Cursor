@@ -9,8 +9,9 @@ const categorySchema = new mongoose.Schema({
     },
     si: {
       type: String,
-      required: true,
-      trim: true
+      required: false,
+      trim: true,
+      default: ''
     }
   },
   description: {
@@ -20,7 +21,8 @@ const categorySchema = new mongoose.Schema({
     },
     si: {
       type: String,
-      trim: true
+      trim: true,
+      default: ''
     }
   },
   parent: {

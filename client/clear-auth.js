@@ -1,3 +1,5 @@
+// This file is a script to clear authentication data.
+// In simple English: Run this to remove all login tokens and auth info from your browser for the POS system.
 // Quick script to clear authentication data
 // Run this in browser console to fix 401 errors after server restart
 

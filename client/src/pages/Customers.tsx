@@ -1,3 +1,7 @@
+
+// This file shows the Customers page.
+// In simple English:
+// - Lets you view, add, edit, and manage customers and their purchase history.
 import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { CustomerList } from '@/features/customers/CustomerList';

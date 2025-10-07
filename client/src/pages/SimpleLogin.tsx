@@ -1,3 +1,5 @@
+// This file shows the Simple Login page.
+// In simple English: It provides a basic login form for users to sign in to the POS system.
 import { useState, useMemo } from 'react';
 // useAuthStore not needed for this simple login component
 import { authApi } from '@/lib/api/auth.api';

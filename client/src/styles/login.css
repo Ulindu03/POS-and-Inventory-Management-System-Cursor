@@ -1,3 +1,5 @@
+/* This file styles the login page and its animations. */
+/* In simple English: It makes the login page look nice and adds animation effects. */
 @keyframes blob {
   0% {
     transform: translate(0px, 0px) scale(1);

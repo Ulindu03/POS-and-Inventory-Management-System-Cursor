@@ -89,7 +89,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
           setProducts(items as unknown as Product[]);
           setStats({
             total: items.length,
-            active: items.filter((p: any) => p.isActive !== false).length,
+            active: items.filter((p: any) => p.isActive !== false && (p.stock?.current ?? 0) > 0).length,
             lowStock: items.filter((p: any) => (p.stock?.current ?? 0) <= 10 && (p.stock?.current ?? 0) > 0).length,
             outOfStock: items.filter((p: any) => (p.stock?.current ?? 0) === 0).length
           });
@@ -149,7 +149,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
 
   const updateStatsFromList = (list: Product[]) => ({
     total: list.length,
-    active: list.filter((p) => p.isActive !== false).length,
+    active: list.filter((p) => p.isActive !== false && (p.stock?.current ?? 0) > 0).length,
     lowStock: list.filter((p) => {
       const stock = p.stock?.current ?? 0;
       return stock <= 10 && stock > 0;
@@ -376,9 +376,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-[#F8F8F8] space-y-1">
+                          <div className="text-xs text-[#F8F8F8]/50">Retail</div>
                           <div>
                             <span>{formatLKR(product.price.retail)}</span>
                           </div>
+                          <div className="text-xs text-[#F8F8F8]/50">Wholesale</div>
                           {hasWholesalePrice ? (
                             <div>
                               <span>{formatLKR(product.price.wholesale || 0)}</span>
@@ -386,7 +388,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                           ) : (
                             <div className="text-xs text-[#F8F8F8]/40">Wholesale not set</div>
                           )}
-                          <div className="text-xs text-[#F8F8F8]/50">Cost {formatLKR(product.price.cost)}</div>
+                          <div className="text-xs text-[#F8F8F8]/50">Cost</div>
+                          <div className="text-xs text-[#F8F8F8]/50">{formatLKR(product.price.cost)}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4">

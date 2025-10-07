@@ -1,3 +1,5 @@
+// This file shows the Categories page.
+// In simple English: It lets users manage product categories in the POS system.
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { CategoryManager } from '@/features/products/CategoryManager';
 

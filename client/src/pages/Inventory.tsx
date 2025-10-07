@@ -1,4 +1,8 @@
 
+// This file shows the Inventory page.
+// In simple English:
+// - Lets you view and manage stock, adjust inventory, see low stock alerts, and view stock movement history.
+
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { StockList } from "@/features/inventory/StockList";
 import { StockAdjustment } from "@/features/inventory/StockAdjustment";

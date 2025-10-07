@@ -40,7 +40,10 @@ export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void;
                       × {i.qty} ={' '}
                       <span className="font-medium text-[#F8F8F8]">{formatLKR(i.price * i.qty)}</span>
                     </span>
-                    {i.discountAmount && i.discountAmount > 0 ? (
+                    {i.discountAmount && i.discountAmount > 0 && (
+                      (!i.discountExpiry) // permanent discount
+                      || (i.discountExpiry && !isNaN(Date.parse(i.discountExpiry)) && new Date(i.discountExpiry) > new Date()) // valid future expiry
+                    ) ? (
                       <span className="block text-emerald-300">Saving {formatLKR(i.discountAmount * i.qty)}</span>
                     ) : null}
                   </>

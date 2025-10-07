@@ -1,3 +1,5 @@
+// This file is a stub for the Chrome icon.
+// In simple English: It provides a simple icon to avoid issues with the lucide-react Chrome icon in the POS system.
 // Minimal stub to bypass Defender false-positive on lucide-react chrome icon
 import * as React from 'react';
 export default function ChromeIcon(props) {

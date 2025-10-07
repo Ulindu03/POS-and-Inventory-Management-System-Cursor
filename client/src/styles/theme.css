@@ -1,3 +1,5 @@
+/* This file defines color themes and variables for the app. */
+/* In simple English: It sets the main colors and styles for light and dark modes. */
 :root {
   --vz-bg: #0d0d0f;
   --vz-bg-alt: #18181b;

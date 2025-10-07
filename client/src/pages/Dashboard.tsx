@@ -1,4 +1,6 @@
-// Main dashboard page showing business overview with charts and statistics
+// This file shows the main dashboard page.
+// In simple English:
+// - Shows business overview, charts, and statistics for sales, products, and customers.
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { 
   DashboardStats, 
