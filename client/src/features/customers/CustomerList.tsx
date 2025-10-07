@@ -106,10 +106,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({
 									<span className="font-medium text-gray-400">Credit:</span>
 									<span className="ml-2 text-white font-semibold">{customer.creditLimit?.toLocaleString() || 0} LKR</span>
 								</div>
-								<div>
-									<span className="font-medium text-gray-400">Loyalty:</span>
-									<span className="ml-2 text-yellow-300 font-semibold">{customer.loyaltyPoints?.toLocaleString() || 0} pts</span>
-								</div>
+								{/* Loyalty points display removed as requested */}
 							</div>
 							<div className="flex gap-2 mt-4 justify-start flex-wrap">
 								<button

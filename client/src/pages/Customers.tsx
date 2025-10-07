@@ -4,7 +4,7 @@ import { CustomerList } from '@/features/customers/CustomerList';
 import { CustomerForm } from '@/features/customers/CustomerForm';
 import { CustomerProfile } from '@/features/customers/CustomerProfile';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Users, TrendingUp, Star, CreditCard } from 'lucide-react';
+import { Users, TrendingUp, CreditCard } from 'lucide-react';
 import { 
   getCustomers, 
   getCustomerStats, 
@@ -326,7 +326,6 @@ const handleDeleteCustomer = async (customer: Customer) => {
   // Use stats from API or calculate from customers
   const totalCustomers = stats?.totalCustomers || customers.length;
   const activeCustomers = stats?.activeCustomers || customers.filter(c => c.isActive).length;
-  const totalLoyaltyPoints = stats?.totalLoyaltyPoints || customers.reduce((sum, c) => sum + c.loyaltyPoints, 0);
   const totalCreditLimit = customers.reduce((sum, c) => sum + c.creditLimit, 0);
   
 
@@ -390,28 +389,7 @@ const handleDeleteCustomer = async (customer: Customer) => {
               </div>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border border-yellow-500/20 hover:border-yellow-400/30 transition-all duration-300"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative p-6">
-                <div className="flex items-center gap-4 mb-3">
-                  <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
-                    <Star className="w-6 h-6 text-yellow-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-white">{totalLoyaltyPoints.toLocaleString()}</p>
-                    <p className="text-yellow-300 text-sm font-medium">Loyalty Points</p>
-                  </div>
-                </div>
-                <div className="h-1 bg-yellow-500/30 rounded-full">
-                  <div className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full w-2/3"></div>
-                </div>
-              </div>
-            </motion.div>
+            {/* Loyalty summary card removed as requested */}
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
