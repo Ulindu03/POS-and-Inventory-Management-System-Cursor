@@ -15,6 +15,8 @@ import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { dashboardApi, type DashboardStats as StatsType, type SalesData, type TopProduct, type CategoryData, type RecentSale } from '@/lib/api/dashboard.api';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/store/auth.store';
+import { usePosProcessStore } from '@/store/posProcess.store';
 
 const Dashboard = () => {
   // State for dashboard statistics (sales, orders, products, customers)
@@ -27,18 +29,43 @@ const Dashboard = () => {
     averageOrderValue: 0
   });
 
-  // Load dashboard statistics on component mount
+  // Load dashboard statistics and merge with real-time POS data for non-store-owner roles
   useEffect(() => {
     let mounted = true;
-    (async () => {
+    const fetchStats = async () => {
       try {
         const s = await dashboardApi.getStats();
-        if (mounted) setStats(s);
+        if (!mounted) return;
+        const user = useAuthStore.getState().user;
+        const role = user?.role;
+        if (role !== 'store_owner') {
+          const { currentSales, currentOrderCount } = usePosProcessStore.getState();
+          setStats({
+            ...s,
+            totalSales: s.totalSales + currentSales,
+            totalOrders: s.totalOrders + currentOrderCount,
+            averageOrderValue: (s.totalOrders + currentOrderCount) > 0
+              ? (s.totalSales + currentSales) / (s.totalOrders + currentOrderCount)
+              : s.averageOrderValue
+          });
+        } else {
+          setStats(s);
+        }
       } catch (e) {
         if (import.meta.env.DEV) console.warn('Dashboard stats load failed', e);
       }
-    })();
-    return () => { mounted = false; };
+    };
+    fetchStats();
+    // Subscribe to real-time POS updates for non-store-owner roles
+    const unsubscribe = usePosProcessStore.subscribe(
+      (state) => [state.currentSales, state.currentOrderCount],
+      () => {
+        const user = useAuthStore.getState().user;
+        const role = user?.role;
+        if (role !== 'store_owner') fetchStats();
+      }
+    );
+    return () => { mounted = false; unsubscribe(); };
   }, []);
 
   // State for various chart data

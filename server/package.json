@@ -11,11 +11,11 @@
     "start": "node dist/server.js",
     "start:prod": "NODE_ENV=production node dist/server.js",
     "lint": "eslint . --ext .ts",
-  "format": "prettier --write \"src/**/*.ts\"",
-  "check": "npx tsx --version && npx nodemon --version",
-  "migrate:roles": "npx tsx src/scripts/migrateAdminToStoreOwner.ts",
-  "script:backfill:canonicalPhone": "npx tsx src/scripts/backfillCanonicalPhone.ts",
-  "script:debug:customers": "npx tsx src/scripts/debugCustomers.ts"
+    "format": "prettier --write \"src/**/*.ts\"",
+    "check": "npx tsx --version && npx nodemon --version",
+    "migrate:roles": "npx tsx src/scripts/migrateAdminToStoreOwner.ts",
+    "script:backfill:canonicalPhone": "npx tsx src/scripts/backfillCanonicalPhone.ts",
+    "script:debug:customers": "npx tsx src/scripts/debugCustomers.ts"
   },
   "keywords": [
     "pos",
@@ -45,6 +45,7 @@
     "morgan": "^1.10.1",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.1",
+    "nodeman": "^1.1.2",
     "npm": "^11.5.2",
     "pdfkit": "^0.14.0",
     "run": "^1.5.0",

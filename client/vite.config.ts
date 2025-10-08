@@ -2,8 +2,27 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+// Dev-only plugin to strip missing source map references from lucide-react ESM files
+function stripLucideSourceMaps() {
+  return {
+    name: 'strip-lucide-sourcemaps',
+    apply: 'serve' as const,
+    enforce: 'pre' as const,
+    transform(code: string, id: string) {
+      // Match lucide-react ESM files (icons and shared utils)
+      const isLucideEsm = /node_modules[\\\/]lucide-react[\\\/]dist[\\\/]esm[\\\/].+\.js$/.test(id)
+      if (!isLucideEsm) return null
+
+      // Remove //# sourceMappingURL=... and /*# sourceMappingURL=... */
+      const withoutLineMap = code.replace(/\/\/#[\t ]*sourceMappingURL=.*$/gm, '')
+      const withoutBlockMap = withoutLineMap.replace(/\/\*#\s*sourceMappingURL=[\s\S]*?\*\//gm, '')
+      return { code: withoutBlockMap, map: null }
+    }
+  }
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), stripLucideSourceMaps()],
   optimizeDeps: {
     exclude: ['lucide-react'],
   },

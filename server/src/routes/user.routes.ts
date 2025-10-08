@@ -7,7 +7,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', authorize('store_owner'), cache(30), listUsers);
+router.get('/', authorize('store_owner'), listUsers);
 router.post('/', authorize('store_owner'), createUser);
 router.put('/:id', authorize('store_owner'), updateUser);
 router.patch('/:id/active', authorize('store_owner'), setUserActive);

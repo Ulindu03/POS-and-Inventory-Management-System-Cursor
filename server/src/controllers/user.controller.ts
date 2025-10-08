@@ -81,6 +81,29 @@ export const setUserRole = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const setUserFaceEmbedding = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { faceEmbedding } = req.body as { faceEmbedding?: unknown };
+
+    if (!Array.isArray(faceEmbedding) || !faceEmbedding.every((n) => typeof n === 'number')) {
+      return res.status(400).json({ success: false, message: 'faceEmbedding must be an array of numbers' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { faceEmbedding: faceEmbedding as number[] },
+      { new: true }
+    )?.select('-password -refreshToken -resetPasswordToken -resetPasswordExpires');
+
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    emit('user:updated', { id: user._id });
+    return res.json({ success: true, data: user });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to update face embedding', error: (error as Error).message });
+  }
+};
+
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const { id } = req.params as { id: string };
@@ -90,24 +113,5 @@ export const deleteUser = async (req: Request, res: Response) => {
   return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to delete user', error: (error as Error).message });
-  }
-};
-
-// Set or update a user's face embedding vector
-export const setUserFaceEmbedding = async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params as { id: string };
-    const { faceEmbedding } = req.body as { faceEmbedding?: number[] };
-    if (!Array.isArray(faceEmbedding) || faceEmbedding.length === 0) {
-      return res.status(400).json({ success: false, message: 'faceEmbedding must be a non-empty array' });
-    }
-    // Clamp numeric precision and ensure numbers
-    const cleaned = faceEmbedding.map((v) => Number(Number(v).toFixed(6)));
-    const user = await User.findByIdAndUpdate(id, { faceEmbedding: cleaned }, { new: true })?.select('-password -refreshToken -resetPasswordToken -resetPasswordExpires');
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    emit('user:updated', { id: user._id });
-    return res.json({ success: true, message: 'Face ID updated', data: user });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: 'Failed to update face embedding', error: (error as Error).message });
   }
 };
