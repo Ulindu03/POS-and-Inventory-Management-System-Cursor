@@ -31,6 +31,13 @@ const Analytics: React.FC = () => {
     return { startDate: start, endDate: end } as any;
   };
 
+  // Helper to accept either axios response or raw data
+  const normalizeResp = (r: any) => {
+    if (r == null) return null;
+    if (typeof r === 'object' && 'data' in r) return r.data;
+    return r;
+  };
+
   const fetchAll = async () => {
     setLoading(true);
     try {
@@ -42,13 +49,13 @@ const Analytics: React.FC = () => {
         reportsApi.staffPerformance(params),
         reportsApi.deliveryPerformance(params)
       ]);
-  setSales(s?.data || null);
-      setInventory(inv?.data || null);
+  setSales(normalizeResp(s) || null);
+      setInventory(normalizeResp(inv) || null);
   // topProducts endpoint returns { success, data: [...] }
-  const topArr = Array.isArray(top) ? top : (top?.data || []);
+  const topArr = Array.isArray(top) ? top : (normalizeResp(top) || []);
   setTopProducts(Array.isArray(topArr) ? topArr : []);
-  setStaffPerf(staff || null);
-  setDeliveryPerf(del || null);
+  setStaffPerf(normalizeResp(staff) || null);
+  setDeliveryPerf(normalizeResp(del) || null);
   const now = Date.now();
   setLastUpdated({ sales: now, inventory: now, delivery: now });
     } catch (e) {
@@ -63,7 +70,7 @@ const Analytics: React.FC = () => {
     try {
       const params = buildRangeParams(dateRangeRef.current);
       const del = await reportsApi.deliveryPerformance(params);
-      setDeliveryPerf(del || null);
+      setDeliveryPerf(normalizeResp(del) || null);
       setLastUpdated((p) => ({ ...p, delivery: Date.now() }));
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -74,7 +81,7 @@ const Analytics: React.FC = () => {
     try {
       const params = buildRangeParams(dateRangeRef.current);
       const inv = await reportsApi.inventory(params);
-      setInventory(inv?.data || null);
+      setInventory(normalizeResp(inv) || null);
       setLastUpdated((p) => ({ ...p, inventory: Date.now() }));
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -89,10 +96,10 @@ const Analytics: React.FC = () => {
         reportsApi.topProducts({ ...params, limit: 8, sort: 'best' }),
         reportsApi.staffPerformance(buildRangeParams(dateRangeRef.current)),
       ]);
-      setSales(s?.data || null);
-      const topArr = Array.isArray(top) ? top : (top?.data || []);
+      setSales(normalizeResp(s) || null);
+      const topArr = Array.isArray(top) ? top : (normalizeResp(top) || []);
       setTopProducts(Array.isArray(topArr) ? topArr : []);
-      setStaffPerf(staff || null);
+      setStaffPerf(normalizeResp(staff) || null);
       setLastUpdated((p) => ({ ...p, sales: Date.now() }));
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -255,85 +262,103 @@ const Analytics: React.FC = () => {
         </div>
 
         {/* Delivery Summary */}
-        {deliveryPerf?.data?.summary && (
-          <GlassCard variant="darkSubtle" className="p-6 border border-[#3e3e3e]">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-[#F8F8F8]">Delivery Performance</h3>
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                <span className="relative inline-flex items-center">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse" /> Live
-                </span>
-                <span>• Updated {lastUpdated.delivery ? new Date(lastUpdated.delivery).toLocaleTimeString() : '—'}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Log the normalized payload currently in state for easy inspection
-                    const normalized = deliveryPerf?.summary ? deliveryPerf : (deliveryPerf?.data ? deliveryPerf.data : deliveryPerf);
-                    // eslint-disable-next-line no-console
-                    console.log('Inspect deliveryPerformance payload:', normalized);
-                    alert('Delivery payload logged to console');
-                  }}
-                  className="ml-3 text-xs text-gray-300 underline underline-offset-2"
-                >
-                  Inspect
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Total Deliveries */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-lg bg-amber-400/20 border border-amber-400/30 text-amber-300">
-                    <Truck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-400">Total Deliveries</p>
-                    <p className="text-xl font-bold text-[#F8F8F8]">{(deliveryPerf.data.summary.total || 0).toLocaleString()}</p>
-                  </div>
+        {(() => {
+          const summary = deliveryPerf?.summary || (deliveryPerf?.data && deliveryPerf.data.summary) || null;
+          if (!summary) return (
+            <GlassCard variant="darkSubtle" className="p-6 border border-[#3e3e3e]">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-[#F8F8F8]">Delivery Performance</h3>
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="relative inline-flex items-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1 animate-pulse" />
+                  </span>
+                  <span>No delivery data for selected range</span>
                 </div>
               </div>
+            </GlassCard>
+          );
+          const byRep = deliveryPerf?.byRep || (deliveryPerf?.data && deliveryPerf.data.byRep) || [];
+          return (
+            <GlassCard variant="darkSubtle" className="p-6 border border-[#3e3e3e]">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-[#F8F8F8]">Delivery Performance</h3>
+                <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <span className="relative inline-flex items-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse" /> Live
+                  </span>
+                  <span>• Updated {lastUpdated.delivery ? new Date(lastUpdated.delivery).toLocaleTimeString() : '—'}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Total Deliveries */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-amber-400/20 border border-amber-400/30 text-amber-300">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-400">Total Deliveries</p>
+                      <p className="text-xl font-bold text-[#F8F8F8]">{(summary.total || 0).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
 
-              {/* Completion Rate */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-lg bg-emerald-400/15 border border-emerald-400/30 text-emerald-300">
-                    <Percent className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-400">Completion Rate</p>
-                    <p className="text-xl font-bold text-[#F8F8F8]">{(deliveryPerf.data.summary.completionRate || 0).toFixed(1)}%</p>
+                {/* Completion Rate */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-emerald-400/15 border border-emerald-400/30 text-emerald-300">
+                      <Percent className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-400">Completion Rate</p>
+                      <p className="text-xl font-bold text-[#F8F8F8]">{(summary.completionRate || 0).toFixed(1)}%</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Damaged Total */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-lg bg-rose-400/15 border border-rose-400/30 text-rose-300">
-                    <AlertTriangle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-400">Damaged Total</p>
-                    <p className="text-xl font-bold text-[#F8F8F8]">{(deliveryPerf.data.summary.totalDamaged || 0).toLocaleString()}</p>
+                {/* Damaged Total */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-rose-400/15 border border-rose-400/30 text-rose-300">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-400">Damaged Total</p>
+                      <p className="text-xl font-bold text-[#F8F8F8]">{(summary.totalDamaged || 0).toLocaleString()}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Completed */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-lg bg-sky-400/15 border border-sky-400/30 text-sky-300">
-                    <CheckCircle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-400">Completed</p>
-                    <p className="text-xl font-bold text-[#F8F8F8]">{(deliveryPerf.data.summary.statusCounts?.completed || 0).toLocaleString()}</p>
+                {/* Completed */}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-lg bg-sky-400/15 border border-sky-400/30 text-sky-300">
+                      <CheckCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-400">Completed</p>
+                      <p className="text-xl font-bold text-[#F8F8F8]">{(summary.statusCounts?.completed || 0).toLocaleString()}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </GlassCard>
-        )}
+              {/* Optionally render by-rep rows if available */}
+              {Array.isArray(byRep) && byRep.length > 0 && (
+                <div className="mt-6 space-y-2">
+                  {byRep.map((r: any) => (
+                    <div key={r.username} className="flex items-center justify-between p-3 rounded-lg bg-white/3">
+                      <div>
+                        <div className="text-sm font-medium text-[#F8F8F8]">{r.username}</div>
+                        <div className="text-xs text-gray-400">Trips: {r.totalTrips || 0} • Completed: {r.completed || 0} • Damaged: {r.totalDamaged || 0}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-[#F8F8F8]">{((r.completionRate || 0) * 1).toFixed(1)}%</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
+          );
+        })()}
       </div>
     </AppLayout>
   );
