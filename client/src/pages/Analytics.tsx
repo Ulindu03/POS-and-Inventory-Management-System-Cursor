@@ -129,6 +129,16 @@ const Analytics: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Periodic polling to keep dashboard data fresh (every 30 seconds)
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      fetchAll();
+    }, 30_000);
+    return () => window.clearInterval(id);
+    // only mount once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Refetch when date range changes
   useEffect(() => {
     fetchAll();
