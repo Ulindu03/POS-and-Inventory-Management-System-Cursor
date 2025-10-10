@@ -1,10 +1,11 @@
 //functions to manage real-time communication using Socket.IO
 import { io } from 'socket.io-client';
 
+type EventHandler = (...args: unknown[]) => void;
 type ClientSocket = {
-  on: (event: string, handler: (...args: any[]) => void) => void;
-  off: (event: string, handler?: (...args: any[]) => void) => void;
-  emit: (event: string, ...args: any[]) => void;
+  on: (event: string, handler: EventHandler) => void;
+  off: (event: string, handler?: EventHandler) => void;
+  emit: (event: string, ...args: unknown[]) => void;
 };
 
 let socket: ClientSocket | null = null;
@@ -25,14 +26,17 @@ export function getSocket() {
       timeout: 20000,
     }) as unknown as ClientSocket;
     if (import.meta.env.DEV) {
-      const s = socket as ClientSocket & { on: any };
-      s.on('connect_error', (err: any) => {
-        console.warn('socket connect_error:', err?.message || err);
+      // dev-only diagnostics
+      // socket.io-client typings are complex; we keep handlers loosely typed for logs
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anySocket = socket as unknown as { on: (e: string, h: (...a: any[]) => void) => void };
+      anySocket.on('connect_error', (err: any) => {
+        console.warn('socket connect_error:', (err && err.message) ? err.message : err);
       });
-      s.on('disconnect', (reason: any) => {
+      anySocket.on('disconnect', (reason: any) => {
         console.warn('socket disconnect:', reason);
       });
-      s.on('reconnect_attempt', (attempt: number) => {
+      anySocket.on('reconnect_attempt', (attempt: number) => {
         console.log('socket reconnect_attempt:', attempt);
       });
     }

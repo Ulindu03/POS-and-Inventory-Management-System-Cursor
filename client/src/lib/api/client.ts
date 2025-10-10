@@ -78,10 +78,10 @@ async function tryRefreshToken(): Promise<string | null> {
 client.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest: any = error.config || {};
+      const originalRequest: Record<string, any> = (error.config as Record<string, any>) || {};
     const status = error.response?.status;
     const headers = error.response?.headers as Record<string, string | undefined> | undefined;
-    const tokenExpired = headers?.['x-token-expired'] === 'true' || (headers?.['www-authenticate']?.includes('invalid_token') ?? false);
+      // tokenExpired intentionally unused here; kept for potential telemetry.
 
   if (status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;

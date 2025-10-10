@@ -141,8 +141,8 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
                   </div>
                   {sale.returnSummary?.totalReturned > 0 && (
                     <div className="mt-3 text-sm space-y-1">
-                      <div className="flex justify-between text-gray-400"><span>Previously Returned:</span><span className="text-red-400">-LKR {sale.returnSummary.totalReturned.toLocaleString()}</span></div>
-                      <div className="flex justify-between text-gray-300"><span>Remaining Amount:</span><span className="font-semibold text-white">LKR {(sale.total - sale.returnSummary.totalReturned).toLocaleString()}</span></div>
+                      <div className="flex justify-between text-gray-400"><span>Previously Returned:</span><span className="text-red-400">-{formatCurrency(sale.returnSummary.totalReturned)}</span></div>
+                      <div className="flex justify-between text-gray-300"><span>Remaining Amount:</span><span className="font-semibold text-white">{formatCurrency(sale.total - sale.returnSummary.totalReturned)}</span></div>
                     </div>
                   )}
                 </div>

@@ -264,6 +264,19 @@ const Analytics: React.FC = () => {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse" /> Live
                 </span>
                 <span>• Updated {lastUpdated.delivery ? new Date(lastUpdated.delivery).toLocaleTimeString() : '—'}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Log the normalized payload currently in state for easy inspection
+                    const normalized = deliveryPerf?.summary ? deliveryPerf : (deliveryPerf?.data ? deliveryPerf.data : deliveryPerf);
+                    // eslint-disable-next-line no-console
+                    console.log('Inspect deliveryPerformance payload:', normalized);
+                    alert('Delivery payload logged to console');
+                  }}
+                  className="ml-3 text-xs text-gray-300 underline underline-offset-2"
+                >
+                  Inspect
+                </button>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -1,4 +1,5 @@
 import client from './client';
+import type { AxiosRequestConfig } from 'axios';
 
 export interface UserInput {
   username: string;
@@ -11,7 +12,7 @@ export interface UserInput {
 }
 
 export const usersApi = {
-  list(config?: any) {
+  list(config?: AxiosRequestConfig) {
     return client.get('/users', config);
   },
   create(data: UserInput) {

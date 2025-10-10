@@ -482,20 +482,14 @@ const LoginPage = () => {
           faceapi.nets.faceLandmark68Net.loadFromUri(root),
         ]);
       };
-      const candidates = [
-        '/models',
-        'https://justadudewhohacks.github.io/face-api.js/models'
-      ];
-      for (const root of candidates) {
-        try {
-          await tryLoad(root);
-          setModelsLoaded(true);
-          return;
-        } catch (e) {
-          // continue to next candidate quietly
-        }
+      try {
+        await tryLoad('/models');
+        setModelsLoaded(true);
+        return;
+      } catch (e) {
+        // Do not attempt to load models from remote hosts (CORS). Provide a clear error message.
+        toast.error('Failed to load face models from /models. Please download face-api.js model files and place them under public/models');
       }
-      toast.error('Failed to load face models. Please place files under /public/models');
     };
     load();
   }, []);
