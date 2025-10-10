@@ -21,8 +21,34 @@ function stripLucideSourceMaps() {
   }
 }
 
+// Dev-only plugin: respond to missing lucide-react .js.map requests with an empty JSON
+// This avoids Vite attempting to read non-existent map files under node_modules on Windows
+function stubLucideSourceMapRequests() {
+  return {
+    name: 'stub-lucide-sourcemap-requests',
+    apply: 'serve' as const,
+    configureServer(server: any) {
+      server.middlewares.use((req: any, res: any, next: any) => {
+        try {
+          const url = req.url || '';
+          // Match requests for lucide-react dist esm .js.map files
+          if (/\/node_modules\/lucide-react\/dist\/esm\/.+\.js\.map$/.test(url)) {
+            res.setHeader('content-type', 'application/json');
+            res.statusCode = 200;
+            res.end('{}');
+            return;
+          }
+        } catch (e) {
+          // ignore and continue
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), stripLucideSourceMaps()],
+  plugins: [react(), stripLucideSourceMaps(), stubLucideSourceMapRequests()],
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
