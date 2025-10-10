@@ -215,6 +215,24 @@ const Analytics: React.FC = () => {
             >
               <RefreshCcw className="w-4 h-4" /> {loading ? 'Refreshing...' : 'Refresh'}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                // Log normalized payloads for debugging
+                // eslint-disable-next-line no-console
+                console.log('Analytics payloads', {
+                  sales,
+                  inventory,
+                  topProducts,
+                  staffPerf,
+                  deliveryPerf,
+                });
+                alert('Analytics payloads logged to console');
+              }}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-700 text-gray-200 text-sm hover:bg-gray-600"
+            >
+              Inspect
+            </button>
           </div>
         </div>
 
