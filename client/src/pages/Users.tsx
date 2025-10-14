@@ -76,12 +76,16 @@ export default function UsersPage() {
       await tryLoad('/models');
       setModelsLoaded(true);
       return true;
-    } catch (e) {
-      // Avoid loading models from external hosts - many browsers block those requests via CORS.
-      // Instead instruct the developer to place model files under public/models.
-      // eslint-disable-next-line no-console
-      console.warn('Face models not found under /models. Please download face-api.js models and place them under public/models to enable Face ID.');
-      return false;
+    } catch {
+      try {
+        await tryLoad('https://justadudewhohacks.github.io/face-api.js/models');
+        setModelsLoaded(true);
+        return true;
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('Face models failed to load');
+        return false;
+      }
     }
   };
 

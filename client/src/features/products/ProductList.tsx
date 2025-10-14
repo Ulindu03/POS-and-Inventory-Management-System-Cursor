@@ -347,7 +347,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-3">
-                          <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center">
+                          <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center">
                             {thumbUrl && (
                               <img
                                 src={proxyImage(thumbUrl)}
@@ -356,7 +356,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
                               />
                             )}
-                            <Package className="w-5 h-5 text-[#F8F8F8]/70" />
+                            <Package className="w-7 h-7 text-[#F8F8F8]/70" />
                           </div>
                           <div>
                             <div className="text-sm font-medium text-[#F8F8F8]">

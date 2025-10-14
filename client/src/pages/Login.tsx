@@ -305,7 +305,7 @@ const ForgotView = ({ t, formData, handleInputChange, handleSubmit, isLoading, r
               onChange={(e) => setResetOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
               className="w-full pl-4 pr-28 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black"
               style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }}
-              placeholder="123456"
+              placeholder=""
               inputMode="numeric"
               maxLength={6}
             />
@@ -482,14 +482,20 @@ const LoginPage = () => {
           faceapi.nets.faceLandmark68Net.loadFromUri(root),
         ]);
       };
-      try {
-        await tryLoad('/models');
-        setModelsLoaded(true);
-        return;
-      } catch (e) {
-        // Do not attempt to load models from remote hosts (CORS). Provide a clear error message.
-        toast.error('Failed to load face models from /models. Please download face-api.js model files and place them under public/models');
+      const candidates = [
+        '/models',
+        'https://justadudewhohacks.github.io/face-api.js/models'
+      ];
+      for (const root of candidates) {
+        try {
+          await tryLoad(root);
+          setModelsLoaded(true);
+          return;
+        } catch (e) {
+          // continue to next candidate quietly
+        }
       }
+      toast.error('Failed to load face models. Please place files under /public/models');
     };
     load();
   }, []);
@@ -1192,7 +1198,7 @@ const LoginPage = () => {
                               color: '#000000', 
                               caretColor: '#000000' 
                             }} 
-                            placeholder="123456" 
+                            placeholder="" 
                             inputMode="numeric"
                             maxLength={6}
                           />

@@ -97,3 +97,23 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-20px); } 100% { transform: translateY(0px); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 .animate-spin { animation: spin 1s linear infinite; }
+
+/* Reserve space for vertical scrollbar so it doesn't overlap content */
+.vz-scroll-gutter {
+  /* Keep layout stable when scrollbar appears */
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Fallback for browsers that ignore scrollbar-gutter (Edge/older Chrome) */
+.vz-scroll-gutter.pr-fallback {
+  padding-right: 0.5rem; /* ~8px to clear the overlay scrollbar */
+}
+
+/* Globally hide scrollbars (while keeping scroll functional) */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}

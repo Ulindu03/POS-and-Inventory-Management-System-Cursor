@@ -38,7 +38,7 @@ const QuickReturnModal: React.FC<QuickReturnModalProps> = ({ open, onClose }) =>
       widthClass="max-w-5xl"
       footer={null}
     >
-      <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+  <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1 vz-scroll-gutter pr-fallback scrollbar-hide">
         {step === 'lookup' && (
           <div>
             <SaleLookup onSaleSelected={handleSaleSelected} />

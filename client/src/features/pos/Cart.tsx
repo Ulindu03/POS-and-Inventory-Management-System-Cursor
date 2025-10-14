@@ -12,7 +12,7 @@ export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void;
   return (
     <div className="flex flex-col h-full min-h-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
       <div className="p-4 border-b border-white/10 font-semibold shrink-0">Cart</div>
-      <div className="p-4 space-y-3 overflow-auto min-h-0">
+  <div className="p-4 space-y-3 overflow-auto min-h-0 vz-scroll-gutter pr-fallback scrollbar-hide">
         {items.length === 0 && <div className="opacity-70">No items yet</div>}
         {items.map((i) => (
           <div key={i.id} className="flex items-center justify-between gap-3">

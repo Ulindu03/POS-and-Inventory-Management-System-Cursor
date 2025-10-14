@@ -65,8 +65,8 @@ const POS = () => {
     <AppLayout>
       {/* Main POS layout with product grid and cart */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-h-0 h-[calc(100vh-3.5rem-1.5rem)] md:h-[calc(100vh-3.5rem-1.5rem)]">
-        {/* Left side: Product selection area */}
-        <div className="md:col-span-1 lg:col-span-2 space-y-4 min-h-0 overflow-auto">
+  {/* Left side: Product selection area */}
+  <div className="md:col-span-1 lg:col-span-2 space-y-4 min-h-0 overflow-auto vz-scroll-gutter pr-fallback scrollbar-hide">
           <div className="mb-3 font-semibold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3 flex-wrap">
               <span>{t('pos.productsHeader')}</span>

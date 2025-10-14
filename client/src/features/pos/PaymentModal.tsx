@@ -289,7 +289,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         {upsellItems.length > 0 && (
           <div className="mt-6 border-t border-white/10 pt-4">
             <div className="text-sm font-semibold mb-2 opacity-90">Extended Warranty Offers</div>
-            <div className="space-y-3 max-h-56 overflow-auto pr-1">
+            <div className="space-y-3 max-h-56 overflow-auto pr-1 vz-scroll-gutter pr-fallback scrollbar-hide">
               {upsellItems.map((ci:any) => (
                 <div key={ci.id} className="p-2 rounded-lg bg-white/5 border border-white/10">
                   <div className="text-xs font-medium mb-1 flex justify-between items-center">

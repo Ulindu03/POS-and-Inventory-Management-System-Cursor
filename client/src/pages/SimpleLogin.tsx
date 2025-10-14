@@ -204,7 +204,7 @@ const SimpleLogin = () => {
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0,6))}
                   className="w-full px-4 py-3.5 bg-white/10 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all text-base tracking-widest"
-                  placeholder="123456"
+                  placeholder=""
                   aria-label="OTP"
                   inputMode="numeric"
                 />
