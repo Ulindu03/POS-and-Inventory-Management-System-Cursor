@@ -140,8 +140,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({
             >
               <option value="name">Sort by Name</option>
               <option value="supplierCode">Sort by Code</option>
-              <option value="totalSpent">Sort by Total Spent</option>
-              <option value="outstandingBalance">Sort by Outstanding</option>
               <option value="rating">Sort by Rating</option>
             </select>
             
@@ -162,7 +160,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({
               <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-400/80 uppercase tracking-wide">Supplier</th>
               <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-400/80 uppercase tracking-wide">Contact</th>
               <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-400/80 uppercase tracking-wide">Performance</th>
-              <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-400/80 uppercase tracking-wide">Financial</th>
               <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-400/80 uppercase tracking-wide">Status</th>
               <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-400/80 uppercase tracking-wide">Actions</th>
             </tr>
@@ -202,22 +199,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="space-y-1">
-                    <div className="flex items-center text-sm">
-                      <DollarSign className="w-4 h-4 text-emerald-400 mr-1" />
-                      <span className="text-gray-100">{formatLKR(supplier.totalSpent || 0)}</span>
-                      <span className="text-gray-500 text-xs ml-1">Total Spent</span>
-                    </div>
-                    {supplier.outstandingBalance && supplier.outstandingBalance > 0 && (
-                      <div className="flex items-center text-sm">
-                        <DollarSign className="w-4 h-4 text-red-400 mr-1" />
-                        <span className="text-red-400 font-medium">{formatLKR(supplier.outstandingBalance)}</span>
-                        <span className="text-gray-500 text-xs ml-1">Outstanding</span>
-                      </div>
-                    )}
-                  </div>
-                </td>
+                {/* Financial column removed by request */}
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex px-2 py-1 text-[10px] font-semibold rounded-full ${getStatusColor(supplier.status)}`}>{supplier.status}</span>
                 </td>

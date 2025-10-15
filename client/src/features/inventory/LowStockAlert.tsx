@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Package, ShoppingCart, Eye } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { PurchaseOrderQuickCreate } from './PurchaseOrderQuickCreate';
 import { inventoryApi } from '@/lib/api/inventory.api';
 import { createPurchaseOrder } from '@/lib/api/purchaseOrders.api';
 import { useRealtime } from '@/hooks/useRealtime';
@@ -27,6 +29,8 @@ export const LowStockAlert = ({ canAdjust = true, canCreatePO = true }: { canAdj
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({ low: 0, critical: 0, out: 0 });
+  const [creatingPO, setCreatingPO] = useState(false);
+  const [poPanelOpen, setPoPanelOpen] = useState(false);
   const skeletonKeys = ['s1', 's2', 's3', 's4', 's5'];
 
   const loadLowStockItems = useCallback(async () => {
@@ -90,73 +94,7 @@ export const LowStockAlert = ({ canAdjust = true, canCreatePO = true }: { canAdj
     });
   });
 
-  const handleCreatePOs = async () => {
-    try {
-  const res = await inventoryApi.reorderSuggestions();
-  const groups = (res?.data?.suggestions || []) as Array<{ supplier: any; items: any[] }>; 
-      for (const g of groups) {
-        if (!g.items || g.items.length === 0) continue;
-        const payload = {
-          supplier: g.supplier?._id || g.supplier,
-          items: g.items.map((it: any) => ({
-    product: it.product?._id || it.product,
-    quantity: it.quantity || 0,
-    unitCost: it.unitCost || 0,
-    totalCost: (it.unitCost || 0) * (it.quantity || 0),
-          })),
-          status: 'draft',
-          orderDate: new Date().toISOString(),
-          paymentTerms: 'Due on receipt',
-          tax: { vat: 0, nbt: 0 },
-          discount: 0,
-          subtotal: 0,
-          total: 0,
-        } as any;
-        // compute totals
-        payload.subtotal = payload.items.reduce((s: number, it: any) => s + (it.totalCost || 0), 0);
-        payload.total = payload.subtotal - (payload.discount || 0) + (payload.tax?.vat || 0) + (payload.tax?.nbt || 0);
-        await createPurchaseOrder(payload);
-      }
-      // refresh list
-      await new Promise((r) => setTimeout(r, 250));
-      // naive reload of alerts
-  const res2 = await inventoryApi.lowStock();
-  const rows2: any[] = ((res2 as any)?.data?.items) || [];
-  const items2 = rows2.map((row: any) => {
-        const current = row.currentStock ?? row.stock?.current ?? 0;
-        const min = row.minimumStock ?? row.stock?.minimum ?? 0;
-        const rp = row.reorderPoint ?? row.stock?.reorderPoint ?? 0;
-        let status: StockStatus;
-        if (current === 0) status = 'out';
-        else {
-          const thresholds = [Number(min), Number(rp)].filter((x) => x > 0);
-          if (thresholds.length === 0) status = 'low';
-          else if (current <= Math.min(...thresholds)) status = 'critical';
-          else if (current <= Math.max(...thresholds)) status = 'low';
-          else status = 'low';
-        }
-        return {
-          _id: row.product?._id || row._id,
-          product: {
-            _id: row.product?._id || row._id,
-            sku: row.product?.sku || row.sku,
-            name: row.product?.name || { en: row.product?.name?.en || row.name || 'Unknown', si: row.product?.name?.si || '' },
-            category: row.product?.category?.name?.en || row.category?.name?.en || '—',
-            supplier: row.product?.supplier?.name || row.supplier?.name || '—',
-          },
-          currentStock: current,
-          minimumStock: min,
-          reorderPoint: row.reorderPoint ?? row.stock?.reorderPoint ?? 0,
-          stockStatus: row.stockStatus || status,
-          daysUntilOut: row.daysUntilOut ?? 0,
-          suggestedReorder: row.suggestedReorder ?? Math.max(0, (row.reorderPoint ?? 0) - (row.currentStock ?? 0)),
-        };
-      }) as LowStockItem[];
-      setLowStockItems(items2);
-    } catch (e) {
-      console.error('Failed creating POs from suggestions', e);
-    }
-  };
+  const handleCreatePOs = () => setPoPanelOpen(true);
 
   const getUrgencyColor = (status: string) => {
     switch (status) {
@@ -181,22 +119,29 @@ export const LowStockAlert = ({ canAdjust = true, canCreatePO = true }: { canAdj
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-[#F8F8F8]">Low Stock Alerts</h2>
         <div className="flex gap-2">
-          <button className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition-colors flex items-center">
+          <Link
+            to="/purchase-orders"
+            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition-colors flex items-center"
+            title="View created purchase orders"
+            style={{ color: '#e3effe' }}
+          >
             <Eye className="w-4 h-4 mr-2" />
-            View All
-          </button>
+            View Purchase Orders
+          </Link>
           {canCreatePO && (
-            <button 
-              className="px-4 py-2 rounded-xl font-semibold transition-colors flex items-center"
+            <button
+              className="px-4 py-2 rounded-xl font-semibold transition-colors flex items-center disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
               onClick={handleCreatePOs}
+              disabled={creatingPO}
             >
               <ShoppingCart className="w-4 h-4 mr-2" />
-              Create Purchase Order
+              {creatingPO ? 'Creating...' : 'Create Purchase Order'}
             </button>
           )}
         </div>
       </div>
+  <PurchaseOrderQuickCreate open={poPanelOpen} onClose={() => setPoPanelOpen(false)} onCreated={() => { loadLowStockItems(); }} />
 
       {/* Alert Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -302,28 +247,9 @@ export const LowStockAlert = ({ canAdjust = true, canCreatePO = true }: { canAdj
                   )}
                 </div>
 
-                <div className="text-right mr-6">
-                  <div className="text-sm text-[#F8F8F8]/70 mb-1">Suggested Reorder</div>
-                  <div className="text-lg font-semibold text-green-400">
-                    {item.suggestedReorder}
-                  </div>
-                </div>
+                {/* Suggested Reorder column removed as requested */}
 
-                <div className="flex gap-2">
-                  {canAdjust && (
-                    <button className="px-3 py-1 text-sm bg-white/10 hover:bg-white/20 rounded-lg border border-white/10 transition-colors">
-                      Adjust Stock
-                    </button>
-                  )}
-                  {canCreatePO && (
-                    <button 
-                      className="px-3 py-1 text-sm rounded-lg font-medium transition-colors"
-                      style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
-                    >
-                      Reorder
-                    </button>
-                  )}
-                </div>
+                {/* Per-row action buttons intentionally removed as per request */}
               </div>
             </div>
           ))

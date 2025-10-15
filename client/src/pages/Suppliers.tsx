@@ -255,53 +255,7 @@ const Suppliers: React.FC = () => {
                 </div>
               </motion.div>
 
-              {/* Total Spent */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border border-yellow-500/20 hover:border-yellow-400/30 transition-all duration-300"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="relative p-6">
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
-                      <Star className="w-6 h-6 text-yellow-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-white">{formatLKR(stats.totalSpent)}</p>
-                      <p className="text-yellow-300 text-sm font-medium">Total Spent</p>
-                    </div>
-                  </div>
-                  <div className="h-1 bg-yellow-500/30 rounded-full">
-                    <div className="h-full bg-gradient-to-r from-yellow-500 to-yellow-400 rounded-full w-2/3" />
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Outstanding Balance */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 hover:border-purple-400/30 transition-all duration-300"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="relative p-6">
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                      <DollarSign className="w-6 h-6 text-purple-400" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-white">{formatLKR(stats.outstandingBalance)}</p>
-                      <p className="text-purple-300 text-sm font-medium">Outstanding</p>
-                    </div>
-                  </div>
-                  <div className="h-1 bg-purple-500/30 rounded-full">
-                    <div className="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full w-5/6" />
-                  </div>
-                </div>
-              </motion.div>
+              {/* Removed Total Spent and Outstanding cards by request */}
             </div>
 
             {/* Supplier List */}

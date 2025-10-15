@@ -147,8 +147,8 @@ const Analytics: React.FC = () => {
   const arr: any[] = Array.isArray(topProducts) ? topProducts : [];
     return arr.map((p: any) => {
       const base = p.productName || 'Unknown';
-      const suffix = p.sku ? ` (${p.sku})` : '';
-      return { name: (base + suffix).trim(), revenue: p.totalRevenue || 0 };
+      // Show product name only (no SKU in label)
+      return { name: String(base).trim(), revenue: p.totalRevenue || 0 };
     });
   }, [topProducts]);
 

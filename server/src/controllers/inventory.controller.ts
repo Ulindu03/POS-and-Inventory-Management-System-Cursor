@@ -17,7 +17,8 @@ export class InventoryController {
           select: 'sku name category supplier price',
           populate: [
             { path: 'category', select: 'name' },
-            { path: 'supplier', select: 'name supplierCode' },
+            // Include supplier email so quick-create PO panel can display it for user verification
+            { path: 'supplier', select: 'name supplierCode email' },
           ],
         });
 
@@ -68,7 +69,7 @@ export class InventoryController {
       const productFallback = await Product.find({ _id: { $nin: Array.from(haveInvIds) } })
         .select('sku name category supplier price stock')
         .populate('category', 'name')
-        .populate('supplier', 'name supplierCode')
+  .populate('supplier', 'name supplierCode email')
         .lean();
 
       const fallbackLow = (productFallback as any[])

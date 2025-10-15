@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { PurchaseOrder } from '../models/PurchaseOrder.model';
 import { Product } from '../models/Product.model';
 import { Payment } from '../models/Payment.model';
+import { isSmtpConfigured } from '../services/email.service';
+import { Request as ExpressRequest } from 'express';
 
 // Get all purchase orders with filtering and pagination
 export const getPurchaseOrders = async (req: Request, res: Response) => {
@@ -120,6 +122,16 @@ export const createPurchaseOrder = async (req: AuthRequest, res: Response) => {
   try {
     const purchaseOrderData = req.body;
 
+    // Ensure createdBy is always set from the authenticated user (model requires this field)
+    if (req.user?.userId) {
+      purchaseOrderData.createdBy = req.user.userId;
+    }
+
+    // Guard: ensure items array exists and is an array
+    if (!Array.isArray(purchaseOrderData.items) || purchaseOrderData.items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Purchase order requires at least one item' });
+    }
+
     // Generate PO number if not provided
     if (!purchaseOrderData.poNumber) {
       const lastPO = await PurchaseOrder.findOne().sort({ poNumber: -1 });
@@ -127,6 +139,8 @@ export const createPurchaseOrder = async (req: AuthRequest, res: Response) => {
       const lastNum = parseInt(lastNumber.replace('PO', ''));
       purchaseOrderData.poNumber = `PO${String(lastNum + 1).padStart(4, '0')}`;
     }
+    // Keep legacy orderNo in sync (for old unique index)
+    if (!purchaseOrderData.orderNo) purchaseOrderData.orderNo = purchaseOrderData.poNumber;
 
     // Check if PO number already exists
     const existingPO = await PurchaseOrder.findOne({ 
@@ -143,7 +157,10 @@ export const createPurchaseOrder = async (req: AuthRequest, res: Response) => {
     // Calculate totals
     let subtotal = 0;
     purchaseOrderData.items.forEach((item: any) => {
-      item.totalCost = item.quantity * item.unitCost;
+      item.quantity = Number(item.quantity) || 0;
+      item.unitCost = Number(item.unitCost ?? 0);
+      // Respect provided totalCost if present else derive
+      item.totalCost = Number(item.totalCost ?? (item.quantity * item.unitCost));
       subtotal += item.totalCost;
     });
 
@@ -157,6 +174,10 @@ export const createPurchaseOrder = async (req: AuthRequest, res: Response) => {
     if (!purchaseOrderData.orderDate) {
       purchaseOrderData.orderDate = new Date();
     }
+
+    // Initialize payment tracking fields if not provided
+    if (typeof purchaseOrderData.paidAmount !== 'number') purchaseOrderData.paidAmount = 0;
+    if (!purchaseOrderData.paymentStatus) purchaseOrderData.paymentStatus = 'pending';
 
     const purchaseOrder = new PurchaseOrder(purchaseOrderData);
     await purchaseOrder.save();
@@ -172,11 +193,23 @@ export const createPurchaseOrder = async (req: AuthRequest, res: Response) => {
       data: populatedPO,
       message: 'Purchase order created successfully'
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Surface validation / required field errors so UI can display a helpful message
     console.error('Error creating purchase order:', error);
-  return res.status(500).json({
+    // Duplicate key friendly handling
+    if (error?.code === 11000) {
+      const dupFields = Object.keys(error.keyPattern || error.keyValue || {});
+      return res.status(409).json({
+        success: false,
+        message: `Duplicate value for: ${dupFields.join(', ')}`,
+        error: 'duplicate_key'
+      });
+    }
+    const msg = (error?.name === 'ValidationError' && error.message) || error?.message || 'Failed to create purchase order';
+    return res.status(500).json({
       success: false,
-      message: 'Failed to create purchase order'
+      message: msg,
+      error: error?.errors ? Object.keys(error.errors).reduce((acc: any, k) => { acc[k] = error.errors[k].message; return acc; }, {}) : undefined
     });
   }
 };
@@ -378,9 +411,12 @@ export const recordPayment = async (req: AuthRequest, res: Response) => {
 export const getPurchaseOrderStats = async (_req: Request, res: Response) => {
   try {
     const totalOrders = await PurchaseOrder.countDocuments();
-    const pendingOrders = await PurchaseOrder.countDocuments({ status: 'sent' });
+    // Treat "pending" as POs still in draft (not yet sent to supplier)
+    const pendingOrders = await PurchaseOrder.countDocuments({ status: 'draft' });
     const receivedOrders = await PurchaseOrder.countDocuments({ status: 'received' });
     const cancelledOrders = await PurchaseOrder.countDocuments({ status: 'cancelled' });
+  // Consider orders that are received or explicitly completed as "completed" for this card
+  const completedOrders = await PurchaseOrder.countDocuments({ status: { $in: ['received', 'completed'] } });
 
     // Calculate total spent
     const totalSpent = await PurchaseOrder.aggregate([
@@ -417,6 +453,7 @@ export const getPurchaseOrderStats = async (_req: Request, res: Response) => {
         pendingOrders,
         receivedOrders,
         cancelledOrders,
+        completedOrders,
         totalSpent: totalSpent[0]?.total || 0,
         outstandingPayments: outstandingPayments[0]?.total || 0,
         ordersByStatus
@@ -494,5 +531,91 @@ export const receiveItems = async (req: Request, res: Response) => {
       success: false,
       message: 'Failed to receive items'
     });
+  }
+};
+
+// Send purchase order email to supplier
+export const sendPurchaseOrderEmail = async (req: ExpressRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const po = await PurchaseOrder.findById(id)
+      .populate('supplier', 'name email')
+      .populate('items.product', 'name sku price.cost');
+    if (!po) {
+      return res.status(404).json({ success: false, message: 'Purchase order not found' });
+    }
+    const supplier: any = po.supplier;
+    if (!supplier?.email) {
+      return res.status(400).json({ success: false, message: 'Supplier has no email on file' });
+    }
+    // Build professional HTML summary (Option 1) basic columns
+    const lines = po.items.map((it: any, idx: number) => {
+        return `
+        <tr style=\"background:${idx % 2 ? '#ffffff' : '#f9fafb'};\">
+          <td style=\"padding:10px 12px;border-bottom:1px solid #e5e7eb;font-family:Arial,sans-serif;font-size:13px;color:#111827;\">${it.product?.sku || ''}</td>
+          <td style=\"padding:10px 12px;border-bottom:1px solid #e5e7eb;font-family:Arial,sans-serif;font-size:13px;color:#111827;\">${(it.product?.name?.en || it.product?.name || '')}</td>
+          <td style=\"padding:10px 12px;border-bottom:1px solid #e5e7eb;font-family:Arial,sans-serif;font-size:13px;color:#111827;text-align:center;\">${it.quantity}</td>
+        </tr>`;
+    }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset=\"UTF-8\" /><title>Purchase Order ${po.poNumber}</title></head>
+    <body style=\"margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;\">
+      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f3f4f6;padding:32px 0;\">
+        <tr><td align=\"center\">
+          <table role=\"presentation\" width=\"640\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:640px;max-width:640px;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,0.08);\">
+            <tr>
+              <td style=\"background:linear-gradient(135deg,#1e3a8a,#4f46e5,#9333ea);padding:28px 36px;color:#fff;\">
+                <h1 style=\"margin:0;font-size:20px;line-height:1.3;font-weight:600;\">Purchase Order <span style=\"opacity:.9;\">${po.poNumber}</span></h1>
+                <p style=\"margin:6px 0 0;font-size:12px;letter-spacing:.5px;opacity:.85;\">Issued ${new Date(po.orderDate || Date.now()).toLocaleDateString()}</p>
+              </td>
+            </tr>
+            <tr><td style=\"padding:28px 36px 8px 36px;\">
+              <p style=\"margin:0 0 14px;font-size:14px;color:#374151;\">Dear <strong>${supplier.name || 'Supplier'}</strong>,</p>
+              <p style=\"margin:0 0 18px;font-size:14px;color:#4b5563;line-height:1.55;\">This email confirms our purchase order <strong>${po.poNumber}</strong> dated ${new Date(po.orderDate || Date.now()).toLocaleDateString()}. Please review the order details below.</p>
+              <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border-collapse:collapse;margin:0 0 12px 0;\">
+                <thead>
+                  <tr style=\"background:#eef2ff;\">
+                    <th align=\"left\" style=\"padding:10px 12px;font-size:12px;font-weight:600;font-family:Arial,sans-serif;color:#374151;text-transform:uppercase;letter-spacing:.5px;\">SKU</th>
+                    <th align=\"left\" style=\"padding:10px 12px;font-size:12px;font-weight:600;font-family:Arial,sans-serif;color:#374151;text-transform:uppercase;letter-spacing:.5px;\">Product</th>
+                    <th align=\"center\" style=\"padding:10px 12px;font-size:12px;font-weight:600;font-family:Arial,sans-serif;color:#374151;text-transform:uppercase;letter-spacing:.5px;\">Qty</th>
+                  </tr>
+                </thead>
+                <tbody>${lines || `<tr><td colspan=\"5\" style=\"padding:16px 12px;text-align:center;font-size:13px;color:#6b7280;\">No items.</td></tr>`}</tbody>
+              </table>
+              <p style=\"margin:0 0 12px;font-size:13px;color:#374151;\">Please reply to confirm receipt of this order and provide an estimated delivery date.</p>
+              <p style=\"margin:0 0 24px;font-size:12px;color:#6b7280;\">If any detail appears incorrect, contact us immediately.</p>
+              <p style=\"margin:0 0 4px;font-size:13px;color:#111827;font-weight:600;\">The VoltZone POS Team</p>
+            </td></tr>
+            <tr>
+              <td style=\"background:#f9fafb;padding:14px 24px;text-align:center;font-size:11px;color:#9ca3af;\">This is an automated message. &copy; ${(new Date()).getFullYear()} VoltZone POS</td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body></html>`;
+
+    if (!isSmtpConfigured()) {
+      return res.status(500).json({ success: false, message: 'SMTP not configured' });
+    }
+    const nodemailer = require('nodemailer');
+    const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+    const transporter = nodemailer.createTransport({
+      service: process.env.SMTP_HOST ? undefined : 'gmail',
+      host: process.env.SMTP_HOST || undefined,
+      port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined,
+      secure: process.env.SMTP_PORT === '465',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    });
+    try {
+      await transporter.sendMail({ from, to: supplier.email, subject: `Purchase Order ${po.poNumber}`, html });
+      // Do NOT auto-advance status here. Keep as 'draft' until the user explicitly marks as "Sent".
+      po.set({ emailSent: true, emailSentAt: new Date() });
+      await po.save();
+      return res.json({ success: true, message: 'Email sent', data: { emailSent: true } });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: 'Failed to send email', error: err?.message });
+    }
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Unexpected error' });
   }
 };

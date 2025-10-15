@@ -147,3 +147,9 @@ export const redeemLoyaltyPoints = async (id: string, data: LoyaltyPointsRedempt
   const response = await apiClient.post(`/customers/${id}/redeem-points`, data);
   return response.data;
 };
+
+// Lookup customer by phone (retail/wholesale) – uses auth-enabled apiClient
+export const lookupCustomerByPhone = async (phone: string) => {
+  const response = await apiClient.get('/customers/lookup/phone', { params: { phone } });
+  return response.data;
+};

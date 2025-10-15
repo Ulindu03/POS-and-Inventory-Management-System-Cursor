@@ -29,5 +29,11 @@ router.delete('/:id', deletePurchaseOrder);
 router.patch('/:id/status', updatePurchaseOrderStatus);
 router.post('/:id/payment', recordPayment);
 router.post('/:id/receive', receiveItems);
+// Send PO email
+router.post('/:id/send-email', (req, res, next) => {
+  // Dynamically import to avoid circular (already imported above) - but we can directly require exported function
+  const { sendPurchaseOrderEmail } = require('../controllers/purchaseOrder.controller');
+  return sendPurchaseOrderEmail(req, res, next);
+});
 
 export default router;

@@ -36,6 +36,8 @@ export interface PurchaseOrder {
   approvedAt?: string;
   createdAt: string;
   updatedAt: string;
+  emailSent?: boolean;
+  emailSentAt?: string;
 }
 
 export interface PurchaseOrderFilters {
@@ -54,6 +56,7 @@ export interface PurchaseOrderStats {
   pendingOrders: number;
   receivedOrders: number;
   cancelledOrders: number;
+  completedOrders?: number;
   totalSpent: number;
   outstandingPayments: number;
   ordersByStatus: Array<{
@@ -138,5 +141,10 @@ export const recordPayment = async (id: string, paymentData: PaymentData): Promi
 
 export const receiveItems = async (id: string, receivedItems: ReceivedItem[]): Promise<{ success: boolean; data: PurchaseOrder }> => {
   const response = await apiClient.post(`/purchase-orders/${id}/receive`, { receivedItems });
+  return response.data;
+};
+
+export const sendPurchaseOrderEmail = async (id: string): Promise<{ success: boolean; data: any; message?: string }> => {
+  const response = await apiClient.post(`/purchase-orders/${id}/send-email`, {});
   return response.data;
 };

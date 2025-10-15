@@ -305,7 +305,7 @@ const ForgotView = ({ t, formData, handleInputChange, handleSubmit, isLoading, r
               onChange={(e) => setResetOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
               className="w-full pl-4 pr-28 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#FFE100] focus:border-transparent transition-all duration-200 placeholder-black"
               style={{ backgroundColor: '#EEEEEE', border: '1px solid #EEEEEE', color: '#000000', caretColor: '#000000' }}
-              placeholder=""
+              placeholder="Enter OTP"
               inputMode="numeric"
               maxLength={6}
             />
@@ -1198,7 +1198,7 @@ const LoginPage = () => {
                               color: '#000000', 
                               caretColor: '#000000' 
                             }} 
-                            placeholder="" 
+                            placeholder="Enter OTP" 
                             inputMode="numeric"
                             maxLength={6}
                           />

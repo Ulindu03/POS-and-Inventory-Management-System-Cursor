@@ -1,12 +1,21 @@
 import mongoose from 'mongoose';
 
 const purchaseOrderSchema = new mongoose.Schema({
+  // Current canonical PO number field
   poNumber: {
     type: String,
     required: true,
     unique: true,
     trim: true,
     uppercase: true
+  },
+  // Legacy field retained because an existing unique index (orderNo_1) may still exist in the database.
+  // We keep it in sync so we don't hit E11000 duplicate key errors on { orderNo: null }.
+  orderNo: {
+    type: String,
+    trim: true,
+    uppercase: true,
+    // Do NOT declare unique here; the old unique index already exists in the collection.
   },
   supplier: {
     type: mongoose.Schema.Types.ObjectId,
@@ -129,6 +138,12 @@ const purchaseOrderSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Email tracking fields
+purchaseOrderSchema.add({
+  emailSent: { type: Boolean, default: false },
+  emailSentAt: { type: Date }
+});
+
 // Indexes for efficient queries (excluding poNumber which is already indexed by unique: true)
 purchaseOrderSchema.index({ supplier: 1 });
 purchaseOrderSchema.index({ status: 1 });
@@ -137,3 +152,11 @@ purchaseOrderSchema.index({ createdBy: 1 });
 purchaseOrderSchema.index({ paymentStatus: 1 });
 
 export const PurchaseOrder = mongoose.model('PurchaseOrder', purchaseOrderSchema);
+
+// Ensure legacy orderNo stays populated for backward compatibility / existing unique index
+purchaseOrderSchema.pre('save', function(next) {
+  if (!this.orderNo && this.poNumber) {
+    (this as any).orderNo = this.poNumber;
+  }
+  next();
+});

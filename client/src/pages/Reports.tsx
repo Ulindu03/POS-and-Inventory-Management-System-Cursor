@@ -385,10 +385,15 @@ const Reports = () => {
                     </div>
                   </div>
 
-                  {/* Summary Cards */}
-                  {reportData.summary && (
+                  {/* Summary Cards (hidden for Stock Movements) */}
+                  {reportData.summary && selectedReport !== 'stock' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {Object.entries(reportData.summary).map(([key, value]) => (
+                      {Object.entries(reportData.summary)
+                        .filter(([_, v]) => {
+                          const t = typeof v;
+                          return t === 'number' || t === 'string' || t === 'boolean';
+                        })
+                        .map(([key, value]) => (
                         <div key={key} className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
                           <h4 className="text-sm font-medium text-[#F8F8F8]/70 capitalize">
                             {key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase())}
@@ -432,38 +437,87 @@ const Reports = () => {
                     </div>
                   )}
 
+                  {/* Stock Movements (Detailed Table) */}
+                  {selectedReport === 'stock' && Array.isArray(reportData.movements) && reportData.movements.length > 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-semibold text-[#F8F8F8]">Stock Movements</h3>
+                        <p className="text-sm text-[#F8F8F8]/60">Date range: {dateRange.startDate} to {dateRange.endDate}</p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="bg-white/10 text-[#F8F8F8]">
+                              <th className="px-3 py-2">Date</th>
+                              <th className="px-3 py-2">Type</th>
+                              <th className="px-3 py-2">SKU</th>
+                              <th className="px-3 py-2">Product</th>
+                              <th className="px-3 py-2 text-right">Quantity</th>
+                              <th className="px-3 py-2">Invoice/Ref</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reportData.movements.map((m: any, idx: number) => {
+                              const date = (() => { try { return new Date(m.createdAt || m.date).toISOString().slice(0,16).replace('T',' '); } catch { return String(m.createdAt || m.date || ''); } })();
+                              const typeRaw = String(m.type || '').toLowerCase();
+                              const typeLabel = ({ add: 'increase', increase: 'increase', remove: 'decrease', decrease: 'decrease', sale: 'sale', purchase: 'purchase', adjust: 'adjust', adjustment: 'adjust' } as Record<string,string>)[typeRaw] || (typeRaw || '—');
+                              const typeTone = typeLabel === 'increase' || typeLabel === 'purchase' ? 'bg-emerald-500/20 text-emerald-300' : (typeLabel === 'decrease' || typeLabel === 'sale' ? 'bg-rose-500/20 text-rose-300' : 'bg-blue-500/20 text-blue-300');
+                              const sku = m.sku || m.product?.sku || '—';
+                              const product = m.productName || m.product?.name?.en || m.product?.name || '—';
+                              const qtyNum = Number(m.quantity ?? 0);
+                              const qtyColor = qtyNum > 0 ? 'text-emerald-300' : qtyNum < 0 ? 'text-rose-300' : 'text-[#F8F8F8]';
+                              const ref = m.invoiceNo || m.referenceNo || m.reference || m.ref || '—';
+                              return (
+                                <tr key={`${m._id || idx}`} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
+                                  <td className="px-3 py-2 text-[#F8F8F8]/80 whitespace-nowrap">{date}</td>
+                                  <td className="px-3 py-2"><span className={`px-2 py-1 rounded text-xs font-semibold ${typeTone}`}>{typeLabel}</span></td>
+                                  <td className="px-3 py-2 text-[#F8F8F8]/80 whitespace-nowrap">{sku}</td>
+                                  <td className="px-3 py-2 text-[#F8F8F8] truncate max-w-[360px]" title={product}>{product}</td>
+                                  <td className={`px-3 py-2 text-right font-semibold ${qtyColor}`}>{qtyNum > 0 ? `+${qtyNum}` : qtyNum}</td>
+                                  <td className="px-3 py-2 text-[#F8F8F8]/80 whitespace-nowrap">{ref}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Category/Type Breakdown */}
                   {(reportData.categoryBreakdown || reportData.typeBreakdown || reportData.supplierPerformance) && (
                     <div className="rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-6">
                       <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">{getBreakdownTitle()}</h3>
                       <div className="space-y-3">
-                        {(reportData.categoryBreakdown || reportData.typeBreakdown || reportData.supplierPerformance)?.map((item: any, idx: number) => {
-                          // For type breakdown, show type and count fields
-                          let displayName = '';
+                        {((reportData.categoryBreakdown || reportData.typeBreakdown || reportData.supplierPerformance) as any[]).map((item: any, idx: number) => {
+                          // Normalize
+                          const isObj = item && typeof item === 'object' && !Array.isArray(item);
+                          const displayName: string = isObj
+                            ? (item.type ?? item.categoryName ?? item.supplier?.name ?? item._id ?? '—')
+                            : String(item ?? '—');
                           let meta = '';
                           let amount = '';
-                          if (item.type) {
-                            displayName = item.type;
-                            meta = item.count !== undefined ? `${item.count} movements` : '';
-                            amount = item.count !== undefined ? item.count.toLocaleString() : '';
-                          } else if (item.categoryName || item.supplier?.name || item._id) {
-                            displayName = item.categoryName || item.supplier?.name || item._id || '';
-                            if (item.productCount) meta = `${item.productCount} products`;
-                            else if (item.totalOrders) meta = `${item.totalOrders} orders`;
-                            else if (item.count) meta = `${item.count} movements`;
-                            else if (item.totalQuantity) meta = `${item.totalQuantity} quantity`;
-                            if (item.onTimeDeliveryRate) meta += ` • ${item.onTimeDeliveryRate}% on-time`;
-                            if (item.totalValue) amount = `LKR ${item.totalValue?.toLocaleString()}`;
-                            else if (item.totalAmount) amount = `LKR ${item.totalAmount?.toLocaleString()}`;
-                            else if (item.totalOrders !== undefined) amount = `${Number(item.totalOrders).toLocaleString()}`;
-                            else if (item.orders !== undefined) amount = `${Number(item.orders).toLocaleString()}`;
-                            else if (item.totalQuantity !== undefined) amount = `${Number(item.totalQuantity).toLocaleString()}`;
-                            const keyStr = String(displayName);
-                            if (keyStr.toLowerCase().includes('stock') && item.totalQuantity !== undefined) {
-                              amount = `${Number(item.totalQuantity).toLocaleString()}`;
+                          if (isObj) {
+                            if (item.type && item.count !== undefined) {
+                              meta = `${item.count} movements`;
+                              amount = Number(item.count).toLocaleString();
+                            } else {
+                              if (item.productCount) meta = `${item.productCount} products`;
+                              else if (item.totalOrders) meta = `${item.totalOrders} orders`;
+                              else if (item.count) meta = `${item.count} movements`;
+                              else if (item.totalQuantity) meta = `${item.totalQuantity} quantity`;
+                              if (item.onTimeDeliveryRate) meta += ` • ${item.onTimeDeliveryRate}% on-time`;
+                              if (item.totalValue !== undefined) amount = `LKR ${Number(item.totalValue).toLocaleString()}`;
+                              else if (item.totalAmount !== undefined) amount = `LKR ${Number(item.totalAmount).toLocaleString()}`;
+                              else if (item.totalOrders !== undefined) amount = `${Number(item.totalOrders).toLocaleString()}`;
+                              else if (item.orders !== undefined) amount = `${Number(item.orders).toLocaleString()}`;
+                              else if (item.totalQuantity !== undefined) amount = `${Number(item.totalQuantity).toLocaleString()}`;
+                              if (String(displayName).toLowerCase().includes('stock') && item.totalQuantity !== undefined) {
+                                amount = `${Number(item.totalQuantity).toLocaleString()}`;
+                              }
                             }
                           }
-                          const key = String(displayName) + idx;
+                          const key = `${String(displayName)}-${idx}`;
                           return (
                             <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-white/5">
                               <div>

@@ -105,7 +105,6 @@ export const CategoryManager: React.FC = () => {
         <thead className="bg-white/5 border-b border-white/10">
           <tr>
             <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Name</th>
-            <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Color</th>
             <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Available</th>
             <th className="text-left px-4 py-2 text-[#F8F8F8]/70 text-xs uppercase">Actions</th>
           </tr>
@@ -115,12 +114,6 @@ export const CategoryManager: React.FC = () => {
             return (
               <tr key={c._id as string} className="hover:bg-white/5">
                 <td className="px-4 py-2 text-[#F8F8F8]">{c.name?.en}</td>
-                <td className="px-4 py-2">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="w-4 h-4 rounded" style={{ backgroundColor: c.color || '#667eea' }} />
-                    <span className="text-[#F8F8F8]/80">{c.color || '#667eea'}</span>
-                  </span>
-                </td>
                 <td className="px-4 py-2 text-[#F8F8F8]/80">{c.isActive !== false ? 'Yes' : 'No'}</td>
                 <td className="px-4 py-2">
                   <div className="flex gap-2">

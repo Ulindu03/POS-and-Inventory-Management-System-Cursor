@@ -4,8 +4,8 @@ import { formatLKR } from '@/lib/utils/currency';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { salesApi, PaymentMethod } from '@/lib/api/sales.api';
-import client from '@/lib/api/client';
-import { getAccessToken } from '@/lib/api/token';
+import { lookupCustomerByPhone, createCustomer as createCustomerApi } from '@/lib/api/customers.api';
+import type { CreateCustomerData } from '@/lib/api/customers.api';
 
 type CheckoutMethod = Extract<PaymentMethod, 'cash' | 'card'>;
 
@@ -52,21 +52,20 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
     if (customerId || !newName || !newPhone) return customerId;
     setCreatingCustomer(true);
     try {
-      const token = getAccessToken();
       // Normalize digits for phone storage
       let digits = newPhone.trim().replace(/\D/g, '');
       if (digits.startsWith('94') && digits.length >= 11) digits = '0' + digits.slice(2);
       try {
-        const resp = await client.post('/customers', {
+        const payload: CreateCustomerData = {
           name: newName,
           phone: digits,
-          ...(newEmail ? { email: newEmail } : {}),
+          email: newEmail || '',
           address: { street: '-', city: '-', province: '-', postalCode: '-' },
-            type: customerType,
+          type: (customerType as any) || 'retail',
           creditLimit: 0,
           loyaltyPoints: 0,
-        }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        const j: any = resp.data;
+        };
+        const j: any = await createCustomerApi(payload);
         if (j.success) {
           const newId = j.data._id || j.data.id;
           setCustomerId(newId);
@@ -85,7 +84,12 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
           return null;
         }
       } catch (e: any) {
-        if (e?.response?.status === 401) toast.error('Unauthorized: login required'); else toast.error('Customer create error');
+        if (e?.response?.status === 401) {
+          toast.error('Session expired. Please log in again.');
+          window.dispatchEvent(new CustomEvent('auth:token-expired'));
+        } else {
+          toast.error('Customer create error');
+        }
         return null;
       }
     } finally { setCreatingCustomer(false); }
@@ -217,30 +221,27 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
                   let normalized = raw.replace(/\D/g,'');
                   if(normalized.startsWith('94') && normalized.length >= 11) normalized = '0' + normalized.slice(2);
                   try {
-                    const token = getAccessToken();
-                    try {
-                      const resp = await client.get('/customers/lookup/phone', { params: { phone: normalized }, headers: token ? { Authorization: `Bearer ${token}` } : {} });
-                      const j: any = resp.data;
-                      if(j.success){
-                        setCustomerId(j.data._id);
-                        setLinkedName(j.data.name||'');
-                        setLinkedType(j.data.type);
-                        setLookupError('');
-                        toast.success('Customer found & linked');
-                      } else {
-                        setCustomerId(null);
-                        setLinkedName('');
-                        setLinkedType(undefined);
-                        setLookupError('Not found. Use New retail section below');
-                      }
-                    } catch (e:any){
-                      if(e?.response?.status === 401){
-                        setLookupError('Unauthorized: please login again');
-                      } else {
-                        setLookupError('Lookup failed');
-                      }
+                    const j: any = await lookupCustomerByPhone(normalized);
+                    if(j?.success){
+                      setCustomerId(j.data._id);
+                      setLinkedName(j.data.name||'');
+                      setLinkedType(j.data.type);
+                      setLookupError('');
+                      toast.success('Customer found & linked');
+                    } else {
+                      setCustomerId(null);
+                      setLinkedName('');
+                      setLinkedType(undefined);
+                      setLookupError('Not found. Use New retail section below');
                     }
-                  } catch { setLookupError('Unexpected error'); }
+                  } catch (e:any) {
+                    if(e?.response?.status === 401){
+                      setLookupError('Session expired. Please log in again.');
+                      window.dispatchEvent(new CustomEvent('auth:token-expired'));
+                    } else {
+                      setLookupError('Lookup failed');
+                    }
+                  }
                   finally { setCustomerLookupLoading(false); }
                 }}
                 className="px-3 py-2 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs"

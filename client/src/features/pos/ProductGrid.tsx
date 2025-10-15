@@ -151,10 +151,10 @@ export const ProductGrid = () => {
                   <span className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-sm">Out of stock</span>
                 )}
                 {low && (
-                  <span className="absolute bottom-2 left-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/90 text-black shadow-sm">Low</span>
+                  <span className="absolute top-2 right-2 z-10 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/90 text-black shadow-sm">Low</span>
                 )}
                 {hasActiveDiscount && (
-                  <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/90 text-black shadow-sm">
+                  <span className={`absolute ${low ? 'top-8' : 'top-2'} right-2 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/90 text-black shadow-sm`}>
                     {discountLabel}
                   </span>
                 )}

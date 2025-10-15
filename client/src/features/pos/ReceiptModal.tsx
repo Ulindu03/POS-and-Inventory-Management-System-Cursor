@@ -103,6 +103,15 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
     return () => { mounted = false; };
   }, [open]);
   if (!open) return null;
+  // Compact warranty period summary for the note below totals
+  const uniquePeriods: number[] = Array.from(new Set((warranties || []).map(w => w?.periodDays).filter((d): d is number => typeof d === 'number' && d > 0)));
+  const formatDays = (d: number) => (d % 365 === 0 ? `${d / 365}y` : d % 30 === 0 ? `${d / 30}m` : `${d}d`);
+  const periodLabel = uniquePeriods.length
+    ? (uniquePeriods.length === 1
+        ? formatDays(uniquePeriods[0])
+        : uniquePeriods.slice(0, 3).map(formatDays).join(', ') + (uniquePeriods.length > 3 ? '…' : ''))
+    : null;
+  const endsOn = warranties.length === 1 && warranties[0]?.endDate ? new Date(warranties[0].endDate as string).toLocaleDateString() : null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <button
@@ -167,13 +176,14 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
             {warranties.length > 0 && (
               <>
                 <hr />
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Warranties</div>
-                {warranties.map(w => (
-                  <div key={w.warrantyNo} className="row" style={{ fontSize: 11 }}>
-                    <span>{w.warrantyNo}</span>
-                    <span>{w.periodDays}d {w.requiresActivation ? 'Pending' : 'Active'}</span>
+                <div className="muted" style={{ fontSize: 11 }}>
+                  Warranty for eligible items is linked to Invoice <strong>#{invoiceNo}</strong>. Keep this receipt for reference.
+                </div>
+                {periodLabel && (
+                  <div className="muted" style={{ fontSize: 11 }}>
+                    {uniquePeriods.length > 1 ? 'Periods' : 'Period'}: <strong>{periodLabel}</strong>{endsOn ? <> (ends {endsOn})</> : null}
                   </div>
-                ))}
+                )}
               </>
             )}
             {payments && payments.length > 0 && (
@@ -187,9 +197,9 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
             )}
             <hr />
             <div className="muted footer" style={{ textAlign: 'center', marginTop: 8 }}>
-              Items sold are not returnable after 7 days.
+              Warranty claims require the Invoice number. Keep this receipt safe.
               <br />
-              Thank you . Visit Again.
+              Thank you for your purchase.
             </div>
           </div>
         </div>

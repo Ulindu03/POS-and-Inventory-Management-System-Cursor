@@ -3,7 +3,7 @@
 // - On start, we check if the user is already logged in.
 // - Public routes: /login and /reset-password/*
 // - All other routes are protected by <ProtectedRoute> and may require certain roles.
-import { useEffect } from 'react'; // React hook to run code on mount
+import { useEffect, useRef } from 'react'; // React hooks
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'; // Router components
 // Import all pages we can navigate to
 import LoginPage from './pages/Login';
@@ -34,10 +34,13 @@ function App() {
 	const checkAuth = useAuthStore((s) => s.checkAuth);   // function that validates tokens and loads user
 	const isChecking = useAuthStore((s) => s.isChecking); // true while checkAuth is running
 
-	// On first render, run a one-time auth check
-	useEffect(() => {
-		checkAuth(); // verify token and load current user on first render / refresh
-	}, [checkAuth]);
+		// On first render, run a one-time auth check (guarded against React 18 StrictMode double-invoke in dev)
+		const didRunAuthCheck = useRef(false);
+		useEffect(() => {
+			if (didRunAuthCheck.current) return;
+			didRunAuthCheck.current = true;
+			checkAuth(); // verify token and load current user on first render / refresh
+		}, [checkAuth]);
 
 		return (
 			<BrowserRouter>

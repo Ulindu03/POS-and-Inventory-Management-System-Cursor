@@ -16,8 +16,11 @@ import {
   Plus,
   Wand2,
   Lock,
+  RefreshCcw,
 } from '@/lib/safe-lucide-react';
 import { productsApi, categoriesApi, type CategoryItem } from '@/lib/api/products.api';
+import { SupplierForm as SupplierFormModal } from '@/features/suppliers';
+import { createSupplier } from '@/lib/api/suppliers.api';
 import type { Supplier } from '@/lib/api/suppliers.api';
 import { getSuppliers } from '@/lib/api/suppliers.api';
 import { proxyImage } from '@/lib/proxyImage';
@@ -134,6 +137,11 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
   const [brandOptions, setBrandOptions] = useState<string[]>([]);
   const [showBrandAdd, setShowBrandAdd] = useState(false);
   const [newBrand, setNewBrand] = useState('');
+  // Inline supplier creation modal
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [supplierSaving, setSupplierSaving] = useState(false);
+  // Manual lists refresh state
+  const [listsRefreshing, setListsRefreshing] = useState(false);
 
   const [formData, setFormData] = useState<FormDataType>({
     _id: product?._id,
@@ -207,7 +215,12 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
             const listRes = await productsApi.list({ category: formData.category, limit: 100 } as any);
             const items: any[] = (listRes as any).data?.items || [];
             const brands = Array.from(new Set(items.map((p) => (p as any).brand).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
-            setBrandOptions(brands);
+            // Ensure previously selected brand remains selectable even if not in the fetched list
+            const selectedBrand = (formData.brand || '').trim();
+            const finalBrands = selectedBrand && !brands.includes(selectedBrand)
+              ? [selectedBrand, ...brands]
+              : brands;
+            setBrandOptions(finalBrands);
           } catch {
             setBrandOptions([]);
           }
@@ -350,6 +363,58 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
       normalized = (normalized + '00').slice(0, 2);
     }
     return normalized;
+  };
+
+  // Create supplier inline and update dropdown
+  const handleCreateSupplierInline = async (data: Partial<Supplier>) => {
+    try {
+      setSupplierSaving(true);
+      const res = await createSupplier(data);
+      if (res?.success && res.data) {
+        // Prepend the new supplier and select it
+        setSuppliers((prev) => [res.data, ...prev]);
+        setFormData((prev) => ({ ...prev, supplier: res.data._id } as any));
+        setShowSupplierModal(false);
+      } else {
+        throw new Error('Failed to create supplier');
+      }
+    } catch (e) {
+      console.error('Create supplier inline failed', e);
+      alert('Failed to create supplier. Please try again.');
+    } finally {
+      setSupplierSaving(false);
+    }
+  };
+
+  // Manual refresh for Category, Brand, Supplier dropdowns
+  const refreshReferenceLists = async () => {
+    try {
+      setListsRefreshing(true);
+      const [catsRes, supsRes] = await Promise.all([
+        categoriesApi.list(),
+        getSuppliers({ page: 1, limit: 100, ...(formData.category ? { category: formData.category } : {}) }),
+      ]);
+      setCategories(catsRes?.data?.items || []);
+      setSuppliers((supsRes as any).data?.items || (supsRes as any).data || []);
+
+      // Refresh brand options based on current category
+      try {
+        const listRes = await productsApi.list({ category: formData.category || undefined, limit: 100 } as any);
+        const items: any[] = (listRes as any).data?.items || [];
+        const brands = Array.from(new Set(items.map((p) => (p as any).brand).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+        const selectedBrand = (formData.brand || '').trim();
+        const finalBrands = selectedBrand && !brands.includes(selectedBrand)
+          ? [selectedBrand, ...brands]
+          : brands;
+        setBrandOptions(finalBrands);
+      } catch {
+        setBrandOptions((prev) => (prev?.length ? prev : []));
+      }
+    } catch (e) {
+      console.error('Manual refresh failed', e);
+    } finally {
+      setListsRefreshing(false);
+    }
   };
 
   const buildStandardSkuBase = (sequenceWidth = 3) => {
@@ -663,7 +728,19 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                       <p className="text-xs text-white/70 mt-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-400/20">💡 Format: <span className="font-semibold text-white">CAT-BRD-SPEC-###</span> (e.g., <span className="text-white">FAN-PAN-16W-001</span>). Add an optional variant like <span className="text-white">-WHT</span> before the number when needed.</p>
                     </div>
                     <div>
-                      <label htmlFor="category" className="block text-sm font-medium text-white mb-2">Category <span className="text-rose-400">*</span></label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label htmlFor="category" className="block text-sm font-medium text-white">Category <span className="text-rose-400">*</span></label>
+                        <button
+                          type="button"
+                          onClick={refreshReferenceLists}
+                          disabled={listsRefreshing}
+                          className="h-8 px-3 rounded-lg bg-white/10 border border-white/20 text-white hover:bg-white/20 inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Refresh categories, brands and suppliers"
+                        >
+                          <RefreshCcw className={`w-4 h-4 ${listsRefreshing ? 'animate-spin' : ''}`} />
+                          <span className="text-xs font-medium">Refresh</span>
+                        </button>
+                      </div>
                       <div className="relative flex gap-2">
                         <div className="relative flex-1">
                           <Tag className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
@@ -686,7 +763,9 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                             <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/50" />
                             <select id="brand" value={formData.brand} onChange={(e) => setFormData(prev => ({ ...prev, brand: e.target.value }))} className="w-full h-12 pl-12 pr-4 rounded-xl bg-white/5 backdrop-blur text-white border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20">
                               <option value="" className="bg-gray-800 text-white">Select Brand</option>
-                              {brandOptions.map((b) => (<option key={b} value={b} className="bg-gray-800 text-white">{b}</option>))}
+                              {(brandOptions.some(b => b === formData.brand) ? brandOptions : [formData.brand, ...brandOptions].filter(Boolean)).map((b) => (
+                                <option key={b} value={b} className="bg-gray-800 text-white">{b}</option>
+                              ))}
                             </select>
                           </div>
                           <button type="button" onClick={() => { setShowBrandAdd(true); setNewBrand(''); }} className="h-12 px-4 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 inline-flex items-center gap-2 transition-colors"><Plus className="w-4 h-4" /> New</button>
@@ -715,7 +794,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                             {suppliers.map(supplier => (<option key={supplier._id} value={supplier._id} className="bg-gray-800 text-white">{supplier.name} ({supplier.supplierCode})</option>))}
                           </select>
                         </div>
-                        <button type="button" onClick={() => window.open('/suppliers', '_blank')} className="h-12 px-4 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 inline-flex items-center gap-2 transition-colors" title="Add supplier"><Plus className="w-4 h-4" /> New</button>
+                        <button type="button" onClick={() => setShowSupplierModal(true)} className="h-12 px-4 rounded-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 inline-flex items-center gap-2 transition-colors" title="Add supplier"><Plus className="w-4 h-4" /> New</button>
                       </div>
                     </div>
                   </div>
@@ -1121,6 +1200,15 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
             </div>
           </div>
         </div>
+      )}
+
+      {/* Inline Supplier Create Modal */}
+      {showSupplierModal && (
+        <SupplierFormModal
+          onSubmit={handleCreateSupplierInline}
+          onCancel={() => setShowSupplierModal(false)}
+          loading={supplierSaving}
+        />
       )}
     </div>
   );

@@ -69,7 +69,7 @@ const Inventory = () => {
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-3 justify-center">
-          {tabs.map((tab) => {
+          {tabs.filter(t => t.id !== 'adjust').map((tab) => {
             const active = activeTab === tab.id;
             return (
               <button
@@ -83,7 +83,7 @@ const Inventory = () => {
               >
                 <span className="relative z-10 flex items-center gap-2">
                   {tab.label}
-                  {tab.count !== null && (
+                  {tab.count !== null && tab.count > 0 && (
                     <span className={`ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold tracking-wide ${
                       active ? 'bg-red-500/90 text-white' : 'bg-red-500/80 text-white'
                     }`}>

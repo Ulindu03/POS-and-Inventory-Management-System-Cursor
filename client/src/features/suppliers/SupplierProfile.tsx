@@ -102,28 +102,7 @@ const SupplierProfile: React.FC<SupplierProfileProps> = ({
               </div>
             </div>
           </div>
-          <div className="rounded-2xl bg-[#233b2b] p-5 shadow flex flex-col gap-2">
-            <div className="flex items-center gap-3">
-              <div className="bg-green-500/10 p-3 rounded-xl">
-                <DollarSign className="w-7 h-7 text-green-500" />
-              </div>
-              <div>
-                <div className="text-xs text-green-600 font-semibold uppercase tracking-wide">Total Spent</div>
-                <div className="text-2xl font-extrabold text-green-900">{formatLKR(supplier.totalSpent || 0)}</div>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-2xl bg-[#3b3923] p-5 shadow flex flex-col gap-2">
-            <div className="flex items-center gap-3">
-              <div className="bg-yellow-500/10 p-3 rounded-xl">
-                <AlertTriangle className="w-7 h-7 text-yellow-500" />
-              </div>
-              <div>
-                <div className="text-xs text-yellow-300 font-semibold uppercase tracking-wide">Outstanding</div>
-                <div className="text-2xl font-extrabold text-yellow-200">{formatLKR(supplier.outstandingBalance || 0)}</div>
-              </div>
-            </div>
-          </div>
+          {/* Removed Total Spent and Outstanding cards by request */}
           <div className="rounded-2xl bg-[#2b233b] p-5 shadow flex flex-col gap-2">
             <div className="flex items-center gap-3">
               <div className="bg-purple-500/10 p-3 rounded-xl">
