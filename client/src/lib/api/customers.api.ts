@@ -17,8 +17,6 @@ export interface Customer {
     province: string;
     postalCode: string;
   };
-  taxId?: string;
-  birthday?: string;
   notes?: string;
   totalPurchases?: number;
   totalSpent?: number;
@@ -42,8 +40,6 @@ export interface CreateCustomerData {
     province: string;
     postalCode: string;
   };
-  taxId?: string;
-  birthday?: string;
   notes?: string;
 }
 

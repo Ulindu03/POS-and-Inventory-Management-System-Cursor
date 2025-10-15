@@ -103,8 +103,7 @@ export const CustomerList: React.FC<CustomerListProps> = ({
 									<span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${getTypeColor(customer.type)}`}>{customer.type || 'N/A'}</span>
 								</div>
 								<div>
-									<span className="font-medium text-gray-400">Credit:</span>
-									<span className="ml-2 text-white font-semibold">{customer.creditLimit?.toLocaleString() || 0} LKR</span>
+									{/* Credit display removed by request */}
 								</div>
 								{/* Loyalty points display removed as requested */}
 							</div>

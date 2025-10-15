@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { User, Mail, Phone, MapPin, CreditCard, Star, Save } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Save } from 'lucide-react';
 import FormModal from '@/components/ui/FormModal';
 
 const customerSchema = z.object({
@@ -18,10 +18,6 @@ const customerSchema = z.object({
     postalCode: z.string().min(4, 'Postal code is required'),
   }),
   type: z.enum(['retail', 'wholesale', 'corporate']),
-  creditLimit: z.number().min(0, 'Credit limit cannot be negative'),
-  loyaltyPoints: z.number().min(0, 'Loyalty points cannot be negative'),
-  taxId: z.string().optional(),
-  birthday: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -45,10 +41,6 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSubmit, 
       alternatePhone: '',
       address: { street: '', city: '', province: '', postalCode: '' },
       type: 'retail',
-      creditLimit: 0,
-      loyaltyPoints: 0,
-      taxId: '',
-      birthday: '',
       notes: '',
     },
   });
@@ -67,10 +59,6 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSubmit, 
           postalCode: customer.address?.postalCode ?? '',
         },
   type: (customer.type as z.infer<typeof customerSchema>['type']) ?? 'retail',
-        creditLimit: customer.creditLimit ?? 0,
-        loyaltyPoints: customer.loyaltyPoints ?? 0,
-        taxId: customer.taxId ?? '',
-        birthday: customer.birthday ?? '',
         notes: customer.notes ?? '',
       });
     }
@@ -234,7 +222,7 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSubmit, 
         {/* Business Information */}
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">Business Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label htmlFor="customer-type" className="block text-sm font-medium text-[#F8F8F8] mb-2">Customer Type *</label>
               <select
@@ -244,70 +232,12 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onSubmit, 
               >
                 <option value="retail">Retail</option>
                 <option value="wholesale">Wholesale</option>
-                <option value="corporate">Corporate</option>
               </select>
             </div>
-
-            <div>
-              <label htmlFor="customer-creditLimit" className="block text-sm font-medium text-[#F8F8F8] mb-2">Credit Limit (LKR)</label>
-              <div className="relative">
-                <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
-                <input
-                  {...register('creditLimit', { valueAsNumber: true })}
-                  id="customer-creditLimit"
-                  type="number"
-                  min={0}
-                  step={100}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                  placeholder="0.00"
-                />
-              </div>
-              {errors.creditLimit && <p className="mt-1 text-sm text-red-400">{errors.creditLimit.message}</p>}
-            </div>
-
-            <div>
-              <label htmlFor="customer-loyaltyPoints" className="block text-sm font-medium text-[#F8F8F8] mb-2">Loyalty Points</label>
-              <div className="relative">
-                <Star className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#F8F8F8]/50" />
-                <input
-                  {...register('loyaltyPoints', { valueAsNumber: true })}
-                  id="customer-loyaltyPoints"
-                  type="number"
-                  min={0}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                  placeholder="0"
-                />
-              </div>
-              {errors.loyaltyPoints && <p className="mt-1 text-sm text-red-400">{errors.loyaltyPoints.message}</p>}
-            </div>
           </div>
         </div>
 
-        {/* Additional Information */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label htmlFor="customer-taxId" className="block text-sm font-medium text-[#F8F8F8] mb-2">Tax ID</label>
-              <input
-                  {...register('taxId')}
-                  id="customer-taxId"
-                  type="text"
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                placeholder="Enter tax ID"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="customer-birthday" className="block text-sm font-medium text-[#F8F8F8] mb-2">Birthday</label>
-              <input
-                  {...register('birthday')}
-                  id="customer-birthday"
-                  type="date"
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
-              />
-            </div>
-          </div>
-        </div>
+        {/* Additional Information panel removed by request */}
 
         {/* Notes */}
         <div className="rounded-xl border border-white/10 bg-white/5 p-4">

@@ -8,7 +8,7 @@ import { CustomerList } from '@/features/customers/CustomerList';
 import { CustomerForm } from '@/features/customers/CustomerForm';
 import { CustomerProfile } from '@/features/customers/CustomerProfile';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Users, TrendingUp, CreditCard } from 'lucide-react';
+import { Users, TrendingUp } from 'lucide-react';
 import { 
   getCustomers, 
   getCustomerStats, 
@@ -76,8 +76,6 @@ const Customers = () => {
             province: 'Western',
             postalCode: '10000'
           },
-          taxId: 'TAX123456',
-          birthday: '1990-05-15',
           notes: 'Regular customer, prefers LED products',
           totalPurchases: 45,
           totalSpent: 125000,
@@ -102,8 +100,6 @@ const Customers = () => {
             province: 'Western',
             postalCode: '10001'
           },
-          taxId: 'TAX654321',
-          birthday: '1985-10-20',
           notes: 'Bulk buyer, prefers monthly invoicing',
           totalPurchases: 120,
           totalSpent: 2500000,
@@ -228,9 +224,7 @@ const Customers = () => {
       // Sanitize payload: remove empty strings and convert date fields
       const payload = {
         ...data,
-        birthday: data.birthday ? new Date(data.birthday).toISOString() : undefined,
         alternatePhone: data.alternatePhone?.trim() ? data.alternatePhone : undefined,
-        taxId: data.taxId?.trim() ? data.taxId : undefined,
         notes: data.notes?.trim() ? data.notes : undefined,
       };
       
@@ -330,7 +324,7 @@ const handleDeleteCustomer = async (customer: Customer) => {
   // Use stats from API or calculate from customers
   const totalCustomers = stats?.totalCustomers || customers.length;
   const activeCustomers = stats?.activeCustomers || customers.filter(c => c.isActive).length;
-  const totalCreditLimit = customers.reduce((sum, c) => sum + c.creditLimit, 0);
+  // Total credit card removed by request
   
 
   return (
@@ -393,30 +387,7 @@ const handleDeleteCustomer = async (customer: Customer) => {
               </div>
             </motion.div>
 
-            {/* Loyalty summary card removed as requested */}
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 hover:border-purple-400/30 transition-all duration-300"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative p-6">
-                <div className="flex items-center gap-4 mb-3">
-                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                    <CreditCard className="w-6 h-6 text-purple-400" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-white">{formatLKR(totalCreditLimit)}</p>
-                    <p className="text-purple-300 text-sm font-medium">Total Credit</p>
-                  </div>
-                </div>
-                <div className="h-1 bg-purple-500/30 rounded-full">
-                  <div className="h-full bg-gradient-to-r from-purple-500 to-purple-400 rounded-full w-5/6"></div>
-                </div>
-              </div>
-            </motion.div>
+            {/* Third summary card removed (Total Credit) */}
           </div>
 
           {/* Customer List Section */}
