@@ -342,27 +342,31 @@ export default function UsersPage() {
             </label>
             <label className="text-sm font-medium text-gray-200 flex flex-col gap-1">
               {t('users.role')}
-              <select
-                name="role"
-                className="rounded-xl bg-white/10 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-300 transition text-base font-semibold shadow-md border border-white/10 hover:border-yellow-300/60 focus:border-yellow-400/80 appearance-none"
-                style={{ boxShadow: '0 4px 24px 0 rgba(234,179,8,0.08)' }}
-              >
-                {roles.map((r) => (
-                  <option
-                    key={r}
-                    value={r}
-                    className="text-gray-900 bg-gray-100 text-base font-semibold rounded-lg px-3 py-2 hover:bg-yellow-100 focus:bg-yellow-200 transition"
-                  >
-                    {t(`users.role_${r}`)}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <ChevronDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-yellow-300/80" />
+                <select
+                  name="role"
+                  className="rounded-xl pl-9 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-300 transition text-base font-semibold shadow-md border border-white/10 hover:border-yellow-300/60 focus:border-yellow-400/80 appearance-none"
+                  style={{ boxShadow: '0 4px 24px 0 rgba(234,179,8,0.08)', backgroundColor: '#3a3a3a', color: '#f8f8f8' }}
+                >
+                  {roles.map((r) => (
+                    <option
+                      key={r}
+                      value={r}
+                      // Use dark dropdown items consistently across browsers
+                      style={{ backgroundColor: '#3a3a3a', color: '#f8f8f8' }}
+                    >
+                      {t(`users.role_${r}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </label>
             <label className="text-sm font-medium text-gray-200 flex flex-col gap-1">
               {t('users.language')}
-              <select name="language" className="rounded-lg bg-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-300 transition">
-                <option value="en" className="text-black">English</option>
-                <option value="si" className="text-black">සිංහල</option>
+              <select name="language" className="rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-300 transition" style={{ backgroundColor: '#3a3a3a', color: '#f8f8f8' }}>
+                <option value="en" style={{ backgroundColor: '#3a3a3a', color: '#f8f8f8' }}>English</option>
+                <option value="si" style={{ backgroundColor: '#3a3a3a', color: '#f8f8f8' }}>සිංහල</option>
               </select>
             </label>
           </div>

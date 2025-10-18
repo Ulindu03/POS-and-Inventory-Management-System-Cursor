@@ -203,9 +203,7 @@ function CategoryForm({
       name: { en: '' },
       description: { en: '' },
       parent: null,
-      color: '#667eea',
       isActive: true,
-      sortOrder: 0,
     }
   );
 
@@ -298,7 +296,7 @@ function CategoryForm({
                 onChange={(e) => setForm({ ...form, parent: e.target.value || null })}
                 className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] focus:outline-none focus:border-white/30"
               >
-                <option value="">No parent (root)</option>
+                <option value="">No parent </option>
                 {allCategories
                   .filter((c) => c._id !== initial?._id)
                   .map((c) => (
@@ -306,27 +304,7 @@ function CategoryForm({
                   ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-[#F8F8F8] mb-2" htmlFor="category-color">Color</label>
-              <input
-                id="category-color"
-                type="color"
-                value={form.color || '#667eea'}
-                onChange={(e) => setForm({ ...form, color: e.target.value })}
-                className="w-full h-[52px] rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[#F8F8F8] mb-2" htmlFor="cat-sort">Sort order</label>
-              <input
-                id="cat-sort"
-                type="number"
-                value={form.sortOrder || 0}
-                onChange={(e) => setForm({ ...form, sortOrder: parseInt(e.target.value || '0', 10) })}
-                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-[#F8F8F8] placeholder-[#F8F8F8]/50 focus:outline-none focus:border-white/30"
-                placeholder="0"
-              />
-            </div>
+            {/* Color and Sort order removed per request */}
             <div className="flex items-center gap-3 pt-7">
               <input
                 id="active"

@@ -73,16 +73,16 @@ export const Header = ({ onToggleSidebar, sidebarOpen }: { onToggleSidebar?: () 
           type="button"
           onClick={toggleFs}
           className="px-2 py-1.5 rounded-lg text-sm bg-white/10 hover:bg-white/20 border border-white/10 inline-flex items-center gap-2"
-          title={isFs ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
-          aria-label={isFs ? 'Exit fullscreen' : 'Enter fullscreen'}
+          title={isFs ? 'Exit Full Screen (Esc)' : 'Enter Full Screen'}
+          aria-label={isFs ? 'Exit Full Screen' : 'Enter Full Screen'}
         >
           <img
             src="/FS.png"
-            alt={isFs ? 'Exit fullscreen' : 'Enter fullscreen'}
+            alt={isFs ? 'Exit Full Screen' : 'Enter Full Screen'}
             className="w-4 h-4 object-contain"
             draggable={false}
           />
-          <span className="hidden sm:inline">{isFs ? 'Exit' : 'Fullscreen'}</span>
+          <span className="inline">{isFs ? 'Exit Full Screen' : 'Full Screen'}</span>
         </button>
         {/* Language switcher (English/Sinhala) */}
         <button

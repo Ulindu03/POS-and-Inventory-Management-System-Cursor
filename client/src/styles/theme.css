@@ -35,3 +35,25 @@ body.vz-themed {
   background: var(--vz-bg);
   color: var(--vz-text);
 }
+
+/* Form controls - force dark dropdown backgrounds */
+body.vz-themed select,
+body.vz-themed select:focus {
+  background-color: #3a3a3a !important; /* override Tailwind bg classes like bg-white/10 */
+  color: var(--vz-text);
+  border-color: var(--vz-border);
+}
+
+/* Dropdown list menu items */
+body.vz-themed select option,
+body.vz-themed select optgroup {
+  background-color: #3a3a3a;
+  color: var(--vz-text);
+}
+
+/* For WebKit-based browsers (Chrome/Edge/Safari) listbox popup */
+/* Not standardized, but improves consistency where supported */
+select::-webkit-listbox {
+  background-color: #3a3a3a;
+  color: var(--vz-text);
+}

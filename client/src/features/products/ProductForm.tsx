@@ -959,7 +959,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                   <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2"><Package className="w-5 h-5 text-indigo-300" /> Inventory</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="flex flex-col">
-                      <label htmlFor="stock_current" className="block text-sm font-medium text-white mb-2">Current Stock</label>
+                      <label htmlFor="stock_current" className="block text-sm font-medium text-white mb-2">New Stock</label>
                       <input type="number" min={0} id="stock_current" value={formData.stock.current} onChange={(e) => setFormData(prev => ({ ...prev, stock: { ...prev.stock, current: parseInt(e.target.value) || 0 } }))} className="w-full h-12 px-3 rounded-xl bg-white/5 backdrop-blur text-white placeholder-white/50 border border-white/20 hover:border-white/30 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20 text-center" placeholder="0" />
                     </div>
                     <div className="flex flex-col">

@@ -418,37 +418,42 @@ export const ProductList: React.FC<ProductListProps> = ({ onEdit, onCreate, canE
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           {canEdit && (
                             <button
                               onClick={() => onEdit(product)}
-                              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                              className="p-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0"
                               title="Edit Product"
                             >
-                              <Edit className="w-4 h-4 text-[#F8F8F8]/70" />
+                              <Edit className="w-6 h-6 text-[#F8F8F8]/70" />
                             </button>
                           )}
                           <button
                             onClick={() => setHistoryProduct({ id: product._id, name: product.name.en })}
-                            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                            className="p-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0"
                             title="View History"
                           >
-                            📈
+                            <TrendingUp className="w-6 h-6 text-[#F8F8F8]/70" />
                           </button>
                           <button
                             onClick={() => window.dispatchEvent(new CustomEvent('vz-stickers-open', { detail: { product } }))}
-                            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                            className="p-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex-shrink-0"
                             title="Generate Stickers"
                           >
-                            <img src="/bar.png" alt="Stickers" className="w-4 h-4 object-contain" />
+                            <img
+                              src="/bar.png"
+                              alt="Generate Stickers"
+                              className="w-6 h-6 object-contain"
+                              style={{ transform: 'scale(1.5)', transformOrigin: 'center' }}
+                            />
                           </button>
                           {canDelete && (
                             <button
                               onClick={() => handleDeleteClick(product)}
-                              className="p-2 rounded-lg bg-white/10 hover:bg-red-500/20 transition-colors"
+                              className="p-3 rounded-lg bg-white/10 hover:bg-red-500/20 transition-colors flex-shrink-0"
                               title="Delete Product"
                             >
-                              <Trash2 className="w-4 h-4 text-red-400" />
+                              <Trash2 className="w-6 h-6 text-red-400" />
                             </button>
                           )}
                         </div>
