@@ -33,6 +33,8 @@ const POS = () => {
     discount: number;
     tax: number;
     total: number;
+    method: 'cash' | 'card';
+    payments?: Array<{ method: 'cash' | 'card'; amount: number; tendered?: number; change?: number }>;
     warranties?: Array<{
       warrantyNo: string;
       status: string;
@@ -167,6 +169,8 @@ const POS = () => {
             saleId: sale.id,
             items: items.map((i) => ({ name: i.name, qty: i.qty, price: i.price, total: i.price * i.qty })),
             ...snapshot,
+            method: sale.method,
+            payments: sale.payments,
             warranties: warranties.map(w => ({ warrantyNo: w.warrantyNo, status: w.status, periodDays: w.periodDays, endDate: w.endDate, requiresActivation: w.status === 'pending_activation' }))
           });
           // Notify other tabs/components (like Warranty page) to refresh
@@ -206,7 +210,8 @@ const POS = () => {
         tax={receipt?.tax ?? 0}
         total={receipt?.total ?? 0}
         // method prop passes an internal payment method key; display components should localize label via something like t('pos.paymentMethod.cash')
-        method="cash"
+        method={receipt?.method || 'cash'}
+        payments={receipt?.payments || []}
         cashierName={user?.firstName || user?.username}
         paperWidth={80}
       />

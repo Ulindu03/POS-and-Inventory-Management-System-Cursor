@@ -14,7 +14,7 @@ interface Props {
   tax: number;
   total: number;
   method?: 'cash' | 'card' | 'digital';
-  payments?: Array<{ method: string; amount: number }>;
+  payments?: Array<{ method: string; amount: number; tendered?: number; change?: number }>;
   promoCode?: string | null;
   cashierName?: string;
   paperWidth?: 80 | 58; // preview width toggle; print will force 80mm unless overridden
@@ -191,7 +191,15 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
                 <hr />
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>Payments</div>
                 {payments.map((p, idx) => (
-                  <div key={`${p.method}-${idx}`} className="row"><span>{p.method.toUpperCase()}</span><span>{formatLKR(p.amount)}</span></div>
+                  <div key={`${p.method}-${idx}`} style={{ marginBottom: 4 }}>
+                    <div className="row"><span>{p.method.toUpperCase()}</span><span>{formatLKR(p.amount)}</span></div>
+                    {typeof p.tendered === 'number' && (
+                      <div className="row" style={{ fontSize: 11 }}><span>Tendered</span><span>{formatLKR(p.tendered)}</span></div>
+                    )}
+                    {typeof p.change === 'number' && (
+                      <div className="row" style={{ fontSize: 11 }}><span>Balance</span><span>{formatLKR(p.change)}</span></div>
+                    )}
+                  </div>
                 ))}
               </>
             )}

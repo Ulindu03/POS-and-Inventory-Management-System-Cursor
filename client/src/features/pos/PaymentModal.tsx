@@ -1,7 +1,7 @@
 import { useCartStore } from '@/store/cart.store';
 import { usePosStore } from '@/store/pos.store';
 import { formatLKR } from '@/lib/utils/currency';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { salesApi, PaymentMethod } from '@/lib/api/sales.api';
 import { lookupCustomerByPhone, createCustomer as createCustomerApi } from '@/lib/api/customers.api';
@@ -9,10 +9,23 @@ import type { CreateCustomerData } from '@/lib/api/customers.api';
 
 type CheckoutMethod = Extract<PaymentMethod, 'cash' | 'card'>;
 
+interface PaymentSummary {
+  method: CheckoutMethod;
+  amount: number;
+  tendered?: number;
+  change?: number;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  onComplete: (sale: { invoiceNo: string; id: string; method: CheckoutMethod; customerId?: string | null }) => void;
+  onComplete: (sale: {
+    invoiceNo: string;
+    id: string;
+    method: CheckoutMethod;
+    customerId?: string | null;
+    payments: PaymentSummary[];
+  }) => void;
 }
 
 export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
@@ -37,6 +50,13 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const [linkedName, setLinkedName] = useState('');
   const [linkedType, setLinkedType] = useState<string | undefined>(undefined);
   const [saveHover, setSaveHover] = useState(false);
+  const [cashReceived, setCashReceived] = useState('');
+  const cashReceivedNumber = useMemo(() => {
+    const cleaned = cashReceived.replace(/,/g, '').trim();
+    return cleaned ? Number(cleaned) : 0;
+  }, [cashReceived]);
+  const changeDue = cashReceivedNumber - total;
+  const isCashValid = method !== 'cash' || cashReceivedNumber >= total;
   let customerButtonLabel = isWholesaleMode ? 'Save Wholesale Customer' : 'Save Customer';
   if (creatingCustomer) customerButtonLabel = 'Saving...';
   if (customerId) customerButtonLabel = 'Customer Linked';
@@ -98,7 +118,12 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const completeSale = async () => {
     setLoading(true);
     try {
-  const paid: Array<{ method: PaymentMethod; amount: number }> = [{ method, amount: total }];
+      const paid: Array<{ method: PaymentMethod; amount: number }> = [{ method, amount: total }];
+      const paymentSummaries: PaymentSummary[] = [{
+        method,
+        amount: total,
+        ...(method === 'cash' ? { tendered: cashReceivedNumber, change: Math.max(changeDue, 0) } : {}),
+      }];
       // Auto-create retail customer if name + phone provided but not yet linked
       let customerIdToUse: string | null = customerId;
       if (!customerIdToUse && newName && newPhone) {
@@ -107,12 +132,12 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
       const res = await salesApi.create({
         items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })),
         discount,
-  payments: paid,
+        payments: paid,
         extendedWarrantySelections: warrantySelections,
         customer: customerIdToUse || undefined,
       });
       const sale = res.data.sale;
-  onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method, customerId: customerIdToUse });
+      onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method, customerId: customerIdToUse, payments: paymentSummaries });
       toast.success('Sale completed');
     } catch (err: any) {
       const status = err?.response?.status;
@@ -198,6 +223,38 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             />
           </button>
         </div>
+        {method === 'cash' && (
+          <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs opacity-80 mb-2">Cash received</div>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={cashReceived}
+              onChange={(e) => setCashReceived(e.target.value)}
+              className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm"
+              placeholder="Enter amount tendered"
+            />
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1">
+                <span>Amount due</span>
+                <span className="font-semibold">{formatLKR(total)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1">
+                <span>Change</span>
+                <span className={`font-semibold ${changeDue >= 0 ? 'text-emerald-300' : 'text-yellow-300'}`}>
+                  {changeDue >= 0 ? formatLKR(changeDue) : formatLKR(0)}
+                </span>
+              </div>
+            </div>
+            {changeDue < 0 && (
+              <div className="text-xs text-yellow-300 mt-2">
+                Short by {formatLKR(Math.abs(changeDue))}
+              </div>
+            )}
+          </div>
+        )}
         {/* Customer section */}
         <div className="mb-4 space-y-3">
           <div className="text-sm font-semibold opacity-90">Customer</div>
@@ -285,7 +342,14 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         </div>
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20">Cancel</button>
-          <button disabled={loading} onClick={completeSale} className="px-4 py-2 rounded-xl font-semibold disabled:opacity-60" style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}>{loading ? 'Processing...' : 'Complete Sale'}</button>
+          <button
+            disabled={loading || !isCashValid}
+            onClick={completeSale}
+            className="px-4 py-2 rounded-xl font-semibold disabled:opacity-60"
+            style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
+          >
+            {loading ? 'Processing...' : 'Complete Sale'}
+          </button>
         </div>
         {upsellItems.length > 0 && (
           <div className="mt-6 border-t border-white/10 pt-4">

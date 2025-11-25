@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import fs from 'fs/promises'
@@ -17,6 +17,24 @@ function stripLucideSourceMaps() {
     name: 'strip-lucide-sourcemaps',
     apply: 'serve' as const,
     enforce: 'pre' as const,
+    configureServer(server: ViteDevServer) {
+      // Robust fallback: intercept requests to lucide icon files and strip inline source maps
+      server.middlewares.use(async (req: import('http').IncomingMessage, res: import('http').ServerResponse, next: () => void) => {
+        try {
+          const url = req.url?.split('?')[0] || ''
+          if (!/\/node_modules\/lucide-react\/dist\/esm\/icons\/.+\.js$/.test(url)) return next()
+          const filePath = path.resolve(server.config.root, '.' + url)
+          const code = await fs.readFile(filePath, 'utf8')
+          const cleaned = strip(code)
+          if (!cleaned) return next()
+          res.setHeader('Content-Type', 'application/javascript')
+          res.end(cleaned)
+          return
+        } catch {
+          return next()
+        }
+      })
+    },
     // Intercept reads for lucide icon ESM files and strip inline source maps
     async load(id: string) {
       const bareId = id.split('?')[0]

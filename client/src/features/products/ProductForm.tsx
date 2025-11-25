@@ -126,8 +126,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
       'pair': 'Pair',
       'set': 'Set',
       'roll': 'Roll',
-      'bottle': 'Bottle',
-      'sheet': 'Sheet'
+     'sheet': 'Sheet'
     };
     return unitMap[unit] || unit;
   };
@@ -995,7 +994,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
                             <option value="pair">Pair</option>
                             <option value="set">Set</option>
                             <option value="roll">Roll</option>
-                            <option value="bottle">Bottle</option>
+                          
                             <option value="sheet">Sheet</option>
                           </select>
                           <div className="pointer-events-none">
@@ -1152,7 +1151,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
             <h3 className="text-lg font-semibold text-white mb-4">Add Category</h3>
             <div className="space-y-3">
               <div>
-                <label htmlFor="new-cat-en" className="block text-sm font-medium text-white mb-2">Name (English) *</label>
+                <label htmlFor="new-cat-en" className="block text-sm font-medium text-white mb-2">Name</label>
                 <input
                   id="new-cat-en"
                   value={newCategory.en}
