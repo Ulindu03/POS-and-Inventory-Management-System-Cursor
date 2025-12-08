@@ -34,7 +34,7 @@ const POS = () => {
     tax: number;
     total: number;
     method: 'cash' | 'card';
-    payments?: Array<{ method: 'cash' | 'card'; amount: number; tendered?: number; change?: number }>;
+    payments?: Array<{ method: 'cash' | 'card'; amount: number; tendered?: number; change?: number; cardBrand?: 'visa' | 'mastercard' | null }>;
     warranties?: Array<{
       warrantyNo: string;
       status: string;
@@ -211,7 +211,7 @@ const POS = () => {
         total={receipt?.total ?? 0}
         // method prop passes an internal payment method key; display components should localize label via something like t('pos.paymentMethod.cash')
         method={receipt?.method || 'cash'}
-        payments={receipt?.payments || []}
+  payments={receipt?.payments || []}
         cashierName={user?.firstName || user?.username}
         paperWidth={80}
       />

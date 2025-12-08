@@ -8,12 +8,14 @@ import { lookupCustomerByPhone, createCustomer as createCustomerApi } from '@/li
 import type { CreateCustomerData } from '@/lib/api/customers.api';
 
 type CheckoutMethod = Extract<PaymentMethod, 'cash' | 'card'>;
+type CardBrand = 'visa' | 'mastercard';
 
 interface PaymentSummary {
   method: CheckoutMethod;
   amount: number;
   tendered?: number;
   change?: number;
+  cardBrand?: CardBrand | null;
 }
 
 interface Props {
@@ -51,12 +53,22 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const [linkedType, setLinkedType] = useState<string | undefined>(undefined);
   const [saveHover, setSaveHover] = useState(false);
   const [cashReceived, setCashReceived] = useState('');
+  const [cardBrand, setCardBrand] = useState<CardBrand | null>(null);
   const cashReceivedNumber = useMemo(() => {
     const cleaned = cashReceived.replace(/,/g, '').trim();
     return cleaned ? Number(cleaned) : 0;
   }, [cashReceived]);
   const changeDue = cashReceivedNumber - total;
   const isCashValid = method !== 'cash' || cashReceivedNumber >= total;
+  const canComplete = method === 'cash' ? isCashValid : method === 'card' ? Boolean(cardBrand) : true;
+  const handleMethodSelect = (next: CheckoutMethod) => {
+    setMethod(next);
+    if (next === 'cash') {
+      setCardBrand(null);
+    } else {
+      setCashReceived('');
+    }
+  };
   let customerButtonLabel = isWholesaleMode ? 'Save Wholesale Customer' : 'Save Customer';
   if (creatingCustomer) customerButtonLabel = 'Saving...';
   if (customerId) customerButtonLabel = 'Customer Linked';
@@ -118,11 +130,19 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const completeSale = async () => {
     setLoading(true);
     try {
-      const paid: Array<{ method: PaymentMethod; amount: number }> = [{ method, amount: total }];
+      const paid: Array<{ method: PaymentMethod; amount: number; reference?: string }> = [{
+        method,
+        amount: total,
+        ...(method === 'card' && cardBrand ? { reference: cardBrand.toUpperCase() } : {}),
+      }];
       const paymentSummaries: PaymentSummary[] = [{
         method,
         amount: total,
-        ...(method === 'cash' ? { tendered: cashReceivedNumber, change: Math.max(changeDue, 0) } : {}),
+        ...(method === 'cash'
+          ? { tendered: cashReceivedNumber, change: Math.max(changeDue, 0) }
+          : method === 'card'
+            ? { cardBrand }
+            : {}),
       }];
       // Auto-create retail customer if name + phone provided but not yet linked
       let customerIdToUse: string | null = customerId;
@@ -175,7 +195,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         <div className="opacity-80 mb-4">Amount due: <span className="font-semibold text-[#F8F8F8]">{formatLKR(total)}</span></div>
         <div className="grid grid-cols-2 gap-3 mb-6">
           <button
-            onClick={() => setMethod('cash')}
+            onClick={() => handleMethodSelect('cash')}
             className={`group relative overflow-hidden rounded-xl border transition-all duration-200 ${
               method === 'cash'
                 ? 'border-blue-400 bg-white/20 text-white shadow-[0_0_20px_rgba(0,102,255,0.32)]'
@@ -199,7 +219,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             />
           </button>
           <button
-            onClick={() => setMethod('card')}
+            onClick={() => handleMethodSelect('card')}
             className={`group relative overflow-hidden rounded-xl border transition-all duration-200 ${
               method === 'card'
                 ? 'border-blue-400 bg-white/20 text-white shadow-[0_0_20px_rgba(0,102,255,0.32)]'
@@ -253,6 +273,36 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
                 Short by {formatLKR(Math.abs(changeDue))}
               </div>
             )}
+          </div>
+        )}
+        {method === 'card' && (
+          <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-xs opacity-80 mb-2">Choose card network</div>
+            <div className="grid grid-cols-2 gap-3">
+              {([['visa', '/visa.png'], ['mastercard', '/mastercard.png']] as Array<[CardBrand, string]>).map(([brand, icon]) => {
+                const active = cardBrand === brand;
+                return (
+                  <button
+                    key={brand}
+                    type="button"
+                    onClick={() => setCardBrand(brand)}
+                    className={`flex flex-col items-center justify-center rounded-xl border px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-yellow-200/70 ${
+                      active
+                        ? 'border-yellow-400 bg-white/20 text-white shadow-[0_0_15px_rgba(255,225,0,0.25)]'
+                        : 'border-white/10 bg-white/5 text-[#F8F8F8] hover:bg-white/10'
+                    }`}
+                  >
+                    <img src={icon} alt={`${brand} logo`} className="h-6 object-contain mb-1" />
+                    <span className="text-xs font-semibold uppercase tracking-wide">{brand}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 rounded-lg bg-blue-500/10 border border-blue-300/20 px-3 py-2 text-xs text-blue-100">
+              {cardBrand
+                ? `Ready to scan ${cardBrand.toUpperCase()} card. Ask the customer to tap, swipe, or insert when the terminal prompts.`
+                : 'Select the card network, then prompt the customer to tap, swipe, or insert their card.'}
+            </div>
           </div>
         )}
         {/* Customer section */}
@@ -343,7 +393,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20">Cancel</button>
           <button
-            disabled={loading || !isCashValid}
+            disabled={loading || !canComplete}
             onClick={completeSale}
             className="px-4 py-2 rounded-xl font-semibold disabled:opacity-60"
             style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}
