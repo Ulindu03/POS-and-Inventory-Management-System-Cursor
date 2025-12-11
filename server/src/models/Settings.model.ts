@@ -10,9 +10,25 @@ const settingsSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     },
+    autoDeductStock: {
+      type: Boolean,
+      default: true
+    },
     requireCustomer: {
       type: Boolean,
       default: false
+    },
+    quickCheckoutMode: {
+      type: Boolean,
+      default: false
+    },
+    allowDiscounts: {
+      type: Boolean,
+      default: true
+    },
+    allowReturns: {
+      type: Boolean,
+      default: true
     },
     printAfterSale: {
       type: Boolean,
@@ -76,6 +92,34 @@ const settingsSchema = new mongoose.Schema({
       enum: ['58mm', '80mm', 'a4'],
       default: '80mm'
     },
+    fontSize: {
+      type: String,
+      enum: ['small', 'medium', 'large'],
+      default: 'medium'
+    },
+    includeSku: {
+      type: Boolean,
+      default: false
+    },
+    includeTaxBreakdown: {
+      type: Boolean,
+      default: false
+    },
+    includeCashierName: {
+      type: Boolean,
+      default: true
+    },
+    printMode: {
+      type: String,
+      enum: ['auto', 'ask', 'no-auto'],
+      default: 'auto'
+    },
+    numCopies: {
+      type: Number,
+      default: 1,
+      min: 1,
+      max: 10
+    },
     showTaxDetails: {
       type: Boolean,
       default: true
@@ -92,6 +136,26 @@ const settingsSchema = new mongoose.Schema({
   },
   branding: {
     logoUrl: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    storeName: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    storeAddress: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    storePhone: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    storeEmail: {
       type: String,
       trim: true,
       default: ''

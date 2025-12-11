@@ -1,13 +1,26 @@
 import { useCartStore } from '@/store/cart.store';
-import { useAuthStore } from '@/store/auth.store';
 import { formatLKR } from '@/lib/utils/currency';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 
-export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void; onClear?: () => void; onDamage?: () => void; onHold?: () => void }) => {
-  const { items, inc, dec, remove, subtotal, tax, total, autoDiscount, totalDiscount } = useCartStore();
+interface Props {
+  onPay?: () => void;
+  onClear?: () => void;
+  onDamage?: () => void;
+  onHold?: () => void;
+  onExchange?: () => void;
+}
+
+export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) => {
+  const { items, inc, dec, remove, subtotal, tax, total, autoDiscount, totalDiscount, exchangeSlip, clearExchangeSlip } = useCartStore();
   const promoSavings = autoDiscount();
   const couponSavings = Math.max(0, totalDiscount() - promoSavings);
   const totalAmount = total();
+  const slipValue = exchangeSlip?.totalValue ?? 0;
+  const amountDue = Math.max(totalAmount - slipValue, 0);
+  const slipOverage = Math.max(slipValue - totalAmount, 0);
+  const expiryLabel = exchangeSlip?.expiryDate && !Number.isNaN(Date.parse(exchangeSlip.expiryDate))
+    ? new Date(exchangeSlip.expiryDate).toLocaleDateString()
+    : null;
 
   return (
     <div className="flex flex-col h-full min-h-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
@@ -88,6 +101,43 @@ export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void;
         <div className="flex justify-between font-semibold text-[#F8F8F8] pt-2 border-t border-white/10">
           <span>Total</span><span>{formatLKR(totalAmount)}</span>
         </div>
+        {exchangeSlip && (
+          <div className="mt-2 rounded-xl border border-sky-300/30 bg-sky-500/10 px-3 py-2 text-xs space-y-2">
+            <div className="flex items-center justify-between text-sky-100">
+              <span>Exchange slip</span>
+              <span className="font-semibold">#{exchangeSlip.slipNo}</span>
+            </div>
+            <div className="flex items-center justify-between text-sky-100/90">
+              <span>Value</span>
+              <span>{formatLKR(slipValue)}</span>
+            </div>
+            {expiryLabel && (
+              <div className="flex items-center justify-between text-[11px] text-sky-100/70">
+                <span>Expires</span>
+                <span>{expiryLabel}</span>
+              </div>
+            )}
+            {amountDue > 0 && (
+              <div className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1 text-xs font-medium text-yellow-100">
+                <span>Still due</span>
+                <span>{formatLKR(amountDue)}</span>
+              </div>
+            )}
+            {slipOverage > 0 && (
+              <div className="flex items-center justify-between rounded-lg bg-emerald-500/20 px-2 py-1 text-xs font-medium text-emerald-100">
+                <span>Over value</span>
+                <span>{formatLKR(slipOverage)}</span>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={clearExchangeSlip}
+              className="w-full rounded-lg border border-white/20 bg-white/10 py-1 text-[11px] text-white/80 hover:bg-white/20"
+            >
+              Remove slip
+            </button>
+          </div>
+        )}
         <div className="space-y-2">
           <button
             disabled={!items.length || totalAmount <= 0}
@@ -97,8 +147,9 @@ export const Cart = ({ onPay, onClear, onDamage, onHold }: { onPay?: () => void;
           >
             Pay
           </button>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <button onClick={onClear} className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20">Clear</button>
+            <button onClick={onExchange} className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20">Exchange</button>
             <button onClick={onDamage} className="px-3 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-600">Damage</button>
             <button onClick={onHold} className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20">Hold</button>
           </div>

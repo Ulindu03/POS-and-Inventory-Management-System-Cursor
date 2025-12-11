@@ -13,8 +13,8 @@ interface Props {
   discount: number;
   tax: number;
   total: number;
-  method?: 'cash' | 'card' | 'digital';
-  payments?: Array<{ method: string; amount: number; tendered?: number; change?: number; cardBrand?: string | null }>;
+  method?: string;
+  payments?: Array<{ method: string; amount: number; tendered?: number; change?: number; cardBrand?: string | null; reference?: string }>;
   promoCode?: string | null;
   cashierName?: string;
   paperWidth?: 80 | 58; // preview width toggle; print will force 80mm unless overridden
@@ -145,7 +145,7 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
             <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Date</span><span>{new Date().toLocaleDateString()}</span></div>
             <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Time</span><span>{new Date().toLocaleTimeString()}</span></div>
             {cashierName && (<div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Cashier</span><span>{cashierName}</span></div>)}
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Payment</span><span>{(method || 'cash').toUpperCase()}</span></div>
+            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Payment</span><span>{(method || 'cash').replace(/_/g, ' ').toUpperCase()}</span></div>
             {promoCode && <div className="row"><span>Promo</span><span>{promoCode}</span></div>}
             <hr />
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -191,7 +191,8 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
                 <hr />
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>Payments</div>
                 {payments.map((p, idx) => {
-                  const label = p.cardBrand ? `${p.cardBrand.toUpperCase()} ${p.method.toUpperCase()}` : p.method.toUpperCase();
+                  const labelMethod = (p.method || '').replace(/_/g, ' ').toUpperCase();
+                  const label = p.cardBrand ? `${p.cardBrand.toUpperCase()} ${labelMethod}` : labelMethod;
                   return (
                     <div key={`${p.method}-${idx}`} style={{ marginBottom: 4 }}>
                       <div className="row"><span>{label}</span><span>{formatLKR(p.amount)}</span></div>
@@ -200,6 +201,9 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
                     )}
                     {typeof p.change === 'number' && (
                       <div className="row" style={{ fontSize: 11 }}><span>Balance</span><span>{formatLKR(p.change)}</span></div>
+                    )}
+                    {p.reference && (
+                      <div className="row" style={{ fontSize: 11 }}><span>Reference</span><span>{p.reference}</span></div>
                     )}
                     </div>
                   );

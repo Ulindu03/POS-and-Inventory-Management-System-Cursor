@@ -68,6 +68,40 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
     return `LKR ${amount.toLocaleString()}`;
   };
 
+  const getCustomerDisplayName = (customer: any) => {
+    if (!customer) return 'Walk-in Customer';
+    if (typeof customer === 'string') return customer;
+    if (typeof customer === 'object') {
+      if (typeof customer.name === 'object') {
+        return customer.name.en || customer.name.si || customer._id || 'Customer';
+      }
+      if (customer.firstName || customer.lastName) {
+        return `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Customer';
+      }
+      return customer.name || customer.email || customer.phone || customer._id || 'Customer';
+    }
+    return String(customer);
+  };
+
+  const getItemName = (item: any) => {
+    if (!item) return 'Item';
+    const product = item.product || item.productDetails || item;
+    const nameSource = product.productName || product.name || item.productName || item.name;
+    if (typeof nameSource === 'object') {
+      return nameSource.en || nameSource.si || product.sku || product._id || 'Item';
+    }
+    return nameSource || product.sku || product._id || 'Item';
+  };
+
+  const getItemSummary = (items: any[] = []) => {
+    if (!items.length) return 'No items recorded';
+    const labels = items.map(getItemName);
+    const previewCount = Math.min(labels.length, 2);
+    const preview = labels.slice(0, previewCount).join(', ');
+    const remaining = labels.length - previewCount;
+    return remaining > 0 ? `${preview} +${remaining} more` : preview;
+  };
+
   return (
     <div className="space-y-8">
       {/* Lookup Card */}
@@ -133,10 +167,15 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
                       <span className="text-gray-500">Date:</span> {format(new Date(sale.createdAt), 'MMM dd, yyyy HH:mm')}
                     </div>
                     <div>
-                      <span className="text-gray-500">Customer:</span> {sale.customer?.name || sale.customer?.firstName ? `${sale.customer.firstName || ''} ${sale.customer.lastName || ''}`.trim() : 'Walk-in Customer'}
+                      <span className="text-gray-500">Customer:</span> {getCustomerDisplayName(sale.customer)}
                     </div>
                     <div>
                       <span className="text-gray-500">Items:</span> {sale.items?.length || 0}
+                      {sale.items?.length ? (
+                        <p className="mt-1 text-xs text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
+                          {getItemSummary(sale.items)}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   {sale.returnSummary?.totalReturned > 0 && (

@@ -99,7 +99,7 @@ const saleSchema = new mongoose.Schema({
   payment: {
     method: {
       type: String,
-      enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit'],
+      enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit', 'exchange_slip'],
     },
     amount: {
       type: Number,
@@ -124,7 +124,7 @@ const saleSchema = new mongoose.Schema({
   payments: [{
     method: {
       type: String,
-      enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit'],
+      enum: ['cash', 'card', 'bank_transfer', 'digital', 'credit', 'exchange_slip'],
       required: true
     },
     amount: {

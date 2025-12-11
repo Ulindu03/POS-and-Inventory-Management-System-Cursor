@@ -19,6 +19,8 @@ import { useCartStore } from '@/store/cart.store';
 import { usePosStore } from '@/store/pos.store';
 import { salesApi } from '@/lib/api/sales.api';
 import { getAccessToken } from '@/lib/api/token';
+import { ExchangeSlipModal } from '@/features/pos/ExchangeSlipModal';
+import { toast } from 'sonner';
 // Replaced lucide icons with custom FS.png from public
 
 const POS = () => {
@@ -33,8 +35,8 @@ const POS = () => {
     discount: number;
     tax: number;
     total: number;
-    method: 'cash' | 'card';
-    payments?: Array<{ method: 'cash' | 'card'; amount: number; tendered?: number; change?: number; cardBrand?: 'visa' | 'mastercard' | null }>;
+    method: string;
+    payments?: Array<{ method: string; amount: number; tendered?: number; change?: number; cardBrand?: 'visa' | 'mastercard' | null; reference?: string }>;
     warranties?: Array<{
       warrantyNo: string;
       status: string;
@@ -47,6 +49,7 @@ const POS = () => {
   const [openDamage, setOpenDamage] = useState(false);
   // State for return and refund modal
   const [openReturn, setOpenReturn] = useState(false);
+  const [openExchange, setOpenExchange] = useState(false);
   
   // Get cart state and actions from store
   const clear = useCartStore((s) => s.clear);
@@ -57,6 +60,8 @@ const POS = () => {
   const tax = useCartStore((s) => s.tax());
   const total = useCartStore((s) => s.total());
   const setHold = useCartStore((s) => s.setHold);
+  const exchangeSlip = useCartStore((s) => s.exchangeSlip);
+  const applyExchangeSlip = useCartStore((s) => s.applyExchangeSlip);
   const customerType = usePosStore((s) => s.customerType);
   const setCustomerType = usePosStore((s) => s.setCustomerType);
   
@@ -126,8 +131,13 @@ const POS = () => {
               onPay={() => setOpen(true)}
               onClear={clear}
               onDamage={() => setOpenDamage(true)}
+              onExchange={() => setOpenExchange(true)}
               onHold={async () => {
                 // Save current cart as a "hold" ticket for later retrieval (park the sale)
+                if (exchangeSlip) {
+                  toast.error('Remove the exchange slip before holding the sale');
+                  return;
+                }
                 const payload = { items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })), discount: manualDiscount };
                 const res = await salesApi.hold(payload);
                 setHold(res.data.ticket);
@@ -143,6 +153,17 @@ const POS = () => {
       
       {/* Return and refund modal */}
       <QuickReturnModal open={openReturn} onClose={() => setOpenReturn(false)} />
+
+      {/* Exchange slip modal */}
+      <ExchangeSlipModal
+        open={openExchange}
+        onClose={() => setOpenExchange(false)}
+        cartTotal={total}
+        onApplied={(slip) => {
+          applyExchangeSlip(slip);
+          setOpenExchange(false);
+        }}
+      />
       
       {/* Payment processing modal */}
       <PaymentModal

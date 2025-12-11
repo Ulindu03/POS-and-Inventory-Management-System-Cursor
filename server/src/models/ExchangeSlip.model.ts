@@ -50,6 +50,17 @@ const exchangeSlipSchema = new mongoose.Schema({
     enum: ['active', 'redeemed', 'expired', 'cancelled'],
     default: 'active'
   },
+  cancellationReason: {
+    type: String,
+    trim: true
+  },
+  cancelledBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  cancelledAt: {
+    type: Date
+  },
   expiryDate: {
     type: Date,
     required: true

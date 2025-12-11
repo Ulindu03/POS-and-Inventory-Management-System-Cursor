@@ -8,39 +8,126 @@ interface ExchangeSlipManagerProps {
 const ExchangeSlipManager: React.FC<ExchangeSlipManagerProps> = ({ customerId }) => {
   const [exchangeSlips, setExchangeSlips] = useState<ExchangeSlip[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedSlip, setSelectedSlip] = useState<ExchangeSlip | null>(null);
-  const [slipDetails, setSlipDetails] = useState<any>(null);
+  const [slipDetails, setSlipDetails] = useState<ExchangeSlip | null>(null);
+  const [slipLookupValue, setSlipLookupValue] = useState('');
+  const [phoneLookupValue, setPhoneLookupValue] = useState('');
+  const [slipLookupLoading, setSlipLookupLoading] = useState(false);
+  const [phoneLookupLoading, setPhoneLookupLoading] = useState(false);
+  const [processingSlipId, setProcessingSlipId] = useState<string | null>(null);
+
+  const getSlipKey = (slip?: ExchangeSlip | null) => {
+    if (!slip) return '';
+    return (slip._id || slip.slipNo || '').toString();
+  };
+
+  const isSameSlip = (left?: ExchangeSlip | null, right?: ExchangeSlip | null) => {
+    if (!left || !right) return false;
+    return getSlipKey(left) === getSlipKey(right);
+  };
 
   useEffect(() => {
     if (customerId) {
-      fetchExchangeSlips();
+      fetchExchangeSlips(customerId);
+    } else {
+      setExchangeSlips([]);
     }
   }, [customerId]);
 
-  const fetchExchangeSlips = async () => {
-    if (!customerId) return;
-
+  const fetchExchangeSlips = async (id: string) => {
+    if (!id) return;
     setLoading(true);
     try {
-      // Note: This would need to be implemented in the backend
-      // For now, we'll show a placeholder
-      console.log('Fetching exchange slips for customer:', customerId);
-      setExchangeSlips([]);
-    } catch (error) {
+      const response = await returnsApi.exchangeSlip.search({ customerId: id });
+      setExchangeSlips(response.data.exchangeSlips);
+    } catch (error: any) {
       console.error('Failed to fetch exchange slips:', error);
-      alert('Failed to load exchange slips');
+      setExchangeSlips([]);
+      alert(error?.response?.data?.message || 'Failed to load exchange slips');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSlipLookup = async (slipNo: string) => {
+  const syncSlipState = (updatedSlip: ExchangeSlip) => {
+    setExchangeSlips((prev) => {
+      if (!prev.length) return prev;
+      const next = prev.map((slip) => (isSameSlip(slip, updatedSlip) ? { ...slip, ...updatedSlip } : slip));
+      if (updatedSlip.status === 'cancelled') {
+        return next.filter((slip) => !isSameSlip(slip, updatedSlip));
+      }
+      return next;
+    });
+    setSlipDetails((prev) => {
+      if (!isSameSlip(prev, updatedSlip)) return prev;
+      if (updatedSlip.status === 'cancelled') return null;
+      return { ...prev!, ...updatedSlip };
+    });
+  };
+
+  const handleSlipLookup = async () => {
+    if (!slipLookupValue.trim()) {
+      alert('Please enter an exchange slip number');
+      return;
+    }
+    setSlipLookupLoading(true);
     try {
-      const response = await returnsApi.exchangeSlip.getDetails(slipNo);
+      const response = await returnsApi.exchangeSlip.getDetails(slipLookupValue.trim());
       setSlipDetails(response.data.exchangeSlip);
+      setExchangeSlips([]);
     } catch (error) {
       console.error('Failed to lookup exchange slip:', error);
       alert('Exchange slip not found or invalid');
+    } finally {
+      setSlipLookupLoading(false);
+    }
+  };
+
+  const handlePhoneLookup = async () => {
+    if (!phoneLookupValue.trim()) {
+      alert('Please enter a customer phone number');
+      return;
+    }
+    setPhoneLookupLoading(true);
+    try {
+      const response = await returnsApi.exchangeSlip.search({ phone: phoneLookupValue.trim() });
+      setExchangeSlips(response.data.exchangeSlips);
+      setSlipDetails(null);
+      if (!response.data.exchangeSlips.length) {
+        alert('No exchange slips found for that phone number');
+      }
+    } catch (error: any) {
+      console.error('Failed to lookup exchange slip by phone:', error);
+      setExchangeSlips([]);
+      const message = error?.response?.data?.message || 'Failed to lookup exchange slips by phone number';
+      alert(message);
+    } finally {
+      setPhoneLookupLoading(false);
+    }
+  };
+
+  const cancelSlip = async (slip: ExchangeSlip) => {
+    const slipKey = getSlipKey(slip);
+    if (!slipKey) {
+      alert('Unable to identify this exchange slip');
+      return;
+    }
+
+    const confirmCancel = window.confirm('Cancel this exchange slip?');
+    if (!confirmCancel) return;
+    const reason = window.prompt('Optional: note a cancellation reason')?.trim();
+
+    setProcessingSlipId(slipKey);
+    try {
+      const response = await returnsApi.exchangeSlip.cancel(slipKey, reason || undefined);
+      const updatedSlip = response.data.exchangeSlip;
+      syncSlipState(updatedSlip);
+      alert('Exchange slip cancelled successfully');
+    } catch (error: any) {
+      console.error('Failed to cancel exchange slip:', error);
+      const message = error?.response?.data?.message || 'Failed to cancel exchange slip';
+      alert(message);
+    } finally {
+      setProcessingSlipId(null);
     }
   };
 
@@ -71,6 +158,7 @@ const ExchangeSlipManager: React.FC<ExchangeSlipManagerProps> = ({ customerId })
       case 'active': return 'bg-green-500/20 text-green-300';
       case 'expired': return 'bg-red-500/20 text-red-300';
       case 'redeemed': return 'bg-gray-500/20 text-gray-300';
+      case 'cancelled': return 'bg-red-500/30 text-red-200';
       default: return 'bg-gray-500/20 text-gray-300';
     }
   };
@@ -91,41 +179,70 @@ const ExchangeSlipManager: React.FC<ExchangeSlipManagerProps> = ({ customerId })
         <div className="absolute inset-0 pointer-events-none rounded-3xl bg-gradient-to-br from-white/5 via-indigo-500/5 to-transparent" />
         <div className="relative">
           <h3 className="text-2xl font-bold tracking-wide bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-6">Exchange Slip Lookup</h3>
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <input
-              type="text"
-              placeholder="Enter exchange slip number"
-              className="flex-1 px-4 py-2.5 rounded-xl bg-[#27272A] border border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 outline-none text-sm text-gray-200 placeholder:text-gray-500"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const input = e.target as HTMLInputElement;
-                  handleSlipLookup(input.value);
-                }
-              }}
-            />
-            <button
-              onClick={() => {
-                const input = document.querySelector('input[placeholder="Enter exchange slip number"]') as HTMLInputElement;
-                if (input?.value) handleSlipLookup(input.value);
-              }}
-              className="relative px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-[0_4px_20px_-4px_rgba(59,130,246,0.6)] transition"
-            >
-              Lookup
-            </button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Slip Number</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={slipLookupValue}
+                  onChange={(e) => setSlipLookupValue(e.target.value)}
+                  placeholder="Enter exchange slip number"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#27272A] border border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 outline-none text-sm text-gray-200 placeholder:text-gray-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSlipLookup();
+                    }
+                  }}
+                />
+                <button
+                  onClick={handleSlipLookup}
+                  disabled={slipLookupLoading}
+                  className="relative px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_20px_-4px_rgba(59,130,246,0.6)] transition"
+                >
+                  {slipLookupLoading ? 'Searching...' : 'Lookup'}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Customer Phone</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={phoneLookupValue}
+                  onChange={(e) => setPhoneLookupValue(e.target.value)}
+                  placeholder="Enter phone to find slips"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#27272A] border border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 outline-none text-sm text-gray-200 placeholder:text-gray-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handlePhoneLookup();
+                    }
+                  }}
+                />
+                <button
+                  onClick={handlePhoneLookup}
+                  disabled={phoneLookupLoading}
+                  className="relative px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_20px_-4px_rgba(59,130,246,0.6)] transition"
+                >
+                  {phoneLookupLoading ? 'Searching...' : 'Lookup' }
+                </button>
+              </div>
+            </div>
           </div>
           {slipDetails && (
             <div className="p-5 rounded-2xl border border-white/10 bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-transparent">
-              <h4 className="font-semibold mb-4 text-white/90 tracking-wide">Exchange Slip Found: <span className="text-green-300">#{slipDetails.slipNo}</span></h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm text-gray-300">
-                <div>
-                  <span className="text-gray-500 block mb-0.5">Value</span>
-                  <p className="font-semibold text-white">{formatCurrency(slipDetails.totalValue)}</p>
-                </div>
-                <div>
-                  <span className="text-gray-500 block mb-0.5">Status</span>
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <h4 className="font-semibold text-white/90 tracking-wide">Exchange Slip Found: <span className="text-green-300">#{slipDetails.slipNo}</span></h4>
+                <div className="flex flex-col items-start gap-2 md:items-end">
                   <span className={`inline-block px-2 py-1 text-xs rounded-full font-medium ${getStatusColor(slipDetails.status)}`}>
                     {slipDetails.status.toUpperCase()}
                   </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mt-4 text-sm text-gray-300">
+                <div>
+                  <span className="text-gray-500 block mb-0.5">Value</span>
+                  <p className="font-semibold text-white">{formatCurrency(slipDetails.totalValue)}</p>
                 </div>
                 <div>
                   <span className="text-gray-500 block mb-0.5">Expires</span>
@@ -165,7 +282,7 @@ const ExchangeSlipManager: React.FC<ExchangeSlipManagerProps> = ({ customerId })
             <div className="space-y-5">
               {exchangeSlips.map((slip) => (
                 <div
-                  key={slip._id}
+                  key={getSlipKey(slip)}
                   className="p-5 rounded-2xl border border-white/10 bg-white/5 hover:border-blue-400/40 transition"
                 >
                   <div className="flex justify-between items-start mb-3">
@@ -173,11 +290,13 @@ const ExchangeSlipManager: React.FC<ExchangeSlipManagerProps> = ({ customerId })
                       <h4 className="font-semibold text-white/90 tracking-wide">Slip #{slip.slipNo}</h4>
                       <p className="text-xs text-gray-500 mt-1">Created: {formatDate(slip.createdAt)}</p>
                     </div>
-                    <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusColor(slip.status)}`}>
-                      {slip.status.toUpperCase()}
-                    </span>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusColor(slip.status)}`}>
+                        {slip.status.toUpperCase()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6 text-sm text-gray-300">
+                  <div className="grid grid-cols-2 md:grid-cols-2 gap-6 text-sm text-gray-300">
                     <div>
                       <span className="text-gray-500 block mb-0.5">Value</span>
                       <p className="font-medium text-white">{formatCurrency(slip.totalValue)}</p>
@@ -185,15 +304,6 @@ const ExchangeSlipManager: React.FC<ExchangeSlipManagerProps> = ({ customerId })
                     <div>
                       <span className="text-gray-500 block mb-0.5">Expires</span>
                       <p className="font-medium text-white/90">{formatDate(slip.expiryDate)}</p>
-                    </div>
-                    <div className="flex items-end">
-                      <button
-                        onClick={() => redeemSlip('current-sale')}
-                        disabled={slip.status !== 'active'}
-                        className="w-full md:w-auto px-4 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        Apply
-                      </button>
                     </div>
                   </div>
                 </div>

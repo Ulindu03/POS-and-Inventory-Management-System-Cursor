@@ -7,7 +7,7 @@ export interface CreateSaleItem {
   discount?: number;
 }
 
-export type PaymentMethod = 'cash' | 'card' | 'digital' | 'bank_transfer' | 'credit';
+export type PaymentMethod = 'cash' | 'card' | 'digital' | 'bank_transfer' | 'credit' | 'exchange_slip';
 export interface PaymentInput { method: PaymentMethod; amount: number; reference?: string };
 export interface CreateSalePayload {
   items: CreateSaleItem[];

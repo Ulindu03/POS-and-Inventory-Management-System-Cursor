@@ -94,6 +94,27 @@ const ReturnsList: React.FC<ReturnsListProps> = ({ customerId, limit = 20 }) => 
 
   const totalPages = Math.ceil(pagination.total / pagination.limit);
 
+  const getSaleLabel = (sale: any) => {
+    if (!sale) return 'Unknown Sale';
+    if (typeof sale === 'string') return sale;
+    if (typeof sale === 'object') {
+      return sale.invoiceNo || sale.saleNo || sale.reference || sale._id || 'Sale Record';
+    }
+    return String(sale);
+  };
+
+  const getProductLabel = (product: any) => {
+    if (!product) return 'Unknown Product';
+    if (typeof product === 'string') return product;
+    if (typeof product === 'object') {
+      if (typeof product.name === 'object') {
+        return product.name.en || product.name.si || product.sku || product._id || 'Product';
+      }
+      return product.name || product.sku || product.productCode || product._id || 'Product';
+    }
+    return String(product);
+  };
+
   return (
     <div className="space-y-8">
       {/* Filters */}
@@ -202,7 +223,7 @@ const ReturnsList: React.FC<ReturnsListProps> = ({ customerId, limit = 20 }) => 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm mb-4 text-gray-300">
                     <div>
                       <span className="text-gray-500 block mb-0.5">Original Sale</span>
-                      <p className="font-medium text-white/90">{returnTx.originalSale}</p>
+                      <p className="font-medium text-white/90">{getSaleLabel(returnTx.originalSale)}</p>
                     </div>
                     <div>
                       <span className="text-gray-500 block mb-0.5">Amount</span>
@@ -223,7 +244,7 @@ const ReturnsList: React.FC<ReturnsListProps> = ({ customerId, limit = 20 }) => 
                       {returnTx.items.map((item, index) => (
                         <div key={index} className="flex justify-between items-center text-sm bg-white/5 p-2.5 rounded-lg border border-white/10">
                           <div className="text-gray-300">
-                            <span className="font-medium text-white/90">Product: {item.product}</span>
+                            <span className="font-medium text-white/90">Product: {getProductLabel(item.product)}</span>
                             <span className="text-gray-500 ml-2">Qty: {item.quantity} | Reason: {item.reason}</span>
                           </div>
                           <span className="font-medium text-white">{formatCurrency(item.returnAmount)}</span>

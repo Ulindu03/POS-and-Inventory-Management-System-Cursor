@@ -25,6 +25,8 @@ router.post('/:id/approve', authorize('store_owner', 'manager'), ReturnControlle
 
 // Exchange slip operations
 router.post('/exchange-slip/redeem', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.redeemExchangeSlip);
+router.post('/exchange-slip/:identifier/cancel', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.cancelExchangeSlip);
+router.get('/exchange-slip/search', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.searchExchangeSlips);
 router.get('/exchange-slip/:slipNo', authorize('store_owner', 'manager', 'sales_rep', 'cashier'), ReturnController.getExchangeSlip);
 
 // Customer overpayment operations

@@ -5,6 +5,7 @@ import { ExchangeSlip } from '../models/ExchangeSlip.model';
 import { CustomerOverpayment } from '../models/CustomerOverpayment.model';
 import { ReturnPolicy } from '../models/ReturnPolicy.model';
 import { ReturnService } from '../services/ReturnService';
+import { Settings } from '../models/Settings.model';
 
 export class ReturnController {
   
@@ -50,6 +51,14 @@ export class ReturnController {
   // POST /api/returns/validate - Validate return before processing
   static async validateReturn(req: Request & { user?: any }, res: Response, next: NextFunction) {
     try {
+      const settings = await Settings.findOne();
+      if (settings?.pos?.allowReturns === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'Returns and refunds are disabled in POS settings'
+        });
+      }
+
       const validation = await ReturnService.validateReturn(req.body);
       
       return res.json({ 
@@ -72,6 +81,14 @@ export class ReturnController {
         return res.status(403).json({ 
           success: false, 
           message: 'Insufficient permissions for processing returns' 
+        });
+      }
+
+      const settings = await Settings.findOne();
+      if (settings?.pos?.allowReturns === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'Returns and refunds are disabled in POS settings'
         });
       }
       
@@ -221,6 +238,42 @@ export class ReturnController {
     }
   }
 
+  static async searchExchangeSlips(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { phone, customerId, limit } = req.query as Record<string, string>;
+
+      if (!phone && !customerId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide a customer phone number or ID'
+        });
+      }
+
+      const slips = await ReturnService.searchExchangeSlips({
+        phone,
+        customerId,
+        limit: limit ? parseInt(limit, 10) : undefined
+      });
+
+      if (!slips.length) {
+        return res.status(404).json({
+          success: false,
+          message: 'No exchange slips found for the provided details'
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          exchangeSlips: slips,
+          count: slips.length
+        }
+      });
+    } catch (err) {
+      return next(err);
+    }
+  }
+
   // POST /api/returns/exchange-slip/redeem - Redeem exchange slip
   static async redeemExchangeSlip(req: Request & { user?: any }, res: Response, next: NextFunction) {
     try {
@@ -237,6 +290,30 @@ export class ReturnController {
       const result = await ReturnService.redeemExchangeSlip(slipNo, saleId, userId);
       
       return res.json(result);
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  static async cancelExchangeSlip(req: Request & { user?: any }, res: Response, next: NextFunction) {
+    try {
+      const { identifier } = req.params;
+      const { reason } = req.body as { reason?: string };
+      const userId = req.user?.userId;
+
+      if (!identifier) {
+        return res.status(400).json({
+          success: false,
+          message: 'Exchange slip identifier is required'
+        });
+      }
+
+      const exchangeSlip = await ReturnService.cancelExchangeSlip(identifier, userId, reason);
+
+      return res.json({
+        success: true,
+        data: { exchangeSlip }
+      });
     } catch (err) {
       return next(err);
     }

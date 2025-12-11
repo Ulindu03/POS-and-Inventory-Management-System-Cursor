@@ -34,6 +34,7 @@ const Customers = () => {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [customerTypeFilter, setCustomerTypeFilter] = useState<'all' | 'retail' | 'wholesale'>('all');
 
   // Load customers and stats from API
   useEffect(() => {
@@ -324,6 +325,12 @@ const handleDeleteCustomer = async (customer: Customer) => {
   // Use stats from API or calculate from customers
   const totalCustomers = stats?.totalCustomers || customers.length;
   const activeCustomers = stats?.activeCustomers || customers.filter(c => c.isActive).length;
+  const retailCount = customers.filter((c) => (c.type || '').toLowerCase() === 'retail').length;
+  const wholesaleCount = customers.filter((c) => (c.type || '').toLowerCase() === 'wholesale').length;
+  const filteredCustomers = customers.filter((c) => {
+    if (customerTypeFilter === 'all') return true;
+    return (c.type || '').toLowerCase() === customerTypeFilter;
+  });
   // Total credit card removed by request
   
 
@@ -397,8 +404,37 @@ const handleDeleteCustomer = async (customer: Customer) => {
             transition={{ duration: 0.6, delay: 0.5 }}
             className="bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 p-8 shadow-2xl"
           >
+            <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center md:justify-between">
+              <p className="text-gray-400 text-sm"></p>
+              <div className="inline-flex rounded-2xl border border-white/10 bg-white/5 p-1 text-sm font-semibold text-white">
+                {([
+                  { label: 'All', value: 'all', count: customers.length },
+                  { label: 'Retail', value: 'retail', count: retailCount },
+                  { label: 'Wholesale', value: 'wholesale', count: wholesaleCount }
+                ] as const).map(({ label, value, count }) => {
+                  const active = customerTypeFilter === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setCustomerTypeFilter(value)}
+                      className={`px-4 py-2 rounded-2xl transition-colors flex items-center gap-2 ${
+                        active
+                          ? 'bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-400 text-black shadow-[0_8px_20px_rgba(255,225,0,0.25)]'
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                    >
+                      <span>{label}</span>
+                      <span className="text-xs font-medium text-gray-800/70 bg-white/70 rounded-full px-2 py-0.5">
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <CustomerList
-              customers={customers}
+              customers={filteredCustomers}
               onAddCustomer={handleAddCustomer}
               onEditCustomer={handleEditCustomer}
               onViewCustomer={handleViewCustomer}

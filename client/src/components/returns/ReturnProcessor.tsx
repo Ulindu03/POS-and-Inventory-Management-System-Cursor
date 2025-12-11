@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { returnsApi, ReturnRequest, ReturnItem, ReturnValidation } from '@/lib/api/returns.api';
+import { settingsApi } from '@/lib/api/settings.api';
 import { toast } from '@/components/ui/toasts/toastService';
 
 interface ReturnProcessorProps {
@@ -61,6 +62,12 @@ const ReturnProcessor: React.FC<ReturnProcessorProps> = ({ sale, onComplete }) =
   const [validation, setValidation] = useState<ReturnValidation | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [storeProfile, setStoreProfile] = useState({
+    name: 'VoltZone',
+    address: '',
+    phone: '',
+    email: ''
+  });
   // Using global toast service now
 
   useEffect(() => {
@@ -77,6 +84,186 @@ const ReturnProcessor: React.FC<ReturnProcessorProps> = ({ sale, onComplete }) =
       setReturnItems(initialItems);
     }
   }, [sale]);
+
+  useEffect(() => {
+    let active = true;
+    settingsApi.get()
+      .then((res) => {
+        if (!active) return;
+        const payload = res?.data?.data || res?.data || {};
+        setStoreProfile({
+          name: payload?.branding?.storeName || 'VoltZone',
+          address: payload?.branding?.address || '',
+          phone: payload?.branding?.phone || '',
+          email: payload?.branding?.email || ''
+        });
+      })
+      .catch(() => {
+        /* ignore missing settings */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const formatCurrency = (amount: number) => {
+    const numeric = Number.isFinite(amount) ? amount : 0;
+    return `LKR ${numeric.toLocaleString()}`;
+  };
+
+  const normalizeId = (value: any) => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object') {
+      return value._id || value.id || value.toString?.() || '';
+    }
+    return String(value);
+  };
+
+  const getCustomerDisplayName = (customer: any) => {
+    if (!customer) return 'Walk-in Customer';
+    if (typeof customer === 'string') return customer;
+    if (typeof customer === 'object') {
+      if (typeof customer.name === 'object') {
+        return customer.name.en || customer.name.si || customer._id || 'Customer';
+      }
+      if (customer.firstName || customer.lastName) {
+        return `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || 'Customer';
+      }
+      return customer.name || customer.email || customer.phone || customer._id || 'Customer';
+    }
+    return String(customer);
+  };
+
+  const mapSlipItems = (slipItems: any[] = []) => {
+    if (!Array.isArray(slipItems)) return [];
+    return slipItems.map((item) => {
+      const match = sale?.items?.find((saleItem: any) => normalizeId(saleItem.product) === normalizeId(item.product));
+      const label =
+        (typeof match?.product?.name === 'string' && match?.product?.name) ||
+        match?.product?.name?.en ||
+        match?.product?.name?.si ||
+        match?.productName ||
+        'Product';
+      return {
+        name: label,
+        sku: match?.product?.sku,
+        qty: item.quantity,
+        value: item.exchangeValue
+      };
+    });
+  };
+
+  const formatDateValue = (value?: string | number | Date) => {
+    if (!value) return new Date().toLocaleDateString();
+    return new Date(value).toLocaleDateString();
+  };
+
+  const formatDateTimeValue = (value?: string | number | Date) => {
+    if (!value) return new Date().toLocaleString();
+    return new Date(value).toLocaleString();
+  };
+
+  const openExchangeSlipPreview = (slipData: any) => {
+    if (typeof window === 'undefined') return;
+    const slipWindow = window.open('', '_blank', 'width=520,height=720');
+    if (!slipWindow) {
+      toast.info('Exchange slip generated. Please allow pop-ups to view it.', 'Exchange Slip');
+      return;
+    }
+
+    const lineItems = mapSlipItems(slipData?.items || []);
+    const invoiceRef = sale?.invoiceNo || sale?.saleNo || sale?._id || 'N/A';
+    const customerName = getCustomerDisplayName(sale?.customer);
+    const issueDate = formatDateTimeValue(slipData?.createdAt || new Date());
+    const expiryDate = formatDateValue(slipData?.expiryDate);
+    const storeLines = [storeProfile.address, [storeProfile.phone, storeProfile.email].filter(Boolean).join(' • ')].filter(Boolean);
+    const itemsHtml = lineItems.length
+      ? lineItems
+          .map(
+            (item) => `
+            <tr>
+              <td>
+                <div class="item-name">${item.name}</div>
+                ${item.sku ? `<div class="sku">${item.sku}</div>` : ''}
+              </td>
+              <td class="qty">${item.qty}</td>
+              <td class="val">${formatCurrency(item.value)}</td>
+            </tr>`
+          )
+          .join('')
+      : '<tr><td colspan="3">Item details unavailable</td></tr>';
+
+    const doc = slipWindow.document;
+    doc.open();
+    doc.write(`<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Exchange Slip ${slipData?.slipNo || ''}</title>
+    <style>
+      body { font-family: 'Segoe UI', Tahoma, sans-serif; background:#0f172a; margin:0; padding:32px; color:#0f172a; }
+      .slip { max-width:520px; margin:0 auto; background:#fff; border-radius:18px; padding:32px 36px; box-shadow:0 30px 70px rgba(15,23,42,0.45); }
+      .badge { display:inline-flex; padding:4px 12px; border-radius:999px; font-size:11px; letter-spacing:0.1em; background:#dbeafe; color:#1e3a8a; font-weight:600; }
+      .store { font-size:24px; font-weight:700; letter-spacing:0.04em; margin-top:16px; }
+      .contact { font-size:13px; color:#475569; margin-top:4px; line-height:1.4; }
+      .meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:24px 0 12px; font-size:13px; color:#475569; }
+      .meta span { display:block; color:#0f172a; font-weight:600; font-size:14px; margin-top:4px; }
+      table { width:100%; border-collapse:collapse; margin-top:20px; font-size:13px; }
+      th { text-align:left; font-size:11px; letter-spacing:0.08em; color:#94a3b8; padding-bottom:6px; }
+      td { padding:10px 0; border-top:1px solid #e2e8f0; vertical-align:top; }
+      .item-name { font-weight:600; color:#0f172a; }
+      .sku { font-size:11px; color:#94a3b8; }
+      .qty, .val { text-align:right; font-weight:600; color:#0f172a; }
+      .total-card { margin-top:24px; border-radius:16px; background:linear-gradient(135deg,#1d4ed8,#3b82f6); color:#fff; padding:18px 20px; display:flex; justify-content:space-between; align-items:center; }
+      .total-card span { font-size:13px; letter-spacing:0.08em; text-transform:uppercase; opacity:0.8; }
+      .total-card strong { font-size:24px; }
+      .notes { margin-top:20px; font-size:12px; color:#475569; line-height:1.5; }
+      .signature { margin-top:32px; display:flex; justify-content:space-between; font-size:12px; color:#475569; }
+      .signature div { width:45%; text-align:center; border-top:1px solid #cbd5f5; padding-top:8px; }
+      .print-btn { margin-top:28px; width:100%; padding:12px 16px; border:none; border-radius:12px; background:#0f172a; color:#fff; font-weight:600; cursor:pointer; }
+      @media print { body { background:#fff; padding:0; } .slip { box-shadow:none; border-radius:0; } .print-btn { display:none; } }
+    </style>
+  </head>
+  <body>
+    <div class="slip">
+      <div class="badge">EXCHANGE SLIP</div>
+      <div class="store">${storeProfile.name || 'VoltZone'}</div>
+      ${storeLines.length ? `<div class="contact">${storeLines.map((line) => `<div>${line}</div>`).join('')}</div>` : ''}
+      <div class="meta">
+        <div>Slip No.<span>${slipData?.slipNo || 'N/A'}</span></div>
+        <div>Invoice Ref.<span>${invoiceRef}</span></div>
+        <div>Issued On<span>${issueDate}</span></div>
+        <div>Expires On<span>${expiryDate}</span></div>
+        <div>Customer<span>${customerName}</span></div>
+        <div>Status<span>${(slipData?.status || 'active').toUpperCase()}</span></div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>ITEM</th><th class="qty">QTY</th><th class="val">VALUE</th></tr>
+        </thead>
+        <tbody>
+          ${itemsHtml}
+        </tbody>
+      </table>
+      <div class="total-card">
+        <span>Total Value</span>
+        <strong>${formatCurrency(slipData?.totalValue || 0)}</strong>
+      </div>
+      <div class="notes">
+        Present this slip with the original invoice before the expiry date. Store credit is valid only at ${storeProfile.name || 'our store'} and is non-transferable.
+      </div>
+      <div class="signature">
+        <div>Issued By</div>
+        <div>Customer</div>
+      </div>
+      <button class="print-btn" onclick="window.print()">Print Slip</button>
+    </div>
+  </body>
+</html>`);
+    doc.close();
+    slipWindow.focus();
+  };
 
   const handleItemQuantityChange = (index: number, quantity: number) => {
     const updatedItems = [...returnItems];
@@ -157,8 +344,12 @@ const ReturnProcessor: React.FC<ReturnProcessorProps> = ({ sale, onComplete }) =
     setIsProcessing(true);
     try {
       const apiRes = await returnsApi.processReturn(returnRequest);
+      const resultPayload = apiRes.data;
+      if (returnType === 'exchange' && refundMethod === 'exchange_slip' && resultPayload?.exchangeSlip) {
+        openExchangeSlipPreview(resultPayload.exchangeSlip);
+      }
   toast.success('Return processed successfully.', 'Return Processed');
-      onComplete(apiRes.data); // pass result object
+      onComplete(resultPayload); // pass result object
     } catch (error: any) {
       console.error('Process return error:', error);
       const message = error?.response?.data?.message || error?.message || 'Failed to process return';
@@ -170,10 +361,6 @@ const ReturnProcessor: React.FC<ReturnProcessorProps> = ({ sale, onComplete }) =
 
   const calculateTotalReturnAmount = () => {
     return returnItems.reduce((total, item) => total + item.returnAmount, 0) - discount;
-  };
-
-  const formatCurrency = (amount: number) => {
-    return `LKR ${amount.toLocaleString()}`;
   };
 
   return (

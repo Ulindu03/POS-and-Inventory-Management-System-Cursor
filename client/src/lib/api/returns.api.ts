@@ -173,6 +173,27 @@ export const returnsApi = {
           exchangeSlip: ExchangeSlip;
         };
       };
+    },
+
+    search: async (params: { customerId?: string; phone?: string; limit?: number }) => {
+      const { data } = await client.get('/returns/exchange-slip/search', { params });
+      return data as {
+        success: true;
+        data: {
+          exchangeSlips: ExchangeSlip[];
+          count: number;
+        };
+      };
+    },
+
+    cancel: async (identifier: string, reason?: string) => {
+      const { data } = await client.post(`/returns/exchange-slip/${identifier}/cancel`, { reason });
+      return data as {
+        success: true;
+        data: {
+          exchangeSlip: ExchangeSlip;
+        };
+      };
     }
   },
 

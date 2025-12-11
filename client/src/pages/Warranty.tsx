@@ -245,6 +245,7 @@ const WarrantyPage = () => {
                           {statusChip(w.status)}
                           <span className="text-xs font-mono">{w.warrantyNo}</span>
                         </div>
+                        <div className="opacity-60 text-[11px]">Item: {w.productSnapshot?.name || w.product?.name || 'Product'}</div>
                         <div className="opacity-60 text-[11px]">Period: {w.periodDays}d</div>
                         <div className="opacity-60 text-[11px]">Ends: {w.endDate?new Date(w.endDate).toLocaleDateString(): '-'}</div>
                       </div>
@@ -265,7 +266,7 @@ const WarrantyPage = () => {
                         <span className="text-xs font-mono truncate">{w.warrantyNo}</span>
                         {statusChip(w.status)}
                       </div>
-                      <div className="opacity-50 text-[10px] mt-1">Ends {w.endDate?new Date(w.endDate).toLocaleDateString():'—'}</div>
+                      <div className="opacity-50 text-[10px] mt-1">Item: {w.productSnapshot?.name || w.product?.name || 'Product'}<br/>Ends {w.endDate?new Date(w.endDate).toLocaleDateString():'—'}</div>
                     </div>
                   </div>
                 ))}

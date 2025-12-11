@@ -100,7 +100,7 @@ export default function DeliveryForm({ open, onClose, onSaved }: Props) {
           <input
             id="driverName"
             className="w-full rounded bg-white/10 px-3 py-2"
-            placeholder="John Doe"
+            placeholder=""
             value={driverName}
             onChange={(e) => setDriverName(e.target.value)}
           />

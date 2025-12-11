@@ -621,6 +621,60 @@ export class ReturnService {
     }
   }
 
+  static async searchExchangeSlips(options: { customerId?: string; phone?: string; limit?: number }): Promise<any[]> {
+    const { customerId, phone, limit = 20 } = options;
+    const searchLimit = Math.min(Math.max(limit, 1), 50);
+    const query: any = {};
+    let hasCustomerFilter = false;
+
+    if (customerId) {
+      if (!mongoose.Types.ObjectId.isValid(customerId)) {
+        return [];
+      }
+      query.customer = new mongoose.Types.ObjectId(customerId);
+      hasCustomerFilter = true;
+    }
+
+    if (phone) {
+      const normalized = phone.replace(/\D/g, '');
+      if (!normalized) {
+        return [];
+      }
+      const regex = new RegExp(normalized, 'i');
+      const customers = await Customer.find({
+        $or: [
+          { phone: regex },
+          { 'contact.phone': regex }
+        ]
+      }).select('_id');
+
+      if (!customers.length) {
+        return [];
+      }
+
+      const ids = customers.map((c) => c._id);
+      if (hasCustomerFilter) {
+        if (!ids.some((id) => id.equals(query.customer))) {
+          return [];
+        }
+      } else {
+        query.customer = { $in: ids };
+        hasCustomerFilter = true;
+      }
+    }
+
+    if (!hasCustomerFilter) {
+      return [];
+    }
+
+    return ExchangeSlip.find(query)
+      .populate('customer', 'name firstName lastName phone email')
+      .populate('originalSale', 'invoiceNo total createdAt')
+      .sort({ createdAt: -1 })
+      .limit(searchLimit)
+      .lean();
+  }
+
   // Redeem exchange slip
   static async redeemExchangeSlip(
     slipNo: string,
@@ -653,6 +707,40 @@ export class ReturnService {
     } finally {
       await session.endSession();
     }
+  }
+
+  static async cancelExchangeSlip(
+    identifier: string,
+    cancelledBy: string,
+    reason?: string
+  ): Promise<any> {
+    if (!identifier) {
+      throw new Error('Exchange slip identifier is required');
+    }
+
+    const query: any = [{ slipNo: identifier.trim() }];
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      query.push({ _id: new mongoose.Types.ObjectId(identifier) });
+    }
+
+    const exchangeSlip = await ExchangeSlip.findOne({ $or: query });
+    if (!exchangeSlip) {
+      throw new Error('Exchange slip not found');
+    }
+
+    if (exchangeSlip.status !== 'active') {
+      throw new Error('Only active exchange slips can be cancelled');
+    }
+
+    exchangeSlip.status = 'cancelled';
+    (exchangeSlip as any).cancelledBy = cancelledBy;
+    (exchangeSlip as any).cancelledAt = new Date();
+    if (reason) {
+      (exchangeSlip as any).cancellationReason = reason;
+    }
+
+    await exchangeSlip.save();
+    return exchangeSlip;
   }
 
   // Use customer overpayment

@@ -127,6 +127,16 @@ export default function UsersPage() {
       await usersApi.create(data);
       setCreateOpen(false);
       fetchPage();
+    } catch (err: any) {
+      // Handle duplicate user/email (409 or 400)
+      const msg = err?.response?.data?.message || err?.message || '';
+      if (err?.response?.status === 409 || (msg && msg.toLowerCase().includes('already exists'))) {
+        toast.error(t('users.duplicateUser') || 'A user with this username or email already exists.');
+      } else if (err?.response?.status === 400) {
+        toast.error(msg || t('users.createFailed') || 'Failed to create user.');
+      } else {
+        toast.error(t('users.createFailed') || 'Failed to create user.');
+      }
     } finally {
       setSaving(false);
     }

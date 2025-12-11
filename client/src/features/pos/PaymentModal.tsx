@@ -4,6 +4,7 @@ import { formatLKR } from '@/lib/utils/currency';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { salesApi, PaymentMethod } from '@/lib/api/sales.api';
+import { returnsApi } from '@/lib/api/returns.api';
 import { lookupCustomerByPhone, createCustomer as createCustomerApi } from '@/lib/api/customers.api';
 import type { CreateCustomerData } from '@/lib/api/customers.api';
 
@@ -11,11 +12,12 @@ type CheckoutMethod = Extract<PaymentMethod, 'cash' | 'card'>;
 type CardBrand = 'visa' | 'mastercard';
 
 interface PaymentSummary {
-  method: CheckoutMethod;
+  method: string;
   amount: number;
   tendered?: number;
   change?: number;
   cardBrand?: CardBrand | null;
+  reference?: string;
 }
 
 interface Props {
@@ -24,16 +26,17 @@ interface Props {
   onComplete: (sale: {
     invoiceNo: string;
     id: string;
-    method: CheckoutMethod;
+    method: string;
     customerId?: string | null;
     payments: PaymentSummary[];
   }) => void;
 }
 
 export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
-  const total = useCartStore((s) => s.total());
+  const cartTotal = useCartStore((s) => s.total());
   const items = useCartStore((s) => s.items);
   const discount = useCartStore((s) => s.discount);
+  const exchangeSlip = useCartStore((s) => s.exchangeSlip);
   const customerType = usePosStore((s) => s.customerType);
   const isWholesaleMode = customerType === 'wholesale';
   const [method, setMethod] = useState<CheckoutMethod>('cash');
@@ -58,10 +61,15 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
     const cleaned = cashReceived.replace(/,/g, '').trim();
     return cleaned ? Number(cleaned) : 0;
   }, [cashReceived]);
-  const changeDue = cashReceivedNumber - total;
-  const isCashValid = method !== 'cash' || cashReceivedNumber >= total;
-  const canComplete = method === 'cash' ? isCashValid : method === 'card' ? Boolean(cardBrand) : true;
+  const slipValue = exchangeSlip?.totalValue ?? 0;
+  const amountDue = Math.max(cartTotal - slipValue, 0);
+  const slipOverage = Math.max(slipValue - cartTotal, 0);
+  const changeDue = amountDue > 0 ? cashReceivedNumber - amountDue : 0;
+  const isCashValid = method !== 'cash' || amountDue <= 0 || cashReceivedNumber >= amountDue;
+  const requireAdditionalPayment = amountDue > 0;
+  const canComplete = requireAdditionalPayment ? (method === 'cash' ? isCashValid : method === 'card' ? Boolean(cardBrand) : true) : Boolean(exchangeSlip);
   const handleMethodSelect = (next: CheckoutMethod) => {
+    if (!requireAdditionalPayment) return;
     setMethod(next);
     if (next === 'cash') {
       setCardBrand(null);
@@ -130,20 +138,45 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const completeSale = async () => {
     setLoading(true);
     try {
-      const paid: Array<{ method: PaymentMethod; amount: number; reference?: string }> = [{
-        method,
-        amount: total,
-        ...(method === 'card' && cardBrand ? { reference: cardBrand.toUpperCase() } : {}),
-      }];
-      const paymentSummaries: PaymentSummary[] = [{
-        method,
-        amount: total,
-        ...(method === 'cash'
-          ? { tendered: cashReceivedNumber, change: Math.max(changeDue, 0) }
-          : method === 'card'
-            ? { cardBrand }
-            : {}),
-      }];
+      const payments: Array<{ method: PaymentMethod; amount: number; reference?: string }> = [];
+      const paymentSummaries: PaymentSummary[] = [];
+
+      if (exchangeSlip) {
+        const appliedAmount = Math.min(slipValue, cartTotal);
+        payments.push({
+          method: 'exchange_slip' as PaymentMethod,
+          amount: appliedAmount,
+          reference: exchangeSlip.slipNo,
+        });
+        paymentSummaries.push({
+          method: 'exchange_slip',
+          amount: appliedAmount,
+          reference: exchangeSlip.slipNo,
+        });
+      }
+
+      if (requireAdditionalPayment) {
+        const payAmount = amountDue;
+        payments.push({
+          method,
+          amount: payAmount,
+          ...(method === 'card' && cardBrand ? { reference: cardBrand.toUpperCase() } : {}),
+        });
+        paymentSummaries.push({
+          method,
+          amount: payAmount,
+          ...(method === 'cash'
+            ? { tendered: cashReceivedNumber, change: Math.max(changeDue, 0) }
+            : method === 'card'
+              ? { cardBrand }
+              : {}),
+        });
+      }
+
+      if (!payments.length) {
+        toast.error('No payment method selected');
+        return;
+      }
       // Auto-create retail customer if name + phone provided but not yet linked
       let customerIdToUse: string | null = customerId;
       if (!customerIdToUse && newName && newPhone) {
@@ -152,12 +185,31 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
       const res = await salesApi.create({
         items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })),
         discount,
-        payments: paid,
+        payments,
         extendedWarrantySelections: warrantySelections,
         customer: customerIdToUse || undefined,
       });
       const sale = res.data.sale;
-      onComplete({ invoiceNo: sale.invoiceNo, id: sale.id, method, customerId: customerIdToUse, payments: paymentSummaries });
+
+      if (exchangeSlip) {
+        try {
+          await returnsApi.exchangeSlip.redeem(exchangeSlip.slipNo, sale.id);
+        } catch (redeemErr: any) {
+          const message = redeemErr?.response?.data?.message || 'Exchange slip redemption failed; update manually.';
+          toast.error(message);
+        }
+        if (slipOverage > 0) {
+          toast.info(`Exchange slip exceeded total by ${formatLKR(slipOverage)}. Issue new slip or refund.`);
+        }
+      }
+
+      onComplete({
+        invoiceNo: sale.invoiceNo,
+        id: sale.id,
+        method: requireAdditionalPayment ? method : exchangeSlip ? 'exchange_slip' : method,
+        customerId: customerIdToUse,
+        payments: paymentSummaries,
+      });
       toast.success('Sale completed');
     } catch (err: any) {
       const status = err?.response?.status;
@@ -172,7 +224,6 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
       } else {
         toast.error(msg);
       }
-      return;
     } finally {
       setLoading(false);
     }
@@ -192,12 +243,49 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
       />
       <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-5 text-[#F8F8F8]">
         <div className="text-lg font-semibold mb-3">Payment</div>
-        <div className="opacity-80 mb-4">Amount due: <span className="font-semibold text-[#F8F8F8]">{formatLKR(total)}</span></div>
+        <div className="opacity-80 mb-2">
+          Amount due:&nbsp;
+          <span className="font-semibold text-[#F8F8F8]">{formatLKR(amountDue)}</span>
+        </div>
+        {exchangeSlip && (
+          <div className="mb-4 rounded-xl border border-sky-300/30 bg-sky-500/10 px-3 py-3 text-xs space-y-2">
+            <div className="flex items-center justify-between text-sky-100/90">
+              <span>Sale total</span>
+              <span>{formatLKR(cartTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sky-100">
+              <span>Exchange slip #{exchangeSlip.slipNo}</span>
+              <span>{formatLKR(slipValue)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sky-100/90">
+              <span>Applied now</span>
+              <span>{formatLKR(Math.min(slipValue, cartTotal))}</span>
+            </div>
+            {requireAdditionalPayment && (
+              <div className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1 font-medium text-yellow-100">
+                <span>Collect</span>
+                <span>{formatLKR(amountDue)}</span>
+              </div>
+            )}
+            {slipOverage > 0 && (
+              <div className="flex items-center justify-between rounded-lg bg-emerald-500/20 px-2 py-1 font-medium text-emerald-100">
+                <span>Over value</span>
+                <span>{formatLKR(slipOverage)}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {!exchangeSlip && (
+          <div className="mb-4 text-xs text-yellow-200">
+            Apply an exchange slip from the cart to accept store credit.
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 mb-6">
           <button
             onClick={() => handleMethodSelect('cash')}
-            className={`group relative overflow-hidden rounded-xl border transition-all duration-200 ${
-              method === 'cash'
+            disabled={!requireAdditionalPayment}
+            className={`group relative overflow-hidden rounded-xl border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+              method === 'cash' && requireAdditionalPayment
                 ? 'border-blue-400 bg-white/20 text-white shadow-[0_0_20px_rgba(0,102,255,0.32)]'
                 : 'border-white/10 bg-white/10 text-[#F8F8F8] hover:border-blue-300/60 hover:bg-white/15 hover:text-white'
             }`}
@@ -206,7 +294,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             <span
               aria-hidden
               className={`absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 ${
-                method === 'cash'
+                method === 'cash' && requireAdditionalPayment
                   ? 'bg-gradient-to-r from-blue-400/20 via-purple-400/10 to-blue-500/20'
                   : 'bg-gradient-to-r from-blue-400/10 via-purple-400/5 to-blue-500/10'
               }`}
@@ -214,14 +302,15 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             <span
               aria-hidden
               className={`absolute inset-[-3px] rounded-[18px] blur group-hover:opacity-100 transition-opacity duration-200 ${
-                method === 'cash' ? 'opacity-100 bg-blue-400/50' : 'opacity-0 bg-blue-400/40'
+                method === 'cash' && requireAdditionalPayment ? 'opacity-100 bg-blue-400/50' : 'opacity-0 bg-blue-400/40'
               }`}
             />
           </button>
           <button
             onClick={() => handleMethodSelect('card')}
-            className={`group relative overflow-hidden rounded-xl border transition-all duration-200 ${
-              method === 'card'
+            disabled={!requireAdditionalPayment}
+            className={`group relative overflow-hidden rounded-xl border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+              method === 'card' && requireAdditionalPayment
                 ? 'border-blue-400 bg-white/20 text-white shadow-[0_0_20px_rgba(0,102,255,0.32)]'
                 : 'border-white/10 bg-white/10 text-[#F8F8F8] hover:border-blue-300/60 hover:bg-white/15 hover:text-white'
             }`}
@@ -230,7 +319,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             <span
               aria-hidden
               className={`absolute inset-0 rounded-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 ${
-                method === 'card'
+                method === 'card' && requireAdditionalPayment
                   ? 'bg-gradient-to-r from-blue-400/20 via-purple-400/10 to-blue-500/20'
                   : 'bg-gradient-to-r from-blue-400/10 via-purple-400/5 to-blue-500/10'
               }`}
@@ -238,12 +327,12 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             <span
               aria-hidden
               className={`absolute inset-[-3px] rounded-[18px] blur group-hover:opacity-100 transition-opacity duration-200 ${
-                method === 'card' ? 'opacity-100 bg-blue-400/50' : 'opacity-0 bg-blue-400/40'
+                method === 'card' && requireAdditionalPayment ? 'opacity-100 bg-blue-400/50' : 'opacity-0 bg-blue-400/40'
               }`}
             />
           </button>
         </div>
-        {method === 'cash' && (
+        {requireAdditionalPayment && method === 'cash' && (
           <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="text-xs opacity-80 mb-2">Cash received</div>
             <input
@@ -259,7 +348,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
               <div className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1">
                 <span>Amount due</span>
-                <span className="font-semibold">{formatLKR(total)}</span>
+                <span className="font-semibold">{formatLKR(amountDue)}</span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1">
                 <span>Change</span>
@@ -275,7 +364,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             )}
           </div>
         )}
-        {method === 'card' && (
+        {requireAdditionalPayment && method === 'card' && (
           <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="text-xs opacity-80 mb-2">Choose card network</div>
             <div className="grid grid-cols-2 gap-3">

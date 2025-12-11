@@ -15,6 +15,13 @@ export interface CartItem {
 	priceTier?: 'retail' | 'wholesale';
 }
 
+export interface AppliedExchangeSlip {
+	slipNo: string;
+	totalValue: number;
+	expiryDate?: string;
+	customerName?: string;
+}
+
 interface CartState {
 	items: CartItem[];
 	discount: number; // manual discount (e.g., promo code)
@@ -22,6 +29,7 @@ interface CartState {
 	promoCode?: string | null;
 	holdTicketId?: string | null;
 	holdTicketNo?: string | null;
+	exchangeSlip: AppliedExchangeSlip | null;
 	addItem: (item: Omit<CartItem, 'qty'>, qty?: number) => void;
 	inc: (id: string) => void;
 	dec: (id: string) => void;
@@ -30,6 +38,8 @@ interface CartState {
 	setDiscount: (amount: number) => void;
 	setPromoCode: (code: string | null) => void;
 	setHold: (ticket: { id: string; invoiceNo: string } | null) => void;
+	applyExchangeSlip: (slip: AppliedExchangeSlip) => void;
+	clearExchangeSlip: () => void;
 	subtotal: () => number;
 	tax: () => number;
 	autoDiscount: () => number;
@@ -41,21 +51,33 @@ interface CartState {
 const STORAGE_KEY = 'vz_cart_v1';
 
 // Load cart data from localStorage on app startup
-const loadInitial = (): Pick<CartState, 'items' | 'discount' | 'taxRate' | 'promoCode'> => {
+const loadInitial = (): Pick<CartState, 'items' | 'discount' | 'taxRate' | 'promoCode' | 'exchangeSlip'> => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-	if (!raw) return { items: [], discount: 0, taxRate: 0, promoCode: null };
+	if (!raw) return { items: [], discount: 0, taxRate: 0, promoCode: null, exchangeSlip: null };
     const parsed = JSON.parse(raw);
-	return { items: parsed.items || [], discount: parsed.discount || 0, taxRate: parsed.taxRate || 0, promoCode: parsed.promoCode || null };
+	return {
+		items: parsed.items || [],
+		discount: parsed.discount || 0,
+		taxRate: parsed.taxRate || 0,
+		promoCode: parsed.promoCode || null,
+		exchangeSlip: parsed.exchangeSlip || null,
+	};
   } catch {
-	return { items: [], discount: 0, taxRate: 0, promoCode: null };
+	return { items: [], discount: 0, taxRate: 0, promoCode: null, exchangeSlip: null };
   }
 };
 
 // Save cart data to localStorage whenever cart changes
 const persist = (state: CartState) => {
 	try {
-		const snapshot = { items: state.items, discount: state.discount, taxRate: state.taxRate, promoCode: state.promoCode };
+		const snapshot = {
+			items: state.items,
+			discount: state.discount,
+			taxRate: state.taxRate,
+			promoCode: state.promoCode,
+			exchangeSlip: state.exchangeSlip,
+		};
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch {}
 };
@@ -126,7 +148,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 	},
 	// Clear all items from cart
 	clear: () => {
-		set({ items: [], discount: 0, promoCode: null });
+		set({ items: [], discount: 0, promoCode: null, exchangeSlip: null });
 		persist(get());
 	},
 	// Set discount amount (e.g., promo codes)
@@ -137,6 +159,15 @@ export const useCartStore = create<CartState>((set, get) => ({
 	// Set promo code for discounts
 	setPromoCode: (code) => {
 		set({ promoCode: code });
+		persist(get());
+	},
+
+	applyExchangeSlip: (slip) => {
+		set({ exchangeSlip: slip });
+		persist(get());
+	},
+	clearExchangeSlip: () => {
+		set({ exchangeSlip: null });
 		persist(get());
 	},
 
