@@ -9,6 +9,8 @@ interface MovementRow {
   type: 'add' | 'remove' | 'set' | 'increase' | 'decrease' | string;
   quantity: number;
   reason?: string;
+  reference?: string;
+  referenceType?: string;
   createdAt: string;
   performedBy?: string; // user id
 }
@@ -30,6 +32,8 @@ export const StockMovementHistory: React.FC = () => {
         type: m.type,
         quantity: m.quantity,
         reason: m.reason,
+        reference: m.reference,
+        referenceType: m.referenceType,
         createdAt: m.createdAt,
         performedBy: m.performedBy || m.user || m.createdBy, // fallbacks
       }));
@@ -67,6 +71,42 @@ export const StockMovementHistory: React.FC = () => {
 
   const formatDate = (iso: string) => {
     try { return new Date(iso).toISOString().slice(0,16).replace('T',' '); } catch { return iso; }
+  };
+
+  const formatReason = (m: MovementRow): string => {
+    const raw = (m.reason || '').trim();
+    const type = (m.type || '').toString();
+
+    if (raw) {
+      const lower = raw.toLowerCase();
+      if (lower === 'customer_return_restock') {
+        return 'Customer return  restocked to stock';
+      }
+      if (lower === 'initial stock' || lower === 'initial_stock') {
+        return 'Initial stock';
+      }
+      return raw.charAt(0).toUpperCase() + raw.slice(1);
+    }
+
+    // Fallback based on movement type when explicit reason is not set
+    switch (type) {
+      case 'sale':
+        return 'Sale  stock issued';
+      case 'purchase':
+        return 'Purchase receipt  stock added';
+      case 'adjustment':
+        return 'Manual stock adjustment';
+      case 'return':
+        return 'Return  stock updated';
+      case 'damage':
+        return 'Damaged stock written off';
+      case 'expiry':
+        return 'Expired stock written off';
+      case 'transfer':
+        return 'Stock transfer between locations';
+      default:
+        return 'Stock movement';
+    }
   };
 
   return (
@@ -115,6 +155,7 @@ export const StockMovementHistory: React.FC = () => {
               const sku = typeof m.product === 'string' ? '' : (m.product as any)?.sku || '';
               const displayType = (m.type === 'add') ? 'increase' : (m.type === 'remove') ? 'decrease' : m.type;
               const userName = m.performedBy ? userMap[m.performedBy] || '—' : '—';
+              const reasonText = formatReason(m);
               return (
                 <tr key={m._id} className="border-b border-white/10 last:border-b-0">
                   <td className="px-4 py-2 text-[#F8F8F8]/70 whitespace-nowrap">{formatDate(m.createdAt)}</td>
@@ -124,7 +165,7 @@ export const StockMovementHistory: React.FC = () => {
                     <span className={`px-2 py-1 rounded text-xs font-semibold ${displayType === 'increase' ? 'bg-green-500/20 text-green-400' : displayType === 'decrease' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>{displayType}</span>
                   </td>
                   <td className="px-4 py-2 text-[#F8F8F8]">{m.quantity}</td>
-                  <td className="px-4 py-2 text-[#F8F8F8]/70 max-w-[240px] truncate" title={m.reason}>{m.reason || '—'}</td>
+                  <td className="px-4 py-2 text-[#F8F8F8]/70 max-w-[240px] truncate" title={reasonText}>{reasonText}</td>
                   <td className="px-4 py-2 text-[#F8F8F8]/70">{userName}</td>
                 </tr>
               );

@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-// Removed unused imports (Sale, Product, Customer) to satisfy TS
 import { ReturnTransaction } from '../models/ReturnTransaction.model';
 import { ExchangeSlip } from '../models/ExchangeSlip.model';
 import { CustomerOverpayment } from '../models/CustomerOverpayment.model';
 import { ReturnPolicy } from '../models/ReturnPolicy.model';
 import { ReturnService } from '../services/ReturnService';
 import { Settings } from '../models/Settings.model';
+import { Customer } from '../models/Customer.model';
 
 export class ReturnController {
   
@@ -114,7 +114,8 @@ export class ReturnController {
         returnType, 
         dateFrom, 
         dateTo,
-        customerId 
+        customerId,
+        customerCode
       } = req.query as Record<string, string>;
       
       const take = Math.min(parseInt(limit, 10) || 20, 100);
@@ -124,7 +125,27 @@ export class ReturnController {
       
       if (status) filters.status = status;
       if (returnType) filters.returnType = returnType;
-      if (customerId) filters.customer = customerId;
+
+      if (customerId) {
+        filters.customer = customerId;
+      } else if (customerCode) {
+        const code = String(customerCode).trim().toUpperCase();
+        if (code) {
+          const customer = await Customer.findOne({ customerCode: code }).select('_id');
+          if (!customer) {
+            return res.json({
+              success: true,
+              data: {
+                items: [],
+                total: 0,
+                page: parseInt(page, 10) || 1,
+                limit: take
+              }
+            });
+          }
+          filters.customer = customer._id;
+        }
+      }
       
       if (dateFrom || dateTo) {
         filters.createdAt = {};

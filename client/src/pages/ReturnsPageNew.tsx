@@ -28,6 +28,7 @@ const ReturnsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('process');
   const [selectedSale, setSelectedSale] = useState<any>(null);
   const [customerId, setCustomerId] = useState<string>('');
+  const [customerIdFilter, setCustomerIdFilter] = useState<string>('');
 
   const tabs = [
     { id: 'process', label: 'Process Returns', icon: '↩️' },
@@ -101,18 +102,18 @@ const ReturnsPage: React.FC = () => {
                 <h2 className="text-2xl font-bold tracking-wide bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-4">Return History</h2>
                 <p className="text-gray-400 mb-6 max-w-2xl">View and manage return transaction history.</p>
                 <div className="mb-2">
-                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Filter by Customer (Optional)</label>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Filter by Customer ID Number (Optional)</label>
                   <input
                     type="text"
-                    value={customerId}
-                    onChange={(e) => setCustomerId(e.target.value)}
-                    placeholder="Enter customer ID to filter returns"
+                    value={customerIdFilter}
+                    onChange={(e) => setCustomerIdFilter(e.target.value)}
+                    placeholder="Enter customer ID number (e.g. CUST-0001)"
                     className="w-full md:w-96 px-4 py-2.5 rounded-xl bg-[#27272A] border border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 outline-none text-sm text-gray-200 placeholder:text-gray-500"
                   />
                 </div>
               </div>
             </div>
-            <ReturnsList customerId={customerId || undefined} />
+            <ReturnsList customerId={customerId || undefined} customerCode={customerIdFilter || undefined} />
           </div>
         );
 

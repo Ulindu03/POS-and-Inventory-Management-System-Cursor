@@ -2,7 +2,9 @@
 // In simple English: It helps users manage and track product warranties in the POS system.
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { getAccessToken } from '@/lib/api/token';
+import { useAuthStore } from '@/store/auth.store';
 import { toast } from 'sonner';
 import {
   Search,
@@ -28,6 +30,53 @@ interface WarrantyItem {
   customer?: any;
 }
 
+interface WarrantyClaimItem {
+  _id: string;
+  claimNo: string;
+  status: string;
+  issueCategory: string;
+  issueDescription: string;
+  createdAt: string;
+  warrantySnapshot?: any;
+  productSnapshot?: any;
+  customerSnapshot?: any;
+  resolution?: any;
+}
+
+const CLAIM_STATUS_CHOICES = [
+  { id: 'pending', label: 'Pending', color: 'bg-amber-500/15 text-amber-200 border-amber-400/40', backend: 'open' },
+  { id: 'in_progress', label: 'In-Progress', color: 'bg-sky-500/15 text-sky-200 border-sky-400/40', backend: 'repair_in_progress' },
+  { id: 'repaired', label: 'Repaired', color: 'bg-emerald-500/15 text-emerald-200 border-emerald-400/40', backend: 'resolved' },
+  { id: 'repair_failed', label: 'Repair Failed', color: 'bg-rose-500/15 text-rose-200 border-rose-400/40', backend: 'closed' },
+  { id: 'not_repairable', label: 'Not Repairable', color: 'bg-zinc-500/20 text-zinc-200 border-zinc-400/40', backend: 'rejected' },
+  { id: 'replaced', label: 'Replaced', color: 'bg-purple-500/15 text-purple-200 border-purple-400/40', backend: 'resolved' },
+  { id: 'returned', label: 'Returned', color: 'bg-blue-500/15 text-blue-200 border-blue-400/40', backend: 'resolved' }
+] as const;
+
+type ClaimStatusBucket = (typeof CLAIM_STATUS_CHOICES)[number]['id'];
+
+const getClaimStatusBucket = (c: WarrantyClaimItem): ClaimStatusBucket => {
+  const s = (c.status || '').toString();
+  const resType = c.resolution?.type;
+  if (['inspection','validation','awaiting_customer','approved','repair_in_progress','replacement_pending'].includes(s)) return 'in_progress';
+  if (s === 'rejected') return 'not_repairable';
+  if (s === 'resolved' || s === 'closed') {
+    if (resType === 'repair') return 'repaired';
+    if (resType === 'replace') return 'replaced';
+    if (resType === 'refund') return 'returned';
+    return 'repaired';
+  }
+  return 'pending';
+};
+
+// Generate a short 4-character claim code from the backend claim number
+const getShortClaimCode = (claimNo?: string) => {
+  if (!claimNo) return '';
+  const clean = claimNo.toString().replace(/[^A-Za-z0-9]/g, '');
+  if (!clean) return '';
+  return clean.slice(-4).toUpperCase();
+};
+
 // A more elegant & user‑friendly Warranty Management UI
 const WarrantyPage = () => {
   const [loading, setLoading] = useState(false);
@@ -39,6 +88,15 @@ const WarrantyPage = () => {
   const [claimCategory, setClaimCategory] = useState('mechanical');
   const [filters, setFilters] = useState({ invoiceNo:'', phone:'', nic:'' });
   const [submittingClaim, setSubmittingClaim] = useState(false);
+  const [claims, setClaims] = useState<WarrantyClaimItem[]>([]);
+  const [claimsLoading, setClaimsLoading] = useState(false);
+  const [claimsError, setClaimsError] = useState<string | null>(null);
+  const [statusModalClaim, setStatusModalClaim] = useState<WarrantyClaimItem | null>(null);
+  const [statusModalStatus, setStatusModalStatus] = useState<ClaimStatusBucket>('pending');
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [claimSearch, setClaimSearch] = useState('');
+
+  const accessToken = useAuthStore((s) => s.accessToken);
 
   // Derived groupings memoized for performance & readability
   const pending = useMemo(()=>items.filter(w=>w.status==='pending_activation'),[items]);
@@ -56,9 +114,13 @@ const WarrantyPage = () => {
   }),[items, pending, active, soonExpiring]);
   const activateWarranty = async (id: string, serial: string) => {
     try {
+      const token = accessToken || getAccessToken();
       const r = await fetch(`/api/warranty/${id}/activate`,{
         method:'POST',
-        headers:{ 'Content-Type':'application/json' },
+        headers:{
+          'Content-Type':'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ serialNumber: serial, userId: 'system' })
       });
       const j = await r.json();
@@ -73,7 +135,8 @@ const WarrantyPage = () => {
 
   const devFallback = async () => {
     try {
-      const d = await fetch('/api/warranty/__dev/diag');
+      const token = accessToken || getAccessToken();
+      const d = await fetch('/api/warranty/__dev/diag', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       const dj = await d.json();
       if(dj?.success && dj.data?.recent?.length){
         setItems(dj.data.recent.map((r:any)=>({
@@ -99,7 +162,7 @@ const WarrantyPage = () => {
     if (filters.invoiceNo) params.append('invoiceNo', filters.invoiceNo.trim());
     if (filters.phone) params.append('phone', filters.phone.trim());
     if (filters.nic) params.append('nic', filters.nic.trim());
-    const token = getAccessToken();
+    const token = accessToken || getAccessToken();
     const controller = new AbortController();
     const timeout = setTimeout(()=>controller.abort(), 8000);
     try {
@@ -115,10 +178,122 @@ const WarrantyPage = () => {
       if(e?.name==='AbortError') setError('Request timed out'); else setError('Network error');
     } finally { clearTimeout(timeout); setLoading(false); loadingRef.current = false; }
   };
+  const fetchClaims = async () => {
+    setClaimsLoading(true);
+    setClaimsError(null);
+    try {
+      const token = accessToken || getAccessToken();
+      const res = await fetch('/api/warranty-claims?page=1&pageSize=50', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const json = await res.json();
+      if (json?.success) {
+        setClaims(json.data.items || []);
+      } else {
+        setClaimsError(json?.message || 'Failed to load claims');
+      }
+    } catch {
+      setClaimsError('Network error while loading claims');
+    } finally {
+      setClaimsLoading(false);
+    }
+  };
 
-  const reload = () => fetchWarranties();
-  useEffect(() => { fetchWarranties(); /* eslint-disable-next-line */ }, []);
+  const filteredClaims = useMemo(() => {
+    const query = claimSearch.trim().toLowerCase();
+    if (!query) return claims;
+    return claims.filter(c => {
+      const full = (c.claimNo || '').toLowerCase();
+      const shortCode = getShortClaimCode(c.claimNo).toLowerCase();
+      return full.includes(query) || shortCode.includes(query);
+    });
+  }, [claims, claimSearch]);
+
+  const reload = () => {
+    fetchWarranties();
+    fetchClaims();
+  };
+  useEffect(() => { fetchWarranties(); fetchClaims(); /* eslint-disable-next-line */ }, []);
   useEffect(()=>{ const h=()=>fetchWarranties(); window.addEventListener('warranty:updated',h); const i=setInterval(h,30000); return ()=>{ window.removeEventListener('warranty:updated',h); clearInterval(i);} },[]);
+
+  const generateClaimSlip = (claim: any, warranty: WarrantyItem, targetWin?: Window | null) => {
+    const today = new Date().toLocaleString();
+    const shortCode = getShortClaimCode(claim?.claimNo || '');
+    const ticketNo = shortCode || claim?.claimNo || '—';
+    const productName = claim?.productSnapshot?.name || warranty?.productSnapshot?.name || warranty?.product?.name || 'Product';
+    const customerName = claim?.customerSnapshot?.name || warranty?.customerSnapshot?.name || 'Customer';
+    const customerPhone = claim?.customerSnapshot?.phone || warranty?.customerSnapshot?.phone || '';
+    const warrantyStatus = (warranty?.status || '—').toString().replace(/_/g,' ').toUpperCase();
+    const issue = claim?.issueDescription || claimDesc || '—';
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Claim Slip ${claim?.claimNo || ''}</title><style>
+    body{font-family:Consolas,monospace,Arial,sans-serif;color:#111;background:#f5f5f5;margin:0;padding:12px}
+    .slip{width:320px;margin:0 auto;padding:14px 10px;background:#fff;font-size:13px;border:1px dashed #bbb;border-radius:8px;box-shadow:0 0 4px rgba(0,0,0,0.12)}
+    .header{text-align:center;margin-bottom:8px}
+    .logo{display:block;margin:0 auto 6px auto;height:32px;max-width:120px;object-fit:contain}
+    .title{font-size:16px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
+    .subtitle{font-size:11px;opacity:0.7;margin-top:2px}
+    .divider{border-top:1px dashed #bbb;margin:8px 0}
+    .section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px}
+    .row{display:flex;justify-content:space-between;align-items:flex-start;margin:2px 0}
+    .label{font-weight:600;margin-right:4px}
+    .value{text-align:right;max-width:60%;word-wrap:break-word}
+    .box{border:1px solid #eee;padding:6px 8px;border-radius:4px;margin-top:2px;background:#fafafa}
+    .terms{font-size:11px;margin-top:10px;line-height:1.4}
+    .footer{text-align:center;margin-top:10px;font-size:11px;opacity:0.8}
+    </style></head><body><div class="slip">
+      <div class="header">
+        <img class="logo" src="/logo.png" alt="Store Logo" onerror="this.style.display='none'">
+        <div class="title">Claim Slip</div>
+        <div class="subtitle">Warranty claim customer copy</div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="section-title">Ticket</div>
+        <div class="row"><span class="label">Ticket No</span><span class="value">${ticketNo}</span></div>
+        <div class="row"><span class="label">Date</span><span class="value">${today}</span></div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="section-title">Customer</div>
+        <div class="row"><span class="label">Name</span><span class="value">${customerName}</span></div>
+        <div class="row"><span class="label">Phone</span><span class="value">${customerPhone || '—'}</span></div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="section-title">Product & Warranty</div>
+        <div class="row"><span class="label">Product</span><span class="value">${productName}</span></div>
+        <div class="row"><span class="label">Warranty No</span><span class="value">${warranty?.warrantyNo || '—'}</span></div>
+        <div class="row"><span class="label">Status</span><span class="value">${warrantyStatus}</span></div>
+        <div class="row"><span class="label">Coverage Ends</span><span class="value">${warranty?.endDate ? new Date(warranty.endDate).toLocaleDateString() : '—'}</span></div>
+      </div>
+      <div class="divider"></div>
+      <div>
+        <div class="section-title">Issue</div>
+        <div class="box">${issue}</div>
+      </div>
+      <div class="divider"></div>
+      <div class="terms">
+        <div>• Keep this slip to collect your item.</div>
+        <div>• The store is not responsible for unclaimed items after 30 days.</div>
+      </div>
+      <div class="footer">Thank you!</div>
+    </div></body></html>`;
+
+    const win = targetWin || window.open('', 'claim-slip', 'width=380,height=600');
+    if (!win) {
+      toast.error('Popup blocked: allow popups for this site to print slips');
+      return;
+    }
+
+    try {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      try {
+        win.focus();
+      } catch {/* ignore */}
+    } catch {
+      toast.error('Failed to render claim slip');
+    }
+  };
 
   const statusChip = (status:string) => {
     const base = 'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide';
@@ -134,42 +309,81 @@ const WarrantyPage = () => {
   // Skeleton moved outside component
 
   return (
-    <AppLayout>
-      <div className="h-full overflow-auto space-y-6 pb-10">
+    <AppLayout className="bg-[#242424]">
+      <div className="h-full overflow-auto space-y-6 pb-10 bg-[#242424]">
         {/* Page Header & Filters */}
-        <div className="sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-black/30 bg-black/60 border-b border-white/5 pl-1 pr-2 py-3 flex flex-col gap-3 rounded-b-xl">
-          <div className="flex items-center gap-3 justify-between">
-            <h1 className="text-lg font-semibold tracking-wide flex items-center gap-2">
-              <Tag className="w-4 h-4 text-yellow-300" /> Warranties
-            </h1>
-            <button onClick={reload} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-white/10 hover:bg-white/20 border border-white/10 transition-colors">
+        <div className="sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-[#242424]/90 bg-[#242424] border-b border-white/5 px-2 sm:px-4 py-4 flex flex-col gap-4 shadow-lg">
+          <div className="flex items-start gap-3 justify-between">
+            <div>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-semibold tracking-wide flex items-center gap-2">
+                <Tag className="w-5 h-5 text-yellow-300" />
+                <span>Warranty Management</span>
+              </h1>
+              <p className="mt-0.5 text-[11px] sm:text-xs opacity-70">
+                Track active warranties, create claims, and follow up repairs in one place.
+              </p>
+            </div>
+            <button onClick={reload} className="inline-flex items-center gap-1 text-[11px] px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors">
               <RefreshCcw className="w-3.5 h-3.5" /> Refresh
             </button>
           </div>
-          <div className="flex flex-wrap gap-2 items-end text-xs">
-            <div className="flex flex-col">
-              <label htmlFor="flt-invoice" className="mb-1 opacity-60">Invoice</label>
-              <input id="flt-invoice" placeholder="Invoice #" value={filters.invoiceNo} onChange={e=>setFilters(f=>({...f,invoiceNo:e.target.value}))} className="bg-white/10 border border-white/10 rounded px-2 py-1 w-32 focus:outline-none focus:ring-2 focus:ring-yellow-300/40" />
+
+          {/* Filters */}
+          <div className="mt-1 flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2 items-end text-xs bg-white/5 border border-white/10 rounded-2xl px-3 py-2">
+              <div className="flex flex-col min-w-[120px]">
+                <label htmlFor="flt-invoice" className="mb-1 opacity-70 text-[10px] uppercase tracking-wide">Invoice</label>
+                <input
+                  id="flt-invoice"
+                  placeholder="Invoice #"
+                  value={filters.invoiceNo}
+                  onChange={e=>setFilters(f=>({...f,invoiceNo:e.target.value}))}
+                  className="bg-[#242424] border border-white/15 rounded-lg px-2 py-1.5 w-32 sm:w-40 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40"
+                />
+              </div>
+              <div className="flex flex-col min-w-[140px]">
+                <label htmlFor="flt-phone" className="mb-1 opacity-70 text-[10px] uppercase tracking-wide">Phone</label>
+                <input
+                  id="flt-phone"
+                  placeholder="Customer phone"
+                  value={filters.phone}
+                  onChange={e=>setFilters(f=>({...f,phone:e.target.value}))}
+                  className="bg-[#242424] border border-white/15 rounded-lg px-2 py-1.5 w-36 sm:w-44 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40"
+                />
+              </div>
+              <div className="flex flex-col min-w-[120px]">
+                <label htmlFor="flt-nic" className="mb-1 opacity-70 text-[10px] uppercase tracking-wide">NIC</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="flt-nic"
+                    placeholder="NIC"
+                    value={filters.nic}
+                    onChange={e=>setFilters(f=>({...f,nic:e.target.value}))}
+                    className="bg-[#242424] border border-white/15 rounded-lg px-2 py-1.5 w-32 sm:w-40 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40"
+                  />
+                  <button
+                    onClick={reload}
+                    className="h-8 inline-flex items-center gap-1 px-3 rounded-lg bg-yellow-300 text-black font-medium text-xs shadow hover:shadow-md transition-shadow whitespace-nowrap"
+                  >
+                    <Search className="w-3.5 h-3.5" /> Find
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 ml-auto mt-2 sm:mt-4">
+                {(filters.invoiceNo||filters.phone||filters.nic) && (
+                  <button
+                    onClick={()=>{setFilters({invoiceNo:'',phone:'',nic:''}); reload();}}
+                    className="h-8 text-xs px-2 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10 inline-flex items-center gap-1"
+                  >
+                    <X className="w-3.5 h-3.5"/> Clear
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col">
-              <label htmlFor="flt-phone" className="mb-1 opacity-60">Phone</label>
-              <input id="flt-phone" placeholder="Customer" value={filters.phone} onChange={e=>setFilters(f=>({...f,phone:e.target.value}))} className="bg-white/10 border border-white/10 rounded px-2 py-1 w-32 focus:outline-none focus:ring-2 focus:ring-yellow-300/40" />
-            </div>
-            <div className="flex flex-col">
-              <label htmlFor="flt-nic" className="mb-1 opacity-60">NIC</label>
-              <input id="flt-nic" placeholder="NIC" value={filters.nic} onChange={e=>setFilters(f=>({...f,nic:e.target.value}))} className="bg-white/10 border border-white/10 rounded px-2 py-1 w-32 focus:outline-none focus:ring-2 focus:ring-yellow-300/40" />
-            </div>
-            <button onClick={reload} className="ml-1 h-8 mt-5 inline-flex items-center gap-1 px-3 rounded bg-yellow-300 text-black font-medium text-xs shadow hover:shadow-md transition-shadow">
-              <Search className="w-3.5 h-3.5" /> Find
-            </button>
-            {(filters.invoiceNo||filters.phone||filters.nic) && (
-              <button onClick={()=>{setFilters({invoiceNo:'',phone:'',nic:''}); reload();}} className="h-8 mt-5 text-xs px-2 rounded bg-white/5 hover:bg-white/15 border border-white/10 inline-flex items-center gap-1">
-                <X className="w-3.5 h-3.5"/> Clear
-              </button>
-            )}
           </div>
+
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
             <StatCard label="Total" value={stats.total} icon={<Tag className='w-4 h-4' />} />
             <StatCard label="Pending" value={stats.pending} icon={<Clock className='w-4 h-4' />} tone="amber" />
             <StatCard label="Active" value={stats.active} icon={<CheckCircle className='w-4 h-4' />} tone="emerald" />
@@ -251,7 +465,7 @@ const WarrantyPage = () => {
                       </div>
                       <button onClick={()=>{setCreatingClaim(w._id); setClaimDesc('');}} className="text-[10px] underline opacity-70 hover:opacity-100">Claim</button>
                     </div>
-                    {w.endDate && (()=>{ const daysLeft = Math.ceil((new Date(w.endDate).getTime()-Date.now())/86400000); return daysLeft<=7 ? <div className="absolute top-1 right-1 text-[10px] text-amber-300">{daysLeft>0?daysLeft+'d left':'expiring'}</div> : null; })()}
+                    {w.endDate && (()=>{ const daysLeft = Math.ceil((new Date(w.endDate).getTime()-Date.now())/86400000); return daysLeft<=7 ? <div className="absolute bottom-1 right-1 text-[10px] text-amber-300 pointer-events-none">{daysLeft>0?daysLeft+'d left':'expiring'}</div> : null; })()}
                   </div>
                 ))}
               </div>
@@ -272,55 +486,281 @@ const WarrantyPage = () => {
                 ))}
               </div>
             </Panel>
-          </div>
-        )}
-        {creatingClaim && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <button className="absolute inset-0 bg-black/70" onClick={()=>!submittingClaim && setCreatingClaim(null)} />
-            <div className="relative w-full max-w-md bg-zinc-900/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-xl p-5 text-sm space-y-4">
-              <div className="flex items-start justify-between">
-                <h3 className="font-semibold text-base">New Claim</h3>
-                <button onClick={()=>!submittingClaim && setCreatingClaim(null)} className="p-1 rounded hover:bg-white/10"><X className="w-4 h-4"/></button>
-              </div>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <label htmlFor="claim-category" className="text-xs uppercase tracking-wide opacity-70">Issue Category</label>
-                  <select id="claim-category" value={claimCategory} onChange={(e)=>setClaimCategory(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40">
-                    <option value="mechanical">Mechanical</option>
-                    <option value="electrical">Electrical</option>
-                    <option value="software">Software</option>
-                    <option value="cosmetic">Cosmetic</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <label htmlFor="claim-desc" className="text-xs uppercase tracking-wide opacity-70">Description</label>
-                  <textarea id="claim-desc" value={claimDesc} onChange={(e)=>setClaimDesc(e.target.value)} rows={4} className="w-full resize-none bg-white/5 border border-white/10 rounded px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40" placeholder="Describe the issue in detail" />
-                  <div className="text-[10px] opacity-50 text-right">{claimDesc.length}/500</div>
-                </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <button disabled={submittingClaim} onClick={()=>setCreatingClaim(null)} className="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-xs disabled:opacity-40">Cancel</button>
-                  <button
-                    disabled={submittingClaim || claimDesc.trim().length<4}
-                    onClick={async ()=>{
-                      try {
-                        setSubmittingClaim(true);
-                        const w = items.find(i=>i._id===creatingClaim);
-                        if(!w){ setCreatingClaim(null); return; }
-                        const payload = { warrantyId: w._id, customerId: String(w.customer), productId: String(w.product), issueCategory: claimCategory, issueDescription: claimDesc.trim(), reportedBy: 'system' };
-                        const r = await fetch('/api/warranty-claims', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
-                        const j = await r.json();
-                        if(j.success){ toast.success('Claim created'); setCreatingClaim(null); }
-                        else toast.error(j.message||'Failed');
-                      } catch { toast.error('Error'); } finally { setSubmittingClaim(false); }
-                    }}
-                    className="px-5 py-1.5 rounded bg-yellow-300 text-black font-medium text-xs inline-flex items-center gap-2 disabled:opacity-40"
-                  >{submittingClaim && <Loader2 className="w-3.5 h-3.5 animate-spin"/>} Submit</button>
-                </div>
-              </div>
+            {/* Claims panel with status + slip details */}
+            <div className="md:col-span-2 xl:col-span-3">
+              <Panel
+                title="Recent Claims"
+                subtitle="Latest warranty claims and their status"
+                emptyLabel="No claims yet"
+                count={claimsLoading ? undefined : claims.length}
+              >
+                {claimsLoading ? (
+                  <Skeleton rows={3} />
+                ) : claimsError ? (
+                  <div className="text-xs text-red-300 bg-red-500/10 border border-red-400/30 rounded px-3 py-2">
+                    {claimsError}
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-2 flex items-center gap-2">
+                      <input
+                        placeholder="Search by claim slip #"
+                        value={claimSearch}
+                        onChange={e => setClaimSearch(e.target.value)}
+                        className="flex-1 bg-[#242424] border border-white/15 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40"
+                      />
+                      {claimSearch && (
+                        <button
+                          onClick={() => setClaimSearch('')}
+                          className="text-[11px] px-2 py-1 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-auto pr-1 custom-scroll">
+                      {filteredClaims.length > 0 ? (
+                        <>
+                          <div className="flex items-center text-[11px] uppercase tracking-wide opacity-60 bg-[#242424] px-3 py-2 border-b border-white/10 rounded-t-lg">
+                            <span className="flex-[1.1]">Ticket</span>
+                            <span className="flex-[1.6]">Customer & Product</span>
+                            <span className="w-32 text-right">Created</span>
+                            <span className="w-24 text-right">Actions</span>
+                          </div>
+                          {filteredClaims.map(c => {
+                            const createdAt = c.createdAt ? new Date(c.createdAt) : null;
+                            const createdDate = createdAt ? createdAt.toLocaleDateString() : '';
+                            const createdTime = createdAt ? createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                            const customer = c.customerSnapshot?.name || 'Customer';
+                            const product = c.productSnapshot?.name || 'Product';
+                            const bucket = getClaimStatusBucket(c);
+                            const choice = CLAIM_STATUS_CHOICES.find(x => x.id === bucket) || CLAIM_STATUS_CHOICES[0];
+                            const shortCode = getShortClaimCode(c.claimNo) || c.claimNo;
+
+                            return (
+                              <div
+                                key={c._id}
+                                className="border border-white/10 rounded-xl px-3.5 py-2.5 bg-white/[0.02] hover:bg-white/[0.06] transition-colors flex items-center gap-4"
+                              >
+                                <div className="flex-[1.1] min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono truncate max-w-[80px]">{shortCode}</span>
+                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-medium whitespace-nowrap ${choice.color}`}>
+                                      {choice.label}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] opacity-70 mt-1 line-clamp-1">
+                                    Issue: {c.issueDescription || '—'}
+                                  </div>
+                                </div>
+
+                                <div className="flex-[1.6] min-w-0 text-[11px] opacity-80 space-y-0.5">
+                                  <div className="truncate">Customer: {customer}</div>
+                                  <div className="truncate">Product: {product}</div>
+                                </div>
+
+                                <div className="w-32 text-right text-[11px] opacity-70">
+                                  <div>{createdDate}</div>
+                                  <div>{createdTime}</div>
+                                </div>
+
+                                <div className="w-24 text-right">
+                                  <button
+                                    onClick={() => setStatusModalClaim(c)}
+                                    className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/15 border border-white/15 text-[11px]"
+                                  >
+                                    Update
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <div className="text-[11px] opacity-60 px-2 py-4 text-center">
+                          {claimSearch ? 'No claims found for this slip number.' : 'No claims yet.'}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </Panel>
             </div>
           </div>
         )}
+
+        {creatingClaim && typeof document !== 'undefined'
+          ? createPortal(
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+                <button className="absolute inset-0 bg-[#242424]/80 backdrop-blur-sm" onClick={()=>!submittingClaim && setCreatingClaim(null)} />
+                <div className="relative w-full max-w-md bg-zinc-900/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-xl p-5 text-sm space-y-4">
+                  <div className="flex items-start justify-between">
+                    <h3 className="font-semibold text-base">New Claim</h3>
+                    <button onClick={()=>!submittingClaim && setCreatingClaim(null)} className="p-1 rounded hover:bg-white/10"><X className="w-4 h-4"/></button>
+                  </div>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <label htmlFor="claim-category" className="text-xs uppercase tracking-wide opacity-70">Issue Category</label>
+                      <select id="claim-category" value={claimCategory} onChange={(e)=>setClaimCategory(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded px-2 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40">
+                        <option value="mechanical">Mechanical</option>
+                        <option value="electrical">Electrical</option>
+                        <option value="software">Software</option>
+                        <option value="cosmetic">Cosmetic</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label htmlFor="claim-desc" className="text-xs uppercase tracking-wide opacity-70">Description</label>
+                      <textarea id="claim-desc" value={claimDesc} onChange={(e)=>setClaimDesc(e.target.value)} rows={4} className="w-full resize-none bg-white/5 border border-white/10 rounded px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40" placeholder="Describe the issue in detail" />
+                      <div className="text-[10px] opacity-50 text-right">{claimDesc.length}/500</div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <button disabled={submittingClaim} onClick={()=>setCreatingClaim(null)} className="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-xs disabled:opacity-40">Cancel</button>
+                      <button
+                        disabled={submittingClaim || claimDesc.trim().length<4}
+                        onClick={async ()=>{
+                          try {
+                            setSubmittingClaim(true);
+                            const previewWin = window.open('', 'claim-slip', 'width=380,height=600');
+                            if (!previewWin) {
+                              toast.error('Popup blocked: allow popups for this site to print slips');
+                              setSubmittingClaim(false);
+                              return;
+                            }
+
+                            const w = items.find(i=>i._id===creatingClaim);
+                            if (!w) {
+                              setCreatingClaim(null);
+                              return;
+                            }
+
+                            const payload = {
+                              warrantyId: w._id,
+                              customerId: String(w.customer),
+                              productId: String(w.product),
+                              issueCategory: claimCategory,
+                              issueDescription: claimDesc.trim(),
+                              reportedBy: 'system'
+                            };
+
+                            const token = accessToken || getAccessToken?.();
+                            const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+                            if (token) headers.Authorization = `Bearer ${token}`;
+
+                            const r = await fetch('/api/warranty-claims', {
+                              method: 'POST',
+                              headers,
+                              body: JSON.stringify(payload)
+                            });
+                            const j = await r.json();
+
+                            if (j?.success) {
+                              toast.success('Claim created');
+                              // Add new claim to recent list so it appears immediately
+                              setClaims(prev => [j.data, ...prev]);
+                              generateClaimSlip(j.data, w, previewWin);
+                              setCreatingClaim(null);
+                              setClaimDesc('');
+                              setClaimCategory('mechanical');
+                            } else {
+                              toast.error(j?.message || 'Failed');
+                            }
+                          } catch {
+                            toast.error('Error');
+                          } finally {
+                            setSubmittingClaim(false);
+                          }
+                        }}
+                        className="px-5 py-1.5 rounded bg-yellow-300 text-black font-medium text-xs inline-flex items-center gap-2 disabled:opacity-40"
+                      >{submittingClaim && <Loader2 className="w-3.5 h-3.5 animate-spin"/>} Submit</button>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
+
+        {statusModalClaim && typeof document !== 'undefined'
+          ? createPortal(
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+                <button className="absolute inset-0 bg-[#242424]/80 backdrop-blur-sm" onClick={()=>!updatingStatus && setStatusModalClaim(null)} />
+                <div className="relative w-full max-w-sm bg-zinc-900/90 backdrop-blur-xl border border-white/10 shadow-2xl rounded-xl p-5 text-sm space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-base">Update Claim Status</h3>
+                      <div className="mt-1 text-[11px] opacity-70">
+                        {getShortClaimCode(statusModalClaim.claimNo) || statusModalClaim.claimNo} · {statusModalClaim.customerSnapshot?.name || 'Customer'}
+                      </div>
+                    </div>
+                    <button onClick={()=>!updatingStatus && setStatusModalClaim(null)} className="p-1 rounded hover:bg-white/10"><X className="w-4 h-4"/></button>
+                  </div>
+                  <div className="grid gap-3">
+                    <div className="grid gap-1">
+                      <label className="text-[11px] uppercase tracking-wide opacity-70">Status</label>
+                      <select
+                        value={statusModalStatus}
+                        onChange={e=>setStatusModalStatus(e.target.value as ClaimStatusBucket)}
+                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40"
+                      >
+                        {CLAIM_STATUS_CHOICES.map(opt=>(
+                          <option key={opt.id} value={opt.id}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="text-[11px] opacity-60 bg-white/5 border border-white/10 rounded px-2 py-1.5">
+                      <div className="font-semibold text-[11px] mb-1">Issue</div>
+                      <div className="line-clamp-3 break-words">{statusModalClaim.issueDescription}</div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        disabled={updatingStatus}
+                        onClick={()=>setStatusModalClaim(null)}
+                        className="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-xs disabled:opacity-40"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        disabled={updatingStatus}
+                        onClick={async ()=>{
+                          if (!statusModalClaim) return;
+                          const choice = CLAIM_STATUS_CHOICES.find(x=>x.id===statusModalStatus) || CLAIM_STATUS_CHOICES[0];
+                          try {
+                            setUpdatingStatus(true);
+                            const token = accessToken || getAccessToken();
+                            const headers: Record<string,string> = { 'Content-Type': 'application/json' };
+                            if (token) headers.Authorization = `Bearer ${token}`;
+                            const res = await fetch(`/api/warranty-claims/${statusModalClaim._id}/status`, {
+                              method: 'POST',
+                              headers,
+                              body: JSON.stringify({ status: choice.backend })
+                            });
+                            const json = await res.json();
+                            if (json?.success) {
+                              toast.success('Claim status updated');
+                              setClaims(prev=>prev.map(c=>c._id===statusModalClaim._id ? json.data : c));
+                              setStatusModalClaim(null);
+                            } else {
+                              toast.error(json?.message || 'Failed to update status');
+                            }
+                          } catch {
+                            toast.error('Error updating status');
+                          } finally {
+                            setUpdatingStatus(false);
+                          }
+                        }}
+                        className="px-5 py-1.5 rounded bg-yellow-300 text-black font-medium text-xs inline-flex items-center gap-2 disabled:opacity-40"
+                      >
+                        {updatingStatus && <Loader2 className="w-3.5 h-3.5 animate-spin"/>}
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )
+          : null}
       </div>
     </AppLayout>
   );
@@ -334,24 +774,24 @@ const StatCard = ({ label, value, icon, tone }: { label:string; value:number; ic
     rose:  'from-rose-400/30 via-rose-400/10 to-transparent border-rose-400/30'
   };
   return (
-    <div className={`relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br ${tone?palette[tone]:''} p-3 flex flex-col gap-1`}> 
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-wide opacity-70">
+    <div className={`relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${tone?palette[tone]:''} p-3 sm:p-4 flex flex-col gap-1 shadow-[0_14px_30px_rgba(0,0,0,0.45)]`}> 
+      <div className="flex items-center justify-between text-[10px] sm:text-[11px] uppercase tracking-wide opacity-75">
         <span>{label}</span>
-        <span className="opacity-80">{icon}</span>
+        <span className="opacity-90">{icon}</span>
       </div>
-      <div className="text-lg font-semibold leading-none">{value}</div>
+      <div className="text-lg sm:text-xl font-semibold leading-none mt-1">{value}</div>
     </div>
   );
 };
 
 // Panel wrapper used for sections
 const Panel = ({ title, subtitle, children, emptyLabel, count }: { title:string; subtitle?:string; children:React.ReactNode; emptyLabel?:string; count?:number; }) => (
-  <div className="rounded-2xl border border-white/10 bg-white/[0.035] backdrop-blur-sm p-4 flex flex-col min-h-[300px]">
-    <div className="mb-3">
+  <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.04] via-white/[0.02] to-black/40 backdrop-blur-sm p-4 sm:p-5 flex flex-col min-h-[260px] shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
+    <div className="mb-3 border-b border-white/5 pb-2">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold text-sm tracking-wide flex items-center gap-2">{title}{typeof count==='number' && <span className="text-[10px] font-normal opacity-60">{count}</span>}</h2>
+        <h2 className="font-semibold text-sm sm:text-[15px] tracking-wide flex items-center gap-2">{title}{typeof count==='number' && <span className="text-[10px] font-normal opacity-60">{count}</span>}</h2>
       </div>
-      {subtitle && <p className="text-[11px] opacity-50 mt-0.5 leading-snug">{subtitle}</p>}
+      {subtitle && <p className="text-[11px] opacity-60 mt-0.5 leading-snug">{subtitle}</p>}
     </div>
     <div className="flex-1 relative">
       {count===0 && emptyLabel ? (

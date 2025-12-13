@@ -3,10 +3,11 @@ import { returnsApi, ReturnTransaction } from '@/lib/api/returns.api';
 
 interface ReturnsListProps {
   customerId?: string;
+  customerCode?: string;
   limit?: number;
 }
 
-const ReturnsList: React.FC<ReturnsListProps> = ({ customerId, limit = 20 }) => {
+const ReturnsList: React.FC<ReturnsListProps> = ({ customerId, customerCode, limit = 20 }) => {
   const [returns, setReturns] = useState<ReturnTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({
@@ -32,6 +33,7 @@ const ReturnsList: React.FC<ReturnsListProps> = ({ customerId, limit = 20 }) => 
         page: pagination.page,
         limit: pagination.limit,
         customerId,
+        customerCode,
         ...filters
       };
 

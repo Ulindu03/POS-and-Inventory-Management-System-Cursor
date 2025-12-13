@@ -27,6 +27,11 @@ interface AdminUser {
 
 export default function UsersPage() {
   const { t } = useTranslation();
+  const tf = (key: string, fallback: string) => {
+    const v = t(key) as string | undefined;
+    if (!v || v === key) return fallback;
+    return v;
+  };
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -386,11 +391,11 @@ export default function UsersPage() {
       {/* Face Enrollment / Update Modal */}
       <FormModal
         isOpen={Boolean(enrollUser)}
-        title={enrollUser ? (userHasFace(enrollUser) ? (t('users.updateFaceId') || 'Update Face ID') : (t('users.enrollFaceId') || 'Enroll Face ID')) : ''}
+        title={enrollUser ? (userHasFace(enrollUser) ? tf('users.updateFaceId', 'Update Face ID') : tf('users.enrollFaceId', 'Enroll Face ID')) : ''}
         onClose={() => setEnrollUser(null)}
         footer={
           <div className="flex justify-end gap-2">
-            <button className="px-3 py-2 rounded bg-white/10" onClick={() => setEnrollUser(null)}>{t('users.cancel')}</button>
+            <button className="px-3 py-2 rounded bg-white/10" onClick={() => setEnrollUser(null)}>{tf('users.cancel', 'Cancel')}</button>
             <button
               className="px-3 py-2 rounded bg-indigo-500 text-white disabled:opacity-50"
               disabled={saving || !faceDetected}
@@ -408,23 +413,23 @@ export default function UsersPage() {
                     .withFaceLandmarks()
                     .withFaceDescriptor();
                   if (!result?.descriptor) {
-                    toast.error(t('users.faceNotDetected') || 'No face detected');
+                    toast.error(tf('users.faceNotDetected', 'No face detected'));
                   } else {
                     const embedding = Array.from(result.descriptor).map(v => Number(Number(v).toFixed(6)));
                     await usersApi.setFaceEmbedding(enrollUser._id, embedding);
-                    toast.success(t('users.faceSaved') || 'Face ID saved');
+                    toast.success(tf('users.faceSaved', 'Face ID saved'));
                     setEnrollUser(null);
                     fetchPage();
                   }
                 } catch (e) {
                   const errMsg = (e && typeof e === 'object' && 'message' in e) ? (e as Error).message : undefined;
-                  toast.error(errMsg || (t('users.faceSaveFailed') || 'Failed to save Face ID'));
+                  toast.error(errMsg || tf('users.faceSaveFailed', 'Failed to save Face ID'));
                 } finally {
                   setSaving(false);
                 }
               }}
             >
-              {saving ? t('users.saving') : (t('users.saveFaceId') || 'Capture & Save')}
+              {saving ? tf('users.saving', 'Saving...') : tf('users.saveFaceId', 'Capture & Save')}
             </button>
           </div>
         }

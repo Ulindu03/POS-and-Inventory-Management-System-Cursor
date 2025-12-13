@@ -118,6 +118,7 @@ export const returnsApi = {
     dateFrom?: string;
     dateTo?: string;
     customerId?: string;
+    customerCode?: string;
   }) => {
     const { data } = await client.get('/returns', { params });
     return data as {
