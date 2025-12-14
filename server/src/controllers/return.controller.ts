@@ -15,7 +15,8 @@ export class ReturnController {
       const { 
         invoiceNo, 
         customerName, 
-        customerPhone, 
+        customerPhone,
+        customerNIC,
         customerEmail, 
         productName,
         dateFrom,
@@ -27,6 +28,7 @@ export class ReturnController {
         invoiceNo,
         customerName,
         customerPhone,
+        customerNIC,
         customerEmail,
         productName,
         dateFrom: dateFrom ? new Date(dateFrom) : undefined,

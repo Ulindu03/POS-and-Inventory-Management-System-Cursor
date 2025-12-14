@@ -33,6 +33,7 @@ interface SaleLookupOptions {
   invoiceNo?: string;
   customerName?: string;
   customerPhone?: string;
+  customerNIC?: string;
   customerEmail?: string;
   productName?: string;
   dateFrom?: Date;
@@ -83,41 +84,103 @@ export class ReturnService {
   // Look up sales by various criteria
   static async lookupSales(options: SaleLookupOptions): Promise<any[]> {
     const filters: any = {};
-    const searchDays = options.searchDays || 30;
+    const searchDays = options.searchDays || 365; // Default to 1 year for better search coverage
     
-    // Date range filter
+    // Date range filter - make it more lenient for specific searches
     const dateFrom = options.dateFrom || new Date(Date.now() - searchDays * 24 * 60 * 60 * 1000);
     const dateTo = options.dateTo || new Date();
     filters.createdAt = { $gte: dateFrom, $lte: dateTo };
     
-    // Invoice number search (exact match)
+    // Build OR conditions for different search types
+    const saleOrConditions: any[] = [];
+    
+    // Invoice number search
     if (options.invoiceNo) {
-      filters.invoiceNo = new RegExp(options.invoiceNo.trim(), 'i');
+      saleOrConditions.push({ invoiceNo: new RegExp(options.invoiceNo.trim(), 'i') });
     }
     
-    // Customer search
-    if (options.customerName || options.customerPhone || options.customerEmail) {
+    // Customer search - find customers first, then add to OR conditions
+    if (options.customerName || options.customerPhone || options.customerNIC || options.customerEmail) {
       const customerFilters: any = {};
+      const customerOrConditions: any[] = [];
+      
       if (options.customerName) {
-        customerFilters.$or = [
+        customerOrConditions.push(
           { name: new RegExp(options.customerName.trim(), 'i') },
           { firstName: new RegExp(options.customerName.trim(), 'i') },
           { lastName: new RegExp(options.customerName.trim(), 'i') }
-        ];
+        );
       }
       if (options.customerPhone) {
-        customerFilters.phone = new RegExp(options.customerPhone.trim().replace(/\D/g, ''));
+        const raw = options.customerPhone.trim();
+        const digits = raw.replace(/\D/g, '');
+        const variants: string[] = [];
+        
+        // Generate all possible phone number variants (same logic as customer controller)
+        if (digits) {
+          // Local (0XXXXXXXXX) and international (94XXXXXXXXX / +94XXXXXXXXX) variants
+          if (digits.length === 10 && digits.startsWith('0')) {
+            const local = digits; // 0XXXXXXXXX
+            const intlNoPlus = '94' + digits.slice(1); // 94XXXXXXXXX
+            const intlPlus = '+94' + digits.slice(1); // +94XXXXXXXXX
+            variants.push(local, intlNoPlus, intlPlus);
+          } else if (digits.length === 11 && digits.startsWith('94')) {
+            const intlNoPlus = digits; // 94XXXXXXXXX
+            const local = '0' + digits.slice(2); // 0XXXXXXXXX
+            const intlPlus = '+' + digits; // +94XXXXXXXXX
+            variants.push(local, intlNoPlus, intlPlus);
+          } else if (digits.length === 9) { // Missing leading 0, assume local
+            const local = '0' + digits;
+            const intlNoPlus = '94' + digits;
+            const intlPlus = '+94' + digits;
+            variants.push(local, intlNoPlus, intlPlus, digits);
+          } else {
+            variants.push(digits);
+          }
+        }
+        
+        const unique = variants.filter((v, i) => variants.indexOf(v) === i);
+        const plusVariants = unique.filter(v => v.startsWith('+'));
+        const nonPlus = unique.map(v => v.startsWith('+') ? v.slice(1) : v);
+        
+        // Search with all variants
+        customerOrConditions.push(
+          { phone: { $in: unique } },
+          { phone: { $in: plusVariants } },
+          { canonicalPhone: { $in: nonPlus } },
+          { alternatePhone: { $in: unique } },
+          { alternatePhone: { $in: plusVariants } }
+        );
+        
+        // Also try partial match on last 7 digits as fallback if we have enough digits
+        if (digits.length >= 7) {
+          customerOrConditions.push(
+            { phone: { $regex: digits.slice(-7) + '$' } },
+            { alternatePhone: { $regex: digits.slice(-7) + '$' } }
+          );
+        }
+      }
+      if (options.customerNIC) {
+        customerOrConditions.push({ nic: new RegExp(options.customerNIC.trim(), 'i') });
       }
       if (options.customerEmail) {
-        customerFilters.email = new RegExp(options.customerEmail.trim(), 'i');
+        customerOrConditions.push({ email: new RegExp(options.customerEmail.trim(), 'i') });
+      }
+      
+      if (customerOrConditions.length > 0) {
+        customerFilters.$or = customerOrConditions;
       }
       
       const customers = await Customer.find(customerFilters).select('_id');
       if (customers.length > 0) {
-        filters.customer = { $in: customers.map(c => c._id) };
-      } else {
-        return []; // No matching customers found
+        saleOrConditions.push({ customer: { $in: customers.map(c => c._id) } });
       }
+      // Don't return empty if no customers found - might still match by invoice number
+    }
+    
+    // If we have OR conditions, use them; otherwise use the base filters
+    if (saleOrConditions.length > 0) {
+      filters.$or = saleOrConditions;
     }
     
     // Product search
@@ -136,16 +199,64 @@ export class ReturnService {
       }
     }
     
+    // Debug logging
+    if (options.customerPhone || options.invoiceNo || options.customerNIC) {
+      console.log('Sale lookup filters:', JSON.stringify(filters, null, 2));
+    }
+    
     // Find matching sales
     const sales = await Sale.find(filters)
-      .populate('customer', 'name firstName lastName phone email')
-      .populate('items.product', 'name sku price.retail')
+      .populate('customer', 'name firstName lastName phone email nic customerCode canonicalPhone')
+      .populate('items.product', 'name sku price.retail price.cost')
       .populate('cashier', 'name username')
       .sort({ createdAt: -1 })
-      .limit(50)
+      .limit(100)
       .lean();
     
-    return sales;
+    // Debug logging
+    if (options.customerPhone || options.invoiceNo || options.customerNIC) {
+      console.log(`Found ${sales.length} sales matching the search criteria`);
+    }
+    
+    // Flatten sales into individual items with invoice and sale info
+    const itemsList: any[] = [];
+    for (const sale of sales) {
+      const saleItems = (sale as any).items || [];
+      const customer = (sale as any).customer || {};
+      const invoiceNo = (sale as any).invoiceNo || (sale as any)._id?.toString() || 'N/A';
+      const saleDate = (sale as any).createdAt || new Date();
+      
+      for (const item of saleItems) {
+        const product = (item as any).product || {};
+        const productName = typeof product.name === 'object' 
+          ? (product.name?.en || product.name?.si || 'Unknown Product')
+          : (product.name || 'Unknown Product');
+        const sku = product.sku || 'N/A';
+        const productId = (item as any).product?._id || (item as any).product || null;
+        
+        // Ensure productId is a string for frontend compatibility
+        const productIdStr = productId ? (productId.toString ? productId.toString() : String(productId)) : null;
+        
+        itemsList.push({
+          _id: `${(sale as any)._id}_${productIdStr || (item as any)._id}`,
+          saleId: (sale as any)._id?.toString ? (sale as any)._id.toString() : String((sale as any)._id),
+          invoiceNo: invoiceNo,
+          saleDate: saleDate,
+          customer: customer,
+          customerName: (customer as any).name || 'Walk-in Customer',
+          productId: productIdStr, // Ensure it's a string
+          productName: productName,
+          sku: sku,
+          quantity: (item as any).quantity || 1,
+          price: (item as any).price || (product.price?.retail || 0),
+          cost: (item as any).cost || (product.price?.cost || 0),
+          saleItem: item,
+          sale: sale
+        });
+      }
+    }
+    
+    return itemsList;
   }
 
   // Get applicable return policy for a sale

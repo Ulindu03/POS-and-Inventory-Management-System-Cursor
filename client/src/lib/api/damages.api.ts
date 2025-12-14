@@ -14,5 +14,5 @@ export const damagesApi = {
   reasons: () => client.get('/damages/reasons'),
   costReport: (params?: any) => client.get('/damages/cost-report', { params }),
   transit: (payload: { tripId?: string; deliveryId?: string; shopId?: string; items: DamageItemInput[]; notes?: string; priority?: string }) => client.post('/damages/transit', payload),
-  shopReturn: (payload: { customerId: string; items: DamageItemInput[]; reason: string; disposition: 'restock' | 'scrap' | 'return_to_vendor'; notes?: string }) => client.post('/damages/shop-return', payload),
+  shopReturn: (payload: { customerId: string; saleId?: string; items: DamageItemInput[]; reason: string; disposition: 'restock' | 'scrap' | 'return_to_vendor'; notes?: string }) => client.post('/damages/shop-return', payload),
 };

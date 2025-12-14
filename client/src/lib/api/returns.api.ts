@@ -25,8 +25,10 @@ export interface SaleLookupOptions {
   invoiceNo?: string;
   customerName?: string;
   customerPhone?: string;
+  customerNIC?: string;
   dateFrom?: string;
   dateTo?: string;
+  searchDays?: number;
 }
 
 export interface ReturnValidation {

@@ -80,7 +80,7 @@ export const reportTransitDamage = async (req: AuthRequest, res: Response) => {
 
 // Shop return damage intake with disposition
 export const reportShopReturnDamage = async (req: AuthRequest, res: Response) => {
-  const { customerId, items, reason, disposition, notes } = req.body;
+  const { customerId, saleId, items, reason, disposition, notes } = req.body;
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ success: false, message: 'No items' });
   const ref = await nextRef();
   const totalCost = items.reduce((s: number, it: any) => s + (Number(it.unitCost) * Number(it.quantity)), 0);
@@ -96,6 +96,10 @@ export const reportShopReturnDamage = async (req: AuthRequest, res: Response) =>
     } else if (customerId.toLowerCase() === 'walk-in' || customerId.toLowerCase() === 'walkin') {
       source.location = 'walk-in';
     }
+  }
+  // Add sale reference if provided
+  if (saleId && mongoose.isValidObjectId(saleId)) {
+    source.sale = saleId;
   }
     const doc = await Damage.create({
     referenceNo: ref,
