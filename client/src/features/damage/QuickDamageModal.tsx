@@ -82,7 +82,45 @@ export default function QuickDamageModal({ open, onClose, defaultReason }: Props
         // response shape: { success: true, data: { sales: [...] } }
         const sales = (res?.data?.sales) || [];
         console.debug('lookupSales response:', res, 'parsed sales:', sales);
-        setSaleResults(Array.isArray(sales) ? sales : []);
+        
+        // Flatten sales into items for the damage modal (which expects individual items)
+        const flattenedItems: any[] = [];
+        if (Array.isArray(sales)) {
+          for (const sale of sales) {
+            const saleItems = sale.items || [];
+            const customer = sale.customer || {};
+            const customerName = typeof customer === 'object' 
+              ? (customer.name || (customer.firstName && customer.lastName ? `${customer.firstName} ${customer.lastName}` : customer.firstName || customer.lastName) || 'Walk-in Customer')
+              : customer || 'Walk-in Customer';
+            
+            for (const item of saleItems) {
+              const product = item.productDetails || item.product || {};
+              const productName = typeof product.name === 'object' 
+                ? (product.name?.en || product.name?.si || 'Unknown Product')
+                : (product.name || 'Unknown Product');
+              const productId = item.product?._id || item.product || product._id || product;
+              const productIdStr = productId ? (productId.toString ? productId.toString() : String(productId)) : null;
+              
+              flattenedItems.push({
+                _id: `${sale._id}_${productIdStr || item._id || Date.now()}`,
+                saleId: sale._id?.toString ? sale._id.toString() : String(sale._id),
+                invoiceNo: sale.invoiceNo || 'N/A',
+                saleDate: sale.createdAt || sale.saleDate || new Date(),
+                customer: customer,
+                customerName: customerName,
+                productId: productIdStr,
+                productName: productName,
+                sku: product.sku || 'N/A',
+                quantity: item.quantity || 1,
+                price: item.price || (product.price?.retail || 0),
+                cost: item.cost || (product.price?.cost || 0),
+                saleItem: item,
+                sale: sale
+              });
+            }
+          }
+        }
+        setSaleResults(flattenedItems);
       } catch (err: any) {
         console.error('Sale lookup failed', err);
         if (!active) return;

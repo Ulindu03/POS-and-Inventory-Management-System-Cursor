@@ -207,7 +207,11 @@ export class ReturnService {
     // Find matching sales
     const sales = await Sale.find(filters)
       .populate('customer', 'name firstName lastName phone email nic customerCode canonicalPhone')
-      .populate('items.product', 'name sku price.retail price.cost')
+      .populate({
+        path: 'items.product',
+        select: 'name sku price.retail price.cost productName',
+        model: 'Product'
+      })
       .populate('cashier', 'name username')
       .sort({ createdAt: -1 })
       .limit(100)
@@ -218,45 +222,52 @@ export class ReturnService {
       console.log(`Found ${sales.length} sales matching the search criteria`);
     }
     
-    // Flatten sales into individual items with invoice and sale info
-    const itemsList: any[] = [];
-    for (const sale of sales) {
-      const saleItems = (sale as any).items || [];
-      const customer = (sale as any).customer || {};
-      const invoiceNo = (sale as any).invoiceNo || (sale as any)._id?.toString() || 'N/A';
-      const saleDate = (sale as any).createdAt || new Date();
+    // Return sales with properly populated items
+    // Transform each sale to ensure items are properly structured
+    const salesWithItems = sales.map((sale: any) => {
+      // Ensure items array exists - use the items from the sale directly
+      // The populate should have already populated items.product
+      const saleItems = sale.items || [];
       
-      for (const item of saleItems) {
-        const product = (item as any).product || {};
-        const productName = typeof product.name === 'object' 
-          ? (product.name?.en || product.name?.si || 'Unknown Product')
-          : (product.name || 'Unknown Product');
-        const sku = product.sku || 'N/A';
-        const productId = (item as any).product?._id || (item as any).product || null;
+      // Map items to ensure proper structure
+      const items = saleItems.map((item: any) => {
+        // Handle both populated and unpopulated product references
+        const product = item.product || {};
         
-        // Ensure productId is a string for frontend compatibility
-        const productIdStr = productId ? (productId.toString ? productId.toString() : String(productId)) : null;
+        // Extract product ID (works for both ObjectId and populated object)
+        const productId = product._id ? product._id : (typeof product === 'object' && !product._id ? product : item.product);
         
-        itemsList.push({
-          _id: `${(sale as any)._id}_${productIdStr || (item as any)._id}`,
-          saleId: (sale as any)._id?.toString ? (sale as any)._id.toString() : String((sale as any)._id),
-          invoiceNo: invoiceNo,
-          saleDate: saleDate,
-          customer: customer,
-          customerName: (customer as any).name || 'Walk-in Customer',
-          productId: productIdStr, // Ensure it's a string
-          productName: productName,
-          sku: sku,
-          quantity: (item as any).quantity || 1,
-          price: (item as any).price || (product.price?.retail || 0),
-          cost: (item as any).cost || (product.price?.cost || 0),
-          saleItem: item,
-          sale: sale
-        });
+        // Build the item object, preserving all original fields
+        const processedItem: any = {
+          ...item,
+          product: productId // Keep product reference (ID or populated object)
+        };
+        
+        // If product is populated (has _id and other fields), add productDetails
+        if (typeof product === 'object' && product._id) {
+          processedItem.productDetails = product;
+        }
+        
+        return processedItem;
+      });
+      
+      // Debug logging for troubleshooting
+      if (options.customerPhone && items.length === 0 && saleItems.length > 0) {
+        console.warn(`Sale ${sale.invoiceNo || sale._id} has ${saleItems.length} items but processed items is empty`);
       }
-    }
+      
+      return {
+        ...sale,
+        items: items, // Always include items array (even if empty)
+        // Ensure returnSummary exists for frontend
+        returnSummary: sale.returnSummary || {
+          totalReturned: 0,
+          returnedItems: 0
+        }
+      };
+    });
     
-    return itemsList;
+    return salesWithItems;
   }
 
   // Get applicable return policy for a sale

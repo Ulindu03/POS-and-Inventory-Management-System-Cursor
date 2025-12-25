@@ -266,21 +266,23 @@ const ReturnProcessor: React.FC<ReturnProcessorProps> = ({ sale, onComplete }) =
   };
 
   const handleItemQuantityChange = (index: number, quantity: number) => {
+    if (!sale?.items?.[index]) return;
     const updatedItems = [...returnItems];
     const saleItem = sale.items[index];
-    const maxQuantity = saleItem.quantity - (saleItem.returnedQuantity || 0);
-    
+    const maxQuantity = (saleItem.quantity || 0) - (saleItem.returnedQuantity || 0);
+
     updatedItems[index].quantity = Math.min(Math.max(0, quantity), maxQuantity);
-    updatedItems[index].returnAmount = updatedItems[index].quantity * saleItem.price;
-    
+    updatedItems[index].returnAmount = updatedItems[index].quantity * (saleItem.price || 0);
+
     setReturnItems(updatedItems);
   };
 
   const handleItemAmountChange = (index: number, amount: number) => {
+    if (!sale?.items?.[index]) return;
     const updatedItems = [...returnItems];
     const saleItem = sale.items[index];
-    const maxAmount = saleItem.quantity * saleItem.price;
-    
+    const maxAmount = (saleItem.quantity || 0) * (saleItem.price || 0);
+
     updatedItems[index].returnAmount = Math.min(Math.max(0, amount), maxAmount);
     setReturnItems(updatedItems);
   };
@@ -372,7 +374,7 @@ const ReturnProcessor: React.FC<ReturnProcessorProps> = ({ sale, onComplete }) =
           <h3 className="text-2xl font-bold tracking-wide bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2">Select Items to Return</h3>
           <p className="text-sm text-gray-400 mb-6">Choose the items and quantities you want to return from this sale.</p>
           <div className="space-y-5">
-            {sale.items.map((saleItem:any,index:number)=>{ const ri=returnItems[index]; const max=saleItem.quantity-(saleItem.returnedQuantity||0); const selected=ri?.quantity>0; const key=saleItem.product?._id||saleItem.product||index; return (
+            {(sale?.items || []).map((saleItem:any,index:number)=>{ const ri=returnItems[index]; const max=(saleItem?.quantity||0)-((saleItem?.returnedQuantity)||0); const selected=ri?.quantity>0; const key=saleItem?.product?._id||saleItem?.product||index; return (
               <div key={key} className={`group relative border rounded-2xl p-6 transition overflow-hidden backdrop-blur-sm ${selected? 'border-blue-500/60 bg-gradient-to-br from-blue-500/15 via-indigo-500/10 to-transparent':'border-white/10 bg-white/5 hover:border-blue-400/40'} `}>
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">

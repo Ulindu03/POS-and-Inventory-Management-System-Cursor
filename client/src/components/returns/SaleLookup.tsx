@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { returnsApi, SaleLookupOptions } from '@/lib/api/returns.api';
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 interface SaleLookupProps {
   onSaleSelected: (sale: any) => void;
@@ -102,6 +102,18 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
     return remaining > 0 ? `${preview} +${remaining} more` : preview;
   };
 
+  const formatDate = (value: any) => {
+    if (!value) return '-';
+    let date: Date;
+    try {
+      date = typeof value === 'string' ? parseISO(value) : new Date(value);
+    } catch (e) {
+      return '-';
+    }
+    if (!isValid(date)) return '-';
+    return format(date, 'MMM dd, yyyy HH:mm');
+  };
+
   return (
     <div className="space-y-8">
       {/* Lookup Card */}
@@ -164,7 +176,7 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-300">
                     <div>
-                      <span className="text-gray-500">Date:</span> {format(new Date(sale.createdAt), 'MMM dd, yyyy HH:mm')}
+                      <span className="text-gray-500">Date:</span> {formatDate(sale.createdAt)}
                     </div>
                     <div>
                       <span className="text-gray-500">Customer:</span> {getCustomerDisplayName(sale.customer)}
