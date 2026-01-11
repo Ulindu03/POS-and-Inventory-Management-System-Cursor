@@ -380,8 +380,14 @@ export class ProductController {
       });
 
       if (effectiveMode === 'unique_per_unit') {
-        // Persist unit barcodes
-        const docs = barcodes.map((b) => ({ barcode: b, product: product._id, batch: batch._id }));
+        // Persist unit barcodes with generated status
+        const docs = barcodes.map((b) => ({ 
+          barcode: b, 
+          product: product._id, 
+          batch: batch._id,
+          status: 'generated',
+          printedAt: new Date()
+        }));
         // Use insertMany with ordered: false to skip duplicates if any
         await UnitBarcode.insertMany(docs, { ordered: false }).catch(() => undefined);
       }
@@ -643,8 +649,77 @@ export class ProductController {
   static async getByBarcode(req: Request, res: Response, next: NextFunction) {
     try {
       const { code } = req.params as { code: string };
+      
+      // First check if this is a unit barcode and verify its status
+      const unitBarcode = await UnitBarcode.findOne({ barcode: code });
+      
+      if (unitBarcode) {
+        // Check if barcode has already been used
+        if (unitBarcode.status === 'sold') {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'This barcode has already been sold',
+            code: 'BARCODE_ALREADY_SOLD'
+          });
+        }
+        if (unitBarcode.status === 'returned') {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'This barcode was returned',
+            code: 'BARCODE_RETURNED'
+          });
+        }
+        if (unitBarcode.status === 'damaged') {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'This barcode is marked as damaged',
+            code: 'BARCODE_DAMAGED'
+          });
+        }
+        if (unitBarcode.status === 'written_off') {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'This barcode has been written off',
+            code: 'BARCODE_WRITTEN_OFF'
+          });
+        }
+        
+        // Barcode is available, get the product
+        const product = await Product.findOne({ _id: unitBarcode.product, isActive: true })
+          .select('sku barcode name price stock discount images');
+        
+        if (!product) {
+          return res.status(404).json({ success: false, message: 'Product not found' });
+        }
+        
+        const payload = product.toObject() as any;
+        const { pricing, margins } = buildPricingAndMargins(payload);
+        const retailTier = pricing.retail;
+
+        if (payload.discount) {
+          payload.discount = {
+            isEnabled: Boolean(payload.discount.isEnabled),
+            type: payload.discount.type === 'fixed' ? 'fixed' : 'percentage',
+            value: Number(payload.discount.value || 0),
+            startAt: payload.discount.startAt || null,
+            endAt: payload.discount.endAt || null,
+            notes: payload.discount.notes || '',
+            status: retailTier.status ?? (payload.discount.isEnabled ? 'scheduled' : 'disabled'),
+            amount: retailTier.discountAmount ?? 0,
+            finalPrice: retailTier.final ?? retailTier.base,
+          };
+        }
+
+        payload.pricing = pricing;
+        payload.margins = margins;
+
+        return res.json({ success: true, data: { product: payload } });
+      }
+      
+      // Not a unit barcode, check product's own barcode
       const product = await Product.findOne({ barcode: code, isActive: true })
         .select('sku barcode name price stock discount images');
+      
       if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
       const payload = product.toObject() as any;

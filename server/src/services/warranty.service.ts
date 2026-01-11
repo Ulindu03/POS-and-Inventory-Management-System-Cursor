@@ -2,6 +2,7 @@ import { Warranty } from '../models/Warranty.model';
 import { Product } from '../models/Product.model';
 import { Customer } from '../models/Customer.model';
 import { Sale } from '../models/Sale.model';
+import { UnitBarcode } from '../models/UnitBarcode.model';
 import crypto from 'crypto';
 
 export async function nextWarrantyNo() {
@@ -62,6 +63,27 @@ export async function issueWarranty(params: {
     saleSnapshot: saleDoc ? { invoiceNo: saleDoc.invoiceNo || '', date: saleDoc.createdAt } : undefined,
     events: [{ type: 'issued', timestamp: now }]
   });
+
+  // Track warranty in barcodes if sold from this sale
+  if (params.saleId && params.productId) {
+    try {
+      await UnitBarcode.updateOne(
+        { product: params.productId, sale: params.saleId, status: 'sold', warranty: { $exists: false } },
+        { 
+          $set: { 
+            warranty: warranty._id,
+            warrantyStart: now,
+            warrantyEnd: end
+          } 
+        }
+      );
+    } catch (bcErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[barcode.track.warranty] failed', bcErr);
+      }
+    }
+  }
+
   return warranty;
 }
 

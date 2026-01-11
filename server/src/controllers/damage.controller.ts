@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Damage } from '../models/Damage.model';
 import { Product } from '../models/Product.model';
 import { StockMovement } from '../models/StockMovement.model';
+import { UnitBarcode } from '../models/UnitBarcode.model';
 import { AuthRequest } from '../middleware/auth.middleware';
 
 const nextRef = async () => {
@@ -73,6 +74,26 @@ export const reportTransitDamage = async (req: AuthRequest, res: Response) => {
       performedBy: req.user?.userId,
       location: { from: 'in_transit', to: 'loss' },
     });
+
+    // Track barcode damage
+    try {
+      const barcodes = await UnitBarcode.find({
+        product: it.product,
+        status: { $in: ['in_stock', 'sold'] }
+      }).limit(qty).sort({ createdAt: 1 });
+
+      for (const bc of barcodes) {
+        bc.status = 'damaged';
+        bc.damage = doc._id;
+        bc.damagedAt = new Date();
+        bc.damageReason = it.reason;
+        await bc.save();
+      }
+    } catch (bcErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[barcode.track.damage] failed', bcErr);
+      }
+    }
   }
 
   return res.status(201).json({ success: true, data: doc });
@@ -141,6 +162,26 @@ export const reportShopReturnDamage = async (req: AuthRequest, res: Response) =>
       referenceType: 'Damage',
       performedBy: req.user?.userId,
     });
+
+    // Track barcode damage for shop returns
+    try {
+      const barcodes = await UnitBarcode.find({
+        product: it.product,
+        status: { $in: ['in_stock', 'sold', 'returned'] }
+      }).limit(qty).sort({ createdAt: 1 });
+
+      for (const bc of barcodes) {
+        bc.status = 'damaged';
+        bc.damage = doc._id;
+        bc.damagedAt = new Date();
+        bc.damageReason = (it as any)?.reason ?? reason;
+        await bc.save();
+      }
+    } catch (bcErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[barcode.track.damage.shop_return] failed', bcErr);
+      }
+    }
   }
 
   return res.status(201).json({ success: true, data: doc });

@@ -188,7 +188,7 @@ const POS = () => {
           setReceipt({
             invoiceNo: sale.invoiceNo,
             saleId: sale.id,
-            items: items.map((i) => ({ name: i.name, qty: i.qty, price: i.price, total: i.price * i.qty })),
+            items: items.map((i) => ({ name: i.name, qty: i.qty, price: i.price, total: i.price * i.qty, barcode: i.barcode })),
             ...snapshot,
             method: sale.method,
             payments: sale.payments,

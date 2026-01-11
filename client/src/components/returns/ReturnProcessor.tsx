@@ -139,15 +139,17 @@ const ReturnProcessor: React.FC<ReturnProcessorProps> = ({ sale, onComplete }) =
     if (!Array.isArray(slipItems)) return [];
     return slipItems.map((item) => {
       const match = sale?.items?.find((saleItem: any) => normalizeId(saleItem.product) === normalizeId(item.product));
-      const label =
+      const label = item?.name || item?.productName || (
         (typeof match?.product?.name === 'string' && match?.product?.name) ||
         match?.product?.name?.en ||
         match?.product?.name?.si ||
         match?.productName ||
-        'Product';
+        'Product'
+      );
+      const sku = item?.sku || match?.product?.sku || match?.sku || '';
       return {
         name: label,
-        sku: match?.product?.sku,
+        sku,
         qty: item.quantity,
         value: item.exchangeValue
       };

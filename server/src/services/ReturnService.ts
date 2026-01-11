@@ -8,6 +8,7 @@ import { CustomerOverpayment } from '../models/CustomerOverpayment.model';
 import { ReturnPolicy } from '../models/ReturnPolicy.model';
 import { Inventory } from '../models/Inventory.model';
 import { StockMovement } from '../models/StockMovement.model';
+import { UnitBarcode } from '../models/UnitBarcode.model';
 
 interface ReturnItem {
   product: string;
@@ -557,6 +558,30 @@ export class ReturnService {
         if (validation.policy.stockHandling.autoRestock) {
           await this.processInventoryAdjustments(request.items, returnTransaction[0]._id, processedBy, session);
         }
+
+        // Track barcode returns
+        try {
+          for (const item of request.items) {
+            // Find barcodes that were sold in this sale for this product
+            const barcodes = await UnitBarcode.find({
+              product: item.product,
+              sale: request.saleId,
+              status: 'sold'
+            }).limit(item.quantity).session(session);
+
+            for (const bc of barcodes) {
+              bc.status = 'returned';
+              bc.return = returnTransaction[0]._id;
+              bc.returnedAt = new Date();
+              bc.returnReason = item.reason;
+              await bc.save({ session });
+            }
+          }
+        } catch (bcErr) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('[barcode.track.return] failed', bcErr);
+          }
+        }
         
         await returnTransaction[0].save({ session });
       });
@@ -592,23 +617,42 @@ export class ReturnService {
     issuedBy: string,
     session: mongoose.ClientSession
   ): Promise<any> {
-    const sale = await Sale.findById(saleId).session(session);
+    const sale = await Sale.findById(saleId).populate('items.product', 'name sku').session(session);
     if (!sale) throw new Error('Sale not found');
     
     const slipNo = await this.generateExchangeSlipNumber();
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + 90); // 90 days default
     
+    // Attempt to annotate slip items with product name/sku where available from the original sale
+    const exchangeItems = items.map(item => {
+      // try to find matching sale item to access populated product info
+      const saleItem = (sale.items || []).find((si: any) => {
+        try {
+          return si.product && si.product._id ? si.product._id.toString() === item.product.toString() : si.product.toString() === item.product.toString();
+        } catch (e) {
+          return false;
+        }
+      });
+
+      const productName = ((saleItem && ((saleItem.product as any)?.name || (saleItem as any)?.productName)) || (item as any)?.productName) || 'Product';
+      const sku = ((saleItem && ((saleItem.product as any)?.sku || (saleItem as any)?.sku)) || (item as any)?.sku) || '';
+
+      return {
+        product: item.product,
+        quantity: item.quantity,
+        originalPrice: item.returnAmount / (item.quantity || 1),
+        exchangeValue: item.returnAmount,
+        name: productName,
+        sku
+      };
+    });
+
     const exchangeSlip = await ExchangeSlip.create([{
       slipNo,
       originalSale: saleId,
       customer: sale.customer,
-      items: items.map(item => ({
-        product: item.product,
-        quantity: item.quantity,
-        originalPrice: item.returnAmount / item.quantity,
-        exchangeValue: item.returnAmount
-      })),
+      items: exchangeItems,
       totalValue,
       expiryDate,
       issuedBy,

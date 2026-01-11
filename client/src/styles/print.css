@@ -1,10 +1,64 @@
 /* This file styles the app for printing receipts and documents. */
 /* In simple English: It controls how things look when you print from the POS system. */
 @media print {
-  /* Print only the designated print area */
-  body * { visibility: hidden !important; }
-  .print-area, .print-area * { visibility: visible !important; }
-  .print-area { position: fixed; inset: 0; width: 100%; background: #fff; }
+  /* Remove global hide rule to prevent blank print area */
+  /* body * { visibility: hidden !important; } */
+  
+  /* Show regular print area (receipts) */
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+  /* Fixed positioning for receipts */
+  .print-area {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    background: #fff;
+  }
+  
+  /* LABELS: Override fixed positioning and ensure visibility - MUST come after general .print-area rule */
+  .print-area.labels-print-area,
+  .print-area.labels-a4-print,
+  .print-area.labels-roll-print {
+    position: static !important;
+    width: auto !important;
+    background: #fff !important;
+    inset: auto !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+  /* Force visibility for ALL label content - maximum specificity */
+  .print-area.labels-print-area,
+  .print-area.labels-print-area *,
+  .print-area.labels-a4-print,
+  .print-area.labels-a4-print *,
+  .print-area.labels-roll-print,
+  .print-area.labels-roll-print * {
+    visibility: visible !important;
+  }
+  /* Labels grid and all children - very specific */
+  .print-area.labels-print-area .labels-grid,
+  .print-area.labels-print-area .labels-grid *,
+  .print-area.labels-a4-print .labels-grid,
+  .print-area.labels-a4-print .labels-grid *,
+  .print-area.labels-roll-print .labels-grid,
+  .print-area.labels-roll-print .labels-grid * {
+    visibility: visible !important;
+    display: block !important;
+  }
+  /* Grid items - ensure they're visible and displayed correctly */
+  .print-area.labels-print-area .labels-grid > div,
+  .print-area.labels-a4-print .labels-grid > div,
+  .print-area.labels-roll-print .labels-grid > div {
+    visibility: visible !important;
+    display: flex !important;
+  }
+  .print-area.labels-print-area .labels-grid > div *,
+  .print-area.labels-a4-print .labels-grid > div *,
+  .print-area.labels-roll-print .labels-grid > div * {
+    visibility: visible !important;
+  }
 
   .no-print { display: none !important; }
   .only-print { display: block !important; }
@@ -39,6 +93,7 @@
 
   /* Thermal-fit: fill the roll width during print (keeps screen preview unchanged) */
   body.print-thermal-fit .receipt { width: 100% !important; padding-left: 2mm; padding-right: 2mm; }
+}
 
 /* Screen preview to match thermal width */
 @media screen {
@@ -57,16 +112,11 @@
 }
 
 
-/* Sticker Labels: A4 and Roll support */
-@page label-a4 { size: A4; margin: 0; }
-@page label-roll { size: auto; margin: 0; }
-
+/* Sticker Labels: A4 and Roll support - moved to @media print below */
 .labels-grid { display: grid; gap: 2mm; }
 .labels-grid.roll { page: label-roll; }
 .labels-grid .label-item {
   break-inside: avoid;
-}
-
 }
 
 /* Label stickers preview/print */
@@ -76,7 +126,7 @@
 .labels-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
 .labels-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
 /* Borders like sheet labels */
-.labels-grid > div { box-sizing: border-box; break-inside: avoid; }
+.labels-grid > div { box-sizing: border-box; break-inside: avoid; page-break-inside: avoid; }
 
 @media print {
   .no-print { display: none !important; }
@@ -84,5 +134,135 @@
   /* Sharper small fonts on labels */
   .labels-grid { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .labels-grid * { -webkit-font-smoothing: antialiased; font-synthesis-weight: none; }
+  /* Better page breaks for labels */
+  .labels-grid > div { 
+    break-inside: avoid; 
+    page-break-inside: avoid;
+    -webkit-region-break-inside: avoid;
+  }
+  /* A4 label pages - must be inside @media print */
+  @page label-a4 { 
+    size: A4; 
+    margin: 0; 
+  }
+  /* Roll label pages */
+  @page label-roll { 
+    size: auto; 
+    margin: 0; 
+  }
+  /* Override default page size for labels */
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  /* But use auto for roll labels */
+  .labels-roll-print,
+  .labels-grid.roll {
+    page: label-roll;
+  }
+  .labels-a4-print,
+  .labels-grid:not(.roll) {
+    page: label-a4;
+  }
+  /* Additional label visibility rules in second @media print block - ensure everything is visible */
+  .print-area.labels-print-area,
+  .print-area.labels-a4-print,
+  .print-area.labels-roll-print,
+  .print-area.labels-print-area *,
+  .print-area.labels-a4-print *,
+  .print-area.labels-roll-print * {
+    position: static !important;
+    width: auto !important;
+    background: #fff !important;
+    inset: auto !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+  /* Force visibility for labels grid */
+  .print-area.labels-print-area .labels-grid,
+  .print-area.labels-print-area .labels-grid *,
+  .print-area.labels-a4-print .labels-grid,
+  .print-area.labels-a4-print .labels-grid *,
+  .print-area.labels-roll-print .labels-grid,
+  .print-area.labels-roll-print .labels-grid * {
+    visibility: visible !important;
+  }
+  /* Hide elements marked as no-print */
+  .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  /* Hide preview wrapper styling but keep print area visible */
+  .preview-wrapper {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+  /* Ensure preview wrapper doesn't hide its children */
+  .preview-wrapper * {
+    visibility: visible !important;
+  }
+  /* Ensure print area and all its children are always visible - maximum priority */
+  .print-area,
+  .print-area *,
+  .print-area.labels-print-area,
+  .print-area.labels-a4-print,
+  .print-area.labels-roll-print,
+  .print-area.labels-print-area *,
+  .print-area.labels-a4-print *,
+  .print-area.labels-roll-print * {
+    display: block !important;
+    visibility: visible !important;
+  }
+  /* Hide modal backdrop and UI elements */
+  body > div[class*="fixed"][class*="inset"] {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    position: static !important;
+  }
+  body > div[class*="fixed"][class*="inset"] > div {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  /* Hide buttons */
+  button {
+    display: none !important;
+    visibility: hidden !important;
+  }
 }
 /* End of print.css */
+
+/* Force-all-visible mode when printing labels to avoid blank pages */
+@media print {
+  body.labels-print-mode * {
+    visibility: visible !important;
+    display: initial;
+  }
+  body.labels-print-mode .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  body.labels-print-mode .print-area.labels-print-area,
+  body.labels-print-mode .print-area.labels-a4-print,
+  body.labels-print-mode .print-area.labels-roll-print {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    background: #fff !important;
+    inset: auto !important;
+    width: auto !important;
+  }
+  body.labels-print-mode .labels-grid,
+  body.labels-print-mode .labels-grid * {
+    visibility: visible !important;
+    display: block !important;
+  }
+  body.labels-print-mode button {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}

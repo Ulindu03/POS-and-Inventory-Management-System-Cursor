@@ -183,7 +183,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         customerIdToUse = await createCustomerIfNeeded();
       }
       const res = await salesApi.create({
-        items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })),
+        items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price, barcode: i.barcode })),
         discount,
         payments,
         extendedWarrantySelections: warrantySelections,
@@ -213,8 +213,17 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
       toast.success('Sale completed');
     } catch (err: any) {
       const status = err?.response?.status;
+      const errorCode = err?.response?.data?.code;
       const msg = err?.response?.data?.message || err?.message || 'Failed to complete sale';
-      if (status === 409) {
+      
+      if (errorCode === 'BARCODE_ALREADY_USED') {
+        const barcode = err?.response?.data?.data?.barcode;
+        const barcodeStatus = err?.response?.data?.data?.status;
+        toast.error('Barcode Already Used', {
+          description: `Barcode ${barcode} has already been ${barcodeStatus}. Please remove this item and try again.`,
+          duration: 5000
+        });
+      } else if (status === 409) {
         const data = err?.response?.data;
         const pId = data?.data?.productId || data?.productId;
         const avail = data?.data?.available ?? data?.available;

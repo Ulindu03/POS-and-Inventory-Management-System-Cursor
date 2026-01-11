@@ -184,8 +184,24 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
                     <div>
                       <span className="text-gray-500">Items:</span> {sale.items?.length || 0}
                       {sale.items?.length ? (
-                        <p className="mt-1 text-xs text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap">
-                          {getItemSummary(sale.items)}
+                        <p className="mt-1 text-xs text-gray-300 overflow-hidden text-ellipsis whitespace-nowrap">
+                          {/* Show product names summary */}
+                          {(() => {
+                            const items = sale.items || [];
+                            const names = items.map((item: any) => {
+                              if (item.productDetails?.name) {
+                                if (typeof item.productDetails.name === 'string') return item.productDetails.name;
+                                return item.productDetails.name.en || item.productDetails.name.si || item.productDetails.sku || item.productDetails._id || 'Item';
+                              }
+                              if (item.productName && typeof item.productName === 'string') return item.productName;
+                              if (item.name) return item.name;
+                              return item.product?._id || item.product || 'Item';
+                            });
+                            const previewCount = Math.min(names.length, 2);
+                            const preview = names.slice(0, previewCount).join(', ');
+                            const remaining = names.length - previewCount;
+                            return remaining > 0 ? `${preview} +${remaining} more` : preview;
+                          })()}
                         </p>
                       ) : null}
                     </div>

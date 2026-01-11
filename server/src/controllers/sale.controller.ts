@@ -12,6 +12,7 @@ import { emit as emitRealtime } from '../services/realtime.service';
 import { Counter } from '../models/Counter.model';
 import { Customer } from '../models/Customer.model';
 import { sendEmail, buildSaleReceiptEmail } from '../services/notify.service';
+import { UnitBarcode } from '../models/UnitBarcode.model';
 
 const nextInvoiceNo = async (): Promise<string> => {
   // Determine starting point from last persisted sale
@@ -142,6 +143,26 @@ export class SaleController {
         return res.status(400).json({ success: false, message: 'No items' });
       }
 
+      // Validate barcodes if provided - check if any are already sold
+      const itemsWithBarcodes = items.filter((i: any) => i.barcode);
+      if (itemsWithBarcodes.length > 0) {
+        const barcodes = itemsWithBarcodes.map((i: any) => i.barcode);
+        const soldBarcodes = await UnitBarcode.find({
+          barcode: { $in: barcodes },
+          status: { $in: ['sold', 'returned', 'damaged', 'written_off'] }
+        }).select('barcode status');
+
+        if (soldBarcodes.length > 0) {
+          const firstSold = soldBarcodes[0];
+          return res.status(400).json({
+            success: false,
+            message: `Barcode ${firstSold.barcode} has already been ${firstSold.status}`,
+            code: 'BARCODE_ALREADY_USED',
+            data: { barcode: firstSold.barcode, status: firstSold.status }
+          });
+        }
+      }
+
     const productIds = items.map((i) => i.product);
   const products = await Product.find({ _id: { $in: productIds } }).select('price.cost price.retail stock.current stock.reorderPoint trackInventory allowBackorder isDigital warranty');
     // Load inventory snapshots to validate using available/current stock if present
@@ -240,6 +261,7 @@ export class SaleController {
           discount: i.discount || 0,
           tax: { vat: 0, nbt: 0 },
           total: i.price * i.quantity - (i.discount || 0),
+          barcode: i.barcode || undefined,
         })),
   subtotal,
   tax: { vat, nbt },
@@ -281,6 +303,7 @@ export class SaleController {
         discount: i.discount || 0,
         tax: { vat: 0, nbt: 0 },
         total: i.price * i.quantity - (i.discount || 0),
+        barcode: i.barcode || undefined,
       })),
   subtotal,
       tax: { vat, nbt },
@@ -445,6 +468,43 @@ export class SaleController {
       if (process.env.NODE_ENV !== 'production') {
         // eslint-disable-next-line no-console
         console.warn('[warranty.auto] issuance loop failed', wAllErr);
+      }
+    }
+  }
+
+  // Track barcodes used in this sale
+  if (doc?._id) {
+    try {
+      const saleItems = (doc as any).items || [];
+      for (const it of saleItems) {
+        const qty = Number(it.quantity) || 0;
+        // Find barcodes for this product that are in_stock status and not yet sold
+        const barcodes = await UnitBarcode.find({
+          product: it.product,
+          status: 'in_stock'
+        }).limit(qty).sort({ createdAt: 1 });
+
+        // Mark each barcode as sold
+        for (const bc of barcodes) {
+          bc.status = 'sold';
+          bc.sale = doc._id;
+          bc.soldAt = new Date();
+          bc.customer = customer || undefined;
+          await bc.save();
+          
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('[barcode.track] sold', {
+              barcode: bc.barcode,
+              productId: String(it.product),
+              saleId: String(doc._id),
+              invoiceNo: doc.invoiceNo,
+            });
+          }
+        }
+      }
+    } catch (bcErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[barcode.track] tracking failed', bcErr);
       }
     }
   }

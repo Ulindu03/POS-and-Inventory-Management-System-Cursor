@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PurchaseOrder } from '../models/PurchaseOrder.model';
 import { Product } from '../models/Product.model';
 import { Payment } from '../models/Payment.model';
+import { UnitBarcode } from '../models/UnitBarcode.model';
 import { isSmtpConfigured } from '../services/email.service';
 import { Request as ExpressRequest } from 'express';
 
@@ -516,6 +517,39 @@ export const receiveItems = async (req: Request, res: Response) => {
           const newCurrent = ((ensuredStock && (ensuredStock as any).current) ?? 0) + netQuantity;
           product.stock = { ...(ensuredStock as any), current: newCurrent };
           await product.save();
+
+          // Mark barcodes as in_stock when inventory is received
+          try {
+            const result = await UnitBarcode.updateMany(
+              { 
+                product: product._id, 
+                status: 'generated',
+                $or: [
+                  { inStockAt: { $exists: false } },
+                  { inStockAt: null }
+                ]
+              },
+              { 
+                $set: { 
+                  status: 'in_stock',
+                  inStockAt: new Date()
+                } 
+              },
+              { limit: netQuantity }
+            );
+
+            if (process.env.NODE_ENV !== 'production' && result.modifiedCount > 0) {
+              console.log('[barcode.track.receive]', {
+                productId: product._id,
+                quantity: netQuantity,
+                barcodesUpdated: result.modifiedCount
+              });
+            }
+          } catch (bcErr) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.warn('[barcode.track.receive] failed', bcErr);
+            }
+          }
         }
       }
     }

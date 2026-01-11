@@ -32,6 +32,7 @@ import damageRoutes from './routes/damage.routes';
 import warrantyRoutes from './routes/warranty.routes';
 import warrantyClaimRoutes from './routes/warrantyClaim.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import barcodeRoutes from './routes/barcode.routes';
 import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
@@ -136,6 +137,7 @@ app.use('/api/damages', damageRoutes);
 app.use('/api/warranty', warrantyRoutes);
 app.use('/api/warranty-claims', warrantyClaimRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/barcodes', barcodeRoutes);
 
 // Simple image proxy to avoid third-party cookies / set-cookie headers leaking to browser
 // Usage: /api/proxy/img?url=<encoded remote url>

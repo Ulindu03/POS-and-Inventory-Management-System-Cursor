@@ -75,3 +75,5 @@ export { default as Clock } from 'lucide-react/dist/esm/icons/clock.js';
 export { default as Wand2 } from 'lucide-react/dist/esm/icons/wand-2.js';
 export { default as ToggleLeft } from 'lucide-react/dist/esm/icons/toggle-left.js';
 export { default as ToggleRight } from 'lucide-react/dist/esm/icons/toggle-right.js';
+export { default as Keyboard } from 'lucide-react/dist/esm/icons/keyboard.js';
+export { default as ScanBarcode } from 'lucide-react/dist/esm/icons/scan-barcode.js';

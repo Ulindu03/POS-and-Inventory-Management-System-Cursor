@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import JsBarcode from 'jsbarcode';
 import { useNavigate } from 'react-router-dom';
 import { productsApi } from '@/lib/api/products.api';
 import { BarcodeSVG } from '@/components/ui/BarcodeSVG';
+import { toast } from 'sonner';
 
 interface StickerPrintModalProps {
   product: any;
@@ -10,7 +12,7 @@ interface StickerPrintModalProps {
 }
 
 export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, onClose, initialBarcodes }) => {
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState<number | ''>(1);
   const [labelSize, setLabelSize] = useState<'50x25' | '50x30' | '50x35' | '40x30' | 'a4_5x7_auto'>('50x25');
   const [sheetType, setSheetType] = useState<'roll' | 'a4'>('roll');
   const [mode, setMode] = useState<'reuse_product_barcode' | 'unique_per_unit'>('reuse_product_barcode');
@@ -26,15 +28,36 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
   const [storeName, setStoreName] = useState<string>('VoltZone Electronics');
   const [skuText, setSkuText] = useState<string>(product?.sku || '');
   const [brandText, setBrandText] = useState<string>(product?.brand || '');
-  const [warrantyText, setWarrantyText] = useState<string>(() => {
+  // Parse existing warranty text or product warranty
+  const parseWarranty = () => {
     const d = (product?.specifications?.warranty?.duration ?? 0) as number;
     const t = (product?.specifications?.warranty?.type ?? 'months') as string;
-    if (!d) return '';
-    let unit = 'Month';
-    if (t === 'years') unit = 'Year';
-    else if (t === 'days') unit = 'Day';
-    return `${d} ${unit}${d > 1 ? 's' : ''}`;
-  });
+    if (d) {
+      let unit = 'month';
+      if (t === 'years') unit = 'year';
+      else if (t === 'days') unit = 'day';
+      else if (t === 'weeks') unit = 'week';
+      return { duration: d, unit };
+    }
+    return { duration: 1, unit: 'year' };
+  };
+
+  const initialWarranty = parseWarranty();
+  const [warrantyDuration, setWarrantyDuration] = useState<number | ''>(initialWarranty.duration);
+  const [warrantyUnit, setWarrantyUnit] = useState<'day' | 'week' | 'month' | 'year'>(initialWarranty.unit as 'day' | 'week' | 'month' | 'year');
+
+  // Generate warranty text from duration and unit
+  const warrantyText = useMemo(() => {
+    const duration = typeof warrantyDuration === 'number' ? warrantyDuration : 0;
+    if (duration <= 0) return '';
+    const unitMap: Record<string, string> = {
+      day: duration === 1 ? 'Day' : 'Days',
+      week: duration === 1 ? 'Week' : 'Weeks',
+      month: duration === 1 ? 'Month' : 'Months',
+      year: duration === 1 ? 'Year' : 'Years',
+    };
+    return `${duration} ${unitMap[warrantyUnit] || warrantyUnit}`;
+  }, [warrantyDuration, warrantyUnit]);
   const [specsText, setSpecsText] = useState<string>('');
   const [inclVat, setInclVat] = useState<boolean>(false);
   const [barcodes, setBarcodes] = useState<string[] | null>(null);
@@ -60,9 +83,10 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
   const onGenerate = async () => {
     setLoading(true);
     try {
+      const qty = typeof quantity === 'number' && quantity > 0 ? quantity : 1;
       const { data } = await productsApi.createStickerBatch({
         productId: product._id,
-        quantity,
+        quantity: qty,
         mode,
         layout: {
           labelSize,
@@ -86,10 +110,19 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
       });
       const arr = (data?.data?.barcodes) || (data?.barcodes) || [];
       setBarcodes(arr);
-      setTimeout(() => {
-        // focus printable area
-        printRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 50);
+      if (arr.length > 0) {
+        toast.success(`Generated ${arr.length} sticker${arr.length !== 1 ? 's' : ''}`, {
+          description: mode === 'unique_per_unit' ? 'Each sticker has a unique barcode' : 'All stickers use the same barcode'
+        });
+        setTimeout(() => {
+          // focus printable area
+          printRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 50);
+      } else {
+        toast.error('No stickers generated', {
+          description: 'Please check the quantity and try again'
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -104,6 +137,259 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
     } finally {
       setLoading(false);
     }
+  };
+
+  const onPrint = async () => {
+    // Use a dedicated print window to avoid app-level print CSS hiding content
+    if (!printRef.current) {
+      window.print();
+      return;
+    }
+
+    // Ensure barcode images are ready; regenerate if missing
+    const labelNodes = Array.from(printRef.current.querySelectorAll('.labels-grid > div')) as HTMLElement[];
+    labelNodes.forEach((label) => {
+      try {
+        const img = label.querySelector('img') as HTMLImageElement | null;
+        const codeEl = Array.from(label.querySelectorAll('div')).reverse().find((d) => (d.textContent || '').trim().length > 0);
+        const code = codeEl?.textContent?.trim() || '';
+        if (img && code) {
+          const needsSrc = !img.src || img.src.trim() === '' || img.naturalWidth === 0;
+          if (needsSrc) {
+            const canvas = document.createElement('canvas');
+            try {
+              JsBarcode(canvas, code, {
+                format: /^\d{12,13}$/.test(code) ? 'EAN13' : 'CODE128',
+                displayValue: false,
+                height: 36,
+                margin: 0,
+                width: 1.3,
+                background: '#fff',
+                lineColor: '#000',
+              });
+              img.src = canvas.toDataURL('image/png');
+            } catch {
+              // skip
+            }
+          }
+        }
+      } catch {
+        // ignore per-label errors
+      }
+    });
+
+    const imgs = Array.from(printRef.current.querySelectorAll('img')) as HTMLImageElement[];
+    const waits = imgs.map((img) => {
+      if (img.complete && img.naturalWidth !== 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const onLoad = () => { cleanup(); resolve(); };
+        const onErr = () => { cleanup(); resolve(); };
+        const cleanup = () => {
+          img.removeEventListener('load', onLoad);
+          img.removeEventListener('error', onErr);
+        };
+        img.addEventListener('load', onLoad);
+        img.addEventListener('error', onErr);
+        setTimeout(() => { cleanup(); resolve(); }, 1500);
+      });
+    });
+    await Promise.all(waits);
+
+    const printHtml = printRef.current.innerHTML;
+
+    const gapMm = sheetType === 'a4'
+      ? (labelSize === 'a4_5x7_auto' ? `${a4Gap}mm` : '2mm')
+      : '2mm';
+    const cols = sheetType === 'a4'
+      ? (labelSize === 'a4_5x7_auto' ? a4Cols : calculateA4Columns)
+      : 1;
+    const colWidth = mm(labelDims.w);
+
+    const pageSize = sheetType === 'roll' ? `${mm(labelDims.w)} auto` : 'A4';
+    const pageMargin = sheetType === 'roll' ? '0mm' : '5mm';
+    const bodyPadding = sheetType === 'roll' ? '0mm' : '5mm';
+
+    const labelHeight = mm(labelDims.h);
+
+    // NOTE: We inject the app's styles (Tailwind + components) so labels match the preview.
+    // The app also includes aggressive print rules (print.css) that can break label layout.
+    // These overrides are scoped to body.vz-sticker-print and use !important to win.
+    const printStyles = `
+      <style>
+        @page { size: ${pageSize}; margin: ${pageMargin}; }
+        body.vz-sticker-print { margin: 0; padding: ${bodyPadding}; background: #fff; color: #000; }
+        body.vz-sticker-print * { box-sizing: border-box; }
+
+        body.vz-sticker-print .print-area,
+        body.vz-sticker-print .print-area * {
+          visibility: visible !important;
+        }
+
+        body.vz-sticker-print .labels-grid {
+          display: grid !important;
+          grid-template-columns: repeat(${cols}, ${colWidth}) !important;
+          gap: ${gapMm} !important;
+          align-content: start !important;
+          justify-content: ${sheetType === 'roll' ? 'center' : 'start'} !important;
+          grid-auto-rows: ${labelHeight} !important;
+        }
+
+        body.vz-sticker-print .labels-grid.roll {
+          grid-template-columns: repeat(1, ${colWidth}) !important;
+          width: ${colWidth} !important;
+          margin: 0 auto !important;
+        }
+
+        body.vz-sticker-print .labels-grid > div {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          width: ${colWidth} !important;
+          height: ${labelHeight} !important;
+          min-height: ${labelHeight} !important;
+          max-height: ${labelHeight} !important;
+          overflow: hidden !important;
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+          -webkit-region-break-inside: avoid !important;
+          padding: 0.8mm !important;
+          font-size: 6px !important;
+          line-height: 1.1 !important;
+          gap: 0.2mm !important;
+          background: #fff !important;
+          color: #000 !important;
+          border: 1px solid #ccc !important;
+          box-sizing: border-box !important;
+        }
+
+        body.vz-sticker-print .labels-grid > div > * {
+          width: 100% !important;
+          overflow: hidden !important;
+          text-align: center !important;
+        }
+
+        /* Store name - top, bold, slightly larger */
+        body.vz-sticker-print .labels-grid > div > div:first-child {
+          font-size: 6px !important;
+          font-weight: bold !important;
+          line-height: 1 !important;
+          flex-shrink: 0 !important;
+        }
+
+        /* Product name - smaller, multi-line */
+        body.vz-sticker-print .labels-grid > div > div:nth-child(2) {
+          font-size: 5px !important;
+          line-height: 1.05 !important;
+          word-wrap: break-word !important;
+          flex-shrink: 0 !important;
+        }
+
+        /* Price */
+        body.vz-sticker-print .labels-grid > div > div:nth-child(3) {
+          font-size: 6px !important;
+          font-weight: 600 !important;
+          line-height: 1 !important;
+          flex-shrink: 0 !important;
+        }
+
+        /* Barcode container */
+        body.vz-sticker-print .labels-grid > div > div:nth-child(4) {
+          flex: 0 0 auto !important;
+        }
+
+        /* Barcode number text */
+        body.vz-sticker-print .labels-grid > div > div:nth-child(5) {
+          font-size: 5px !important;
+          font-weight: bold !important;
+          line-height: 1 !important;
+          letter-spacing: 0.5px !important;
+          flex-shrink: 0 !important;
+        }
+
+        /* Brand + SKU + Warranty - footer - EXPAND TO FILL SPACE */
+        body.vz-sticker-print .labels-grid > div > div:nth-child(n+6) {
+          font-size: 4.5px !important;
+          line-height: 1.1 !important;
+          word-break: break-word !important;
+          flex-shrink: 0 !important;
+          white-space: normal !important;
+          text-align: center !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+
+        body.vz-sticker-print .labels-grid > div * {
+          margin: 0 !important;
+          padding: 0 !important;
+          word-break: break-word !important;
+          text-align: center !important;
+        }
+
+        body.vz-sticker-print .labels-grid > div img {
+          display: block !important;
+          max-width: 95% !important;
+          width: auto !important;
+          height: auto !important;
+          flex-shrink: 0 !important;
+          object-fit: contain !important;
+        }
+
+        /* Hide any toast/UI that might have been cloned */
+        body.vz-sticker-print [data-sonner-toaster],
+        body.vz-sticker-print .sonner-toast-container {
+          display: none !important;
+          visibility: hidden !important;
+        }
+
+        /* Never print buttons */
+        body.vz-sticker-print button {
+          display: none !important;
+          visibility: hidden !important;
+        }
+      </style>
+    `;
+
+    // IMPORTANT: include the app's loaded styles (Tailwind + component CSS).
+    // Without this, the cloned markup renders with default browser styles and overlaps.
+    const inheritedCss = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => (node as HTMLElement).outerHTML)
+      .join('\n');
+
+    const headHtml = `
+      <base href="${window.location.origin}/" />
+      ${inheritedCss}
+      ${printStyles}
+    `;
+
+    const w = window.open('', 'PRINT', 'height=900,width=700');
+    if (!w) {
+      window.print();
+      return;
+    }
+    w.document.write('<html><head><title>Print</title>' + headHtml + '</head><body class="vz-sticker-print">');
+    w.document.write('<div class="print-area">');
+    w.document.write(printHtml);
+    w.document.write('</div>');
+    w.document.write('</body></html>');
+    w.document.close();
+    w.focus();
+
+    // Wait a moment for CSS + images to apply in the new window
+    setTimeout(async () => {
+      try {
+        // Wait for fonts if supported
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const fontsReady = (w.document as any).fonts?.ready;
+        if (fontsReady && typeof fontsReady.then === 'function') {
+          await fontsReady;
+        }
+      } catch {
+        // ignore
+      }
+      w.print();
+      w.close();
+    }, 500);
   };
 
   const mm = (n: number) => `${n}mm`;
@@ -141,6 +427,17 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
     return raw ?? '';
   }, [mrp, product?.price?.retail, inclVat]);
 
+  // Calculate optimal columns for A4 based on label width
+  const calculateA4Columns = useMemo(() => {
+    if (sheetType !== 'a4' || labelSize === 'a4_5x7_auto') return a4Cols;
+    const pageWidth = 210; // A4 width in mm
+    const margin = 10; // margin on each side
+    const gap = 2; // gap between labels
+    const usableWidth = pageWidth - (margin * 2);
+    const cols = Math.floor((usableWidth + gap) / (labelDims.w + gap));
+    return Math.max(1, cols);
+  }, [sheetType, labelSize, labelDims.w, a4Cols]);
+
   const gridStyle = useMemo(() => {
     if (sheetType === 'a4') {
       if (labelSize === 'a4_5x7_auto') {
@@ -150,27 +447,35 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
           gap: mm(a4Gap),
         } as React.CSSProperties;
       }
+      // Calculate optimal columns for A4
+      const cols = calculateA4Columns;
       return {
-        gridTemplateColumns: `repeat(auto-fill, ${mm(labelDims.w)})`,
-        justifyContent: 'space-between',
+        gridTemplateColumns: `repeat(${cols}, ${mm(labelDims.w)})`,
+        padding: mm(10),
+        gap: mm(2),
+        justifyContent: 'start',
       } as React.CSSProperties;
     }
-  return { gridTemplateColumns: 'repeat(1, 1fr)' } as React.CSSProperties;
-  }, [sheetType, labelSize, a4Cols, a4Margin, a4Gap, labelDims.w]);
+    // For roll, use single column but allow better spacing
+    return { 
+      gridTemplateColumns: 'repeat(1, 1fr)',
+      gap: mm(2),
+    } as React.CSSProperties;
+  }, [sheetType, labelSize, a4Cols, a4Margin, a4Gap, labelDims.w, calculateA4Columns]);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur z-50 flex items-center justify-center p-4">
       <div className="bg-[#0f0f12] rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <div className="flex items-center justify-between p-4 border-b border-white/10 no-print">
           <div className="text-lg font-semibold">Generate Stickers</div>
           <div className="flex gap-2">
             <button className="px-3 py-1 rounded bg-white/10 hover:bg-white/20" onClick={onClose}>Close</button>
             <button className="px-3 py-1 rounded bg-white/10 hover:bg-white/20" onClick={() => navigate('/dashboard')}>Back to Dashboard</button>
           </div>
         </div>
-        <div className="flex-1 overflow-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-          <div className="space-y-3">
+        <div className="flex-1 overflow-auto no-print" style={{ overflowY: 'auto', overflowX: 'hidden', position: 'relative' }}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 pb-8 no-print" style={{ position: 'relative' }}>
+          <div className="space-y-3 no-print" style={{ position: 'relative', zIndex: 1 }}>
             <div>
               <div className="text-sm text-[#F8F8F8]/70">Product</div>
               <div className="font-semibold">{product?.name?.en || product?.name}</div>
@@ -178,7 +483,29 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
             </div>
             <label className="block">
               <div className="text-sm mb-1">Quantity</div>
-              <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value || '1', 10))} className="w-full bg-white/10 rounded px-3 py-2" />
+              <input 
+                type="number" 
+                min={1} 
+                value={quantity} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setQuantity('');
+                  } else {
+                    const num = parseInt(val, 10);
+                    if (!isNaN(num)) {
+                      setQuantity(num);
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || isNaN(parseInt(val, 10)) || parseInt(val, 10) < 1) {
+                    setQuantity(1);
+                  }
+                }}
+                className="w-full bg-white/10 rounded px-3 py-2" 
+              />
             </label>
             <label className="block relative z-50">
               <div className="text-sm mb-1">Template</div>
@@ -282,10 +609,49 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
                   <div className="text-sm mb-1">Price</div>
                   <input type="number" min={0} value={mrp} onChange={(e) => setMrp(parseFloat(e.target.value || '0'))} className="w-full bg-white/10 rounded px-3 py-2" />
                 </label>
-                <label className="block">
-                  <div className="text-sm mb-1">Warranty text</div>
-                  <input type="text" value={warrantyText} onChange={(e) => setWarrantyText(e.target.value)} className="w-full bg-white/10 rounded px-3 py-2" placeholder="1 Year" />
-                </label>
+                <div className="grid grid-cols-3 gap-2 items-end col-span-2">
+                  <label className="block col-span-2">
+                    <div className="text-sm mb-1">Warranty Duration</div>
+                    <input 
+                      type="number" 
+                      min={1}
+                      value={warrantyDuration} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setWarrantyDuration('');
+                        } else {
+                          const num = parseInt(val, 10);
+                          if (!isNaN(num) && num > 0) {
+                            setWarrantyDuration(num);
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const val = e.target.value;
+                        if (val === '' || isNaN(parseInt(val, 10)) || parseInt(val, 10) < 1) {
+                          setWarrantyDuration(1);
+                        }
+                      }}
+                      className="w-full bg-white/10 rounded px-3 py-2 h-[42px]" 
+                      placeholder="1"
+                    />
+                  </label>
+                  <label className="block relative" style={{ zIndex: 100 }}>
+                    <div className="text-sm mb-1">Unit</div>
+                    <select 
+                      value={warrantyUnit} 
+                      onChange={(e) => setWarrantyUnit(e.target.value as 'day' | 'week' | 'month' | 'year')} 
+                      className="w-full bg-white/10 rounded px-3 py-2 vz-select h-[42px]"
+                      style={{ position: 'relative', zIndex: 100 }}
+                    >
+                      <option value="day">Day(s)</option>
+                      <option value="week">Week(s)</option>
+                      <option value="month">Month(s)</option>
+                      <option value="year">Year(s)</option>
+                    </select>
+                  </label>
+                </div>
                 <label className="block col-span-2">
                   <div className="text-sm mb-1">Specs (short)</div>
                   <input type="text" value={specsText} onChange={(e) => setSpecsText(e.target.value)} className="w-full bg-white/10 rounded px-3 py-2" placeholder="9W | 6500K | E27" />
@@ -296,23 +662,54 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
                 </label>
               </div>
             )}
-            <button onClick={onGenerate} disabled={loading} className="w-full bg-purple-600 hover:bg-purple-700 rounded px-3 py-2 font-semibold">
-              {loading ? 'Generating…' : 'Generate Preview'}
+            <button 
+              onClick={onGenerate} 
+              disabled={loading || !quantity || (typeof quantity === 'number' && quantity < 1)} 
+              className="w-full bg-purple-600 hover:bg-purple-700 rounded px-3 py-2 font-semibold disabled:opacity-50"
+            >
+              {loading 
+                ? `Generating ${typeof quantity === 'number' ? quantity : 1} sticker${(typeof quantity === 'number' ? quantity : 1) !== 1 ? 's' : ''}…` 
+                : `Generate ${typeof quantity === 'number' ? quantity : 1} Sticker${(typeof quantity === 'number' ? quantity : 1) !== 1 ? 's' : ''}`
+              }
             </button>
             <button onClick={onLoadLastBatch} disabled={loading} className="w-full bg-white/10 hover:bg-white/20 rounded px-3 py-2">Load Last Batch</button>
             {barcodes && (
-              <button onClick={() => window.print()} className="w-full bg-white/10 hover:bg-white/20 rounded px-3 py-2">Print</button>
+              <button onClick={onPrint} className="w-full bg-white/10 hover:bg-white/20 rounded px-3 py-2">Print</button>
             )}
             <button onClick={onClose} className="w-full bg-white/5 hover:bg-white/10 rounded px-3 py-2">Cancel</button>
       </div>
   <div className={`md:col-span-2 ${sheetType === 'a4' ? 'labels-a4' : 'labels-roll'}`}>
-            <div className="text-sm text-[#F8F8F8]/70 mb-2">Preview</div>
-            <div
-              ref={printRef}
-              className="print-area"
-              style={sheetType === 'roll' ? { width: mm(labelDims.w), margin: '0 auto' } : undefined}
+            <div className="flex items-center justify-between mb-2 no-print">
+              <div className="text-sm text-[#F8F8F8]/70 font-semibold">Preview</div>
+              {barcodes && barcodes.length > 0 && (
+                <div className="text-xs text-green-400 font-medium">
+                  ✓ {barcodes.length} sticker{barcodes.length !== 1 ? 's' : ''} generated
+                </div>
+              )}
+            </div>
+            {barcodes && barcodes.length > 0 && (
+              <div className="mb-2 flex items-center justify-between text-xs text-gray-400 no-print">
+                <div>
+                  {sheetType === 'a4' && (
+                    <span>Layout: {calculateA4Columns} column{calculateA4Columns !== 1 ? 's' : ''} per page</span>
+                  )}
+                  {sheetType === 'roll' && (
+                    <span>Continuous roll format</span>
+                  )}
+                </div>
+              </div>
+            )}
+            <div 
+              className="overflow-auto max-h-[60vh] border border-white/10 rounded p-2 bg-white/5 preview-wrapper"
+              style={{ scrollbarWidth: 'thin' }}
             >
+              <div
+                ref={printRef}
+                className={`print-area labels-print-area ${sheetType === 'a4' ? 'labels-a4-print' : 'labels-roll-print'}`}
+                style={sheetType === 'roll' ? { width: mm(labelDims.w), margin: '0 auto' } : undefined}
+              >
               <div className={`labels-grid ${sheetType === 'roll' ? 'roll' : ''}`} style={gridStyle}>
+                {/* Render all barcodes - browser handles rendering efficiently */}
                 {(barcodes || []).map((code, i) => (
                   <div
                     key={`${code}-${i}`}
@@ -363,7 +760,12 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
                         <div className="w-full">
                           <div className="flex items-center justify-center gap-1 text-[7px] leading-tight w-full">
                             <div className="min-w-0 max-w-[50%] truncate text-center">{brandText || ''}</div>
-                            <div className="min-w-0 max-w-[50%] truncate text-center">{skuText ? `SKU: ${skuText}` : ''}</div>
+                            <div className="min-w-0 max-w-[50%] truncate text-center">
+                              {mode === 'unique_per_unit' && code 
+                                ? `SKU: ${skuText ? skuText + '-' + String(i + 1).padStart(3, '0') : code}`
+                                : (skuText ? `SKU: ${skuText}` : '')
+                              }
+                            </div>
                           </div>
                           {warrantyText && (
                             <div className="text-[7px] text-center leading-tight">Warranty: {warrantyText}</div>
@@ -378,6 +780,12 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
                 ))}
               </div>
             </div>
+            </div>
+            {!barcodes || barcodes.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm border border-white/10 rounded p-4 bg-white/5">
+                No stickers generated yet. Click "Generate Preview" to create stickers.
+              </div>
+            ) : null}
           </div>
           </div>
         </div>

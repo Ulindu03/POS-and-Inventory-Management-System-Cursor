@@ -3,7 +3,7 @@ import { proxyImage } from '@/lib/proxyImage';
 import { useEffect, useRef, useState } from 'react';
 import { settingsApi } from '@/lib/api/settings.api';
 
-interface Item { name: string; qty: number; price: number; total: number }
+interface Item { name: string; qty: number; price: number; total: number; barcode?: string; barcodes?: string[] }
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -113,112 +113,144 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
     : null;
   const endsOn = warranties.length === 1 && warranties[0]?.endDate ? new Date(warranties[0].endDate as string).toLocaleDateString() : null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
       <button
         type="button"
         className="absolute inset-0 bg-black/70 no-print"
         onClick={onClose}
         aria-label="Close receipt"
       />
-      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-5 text-[#F8F8F8]">
-        <div className="flex items-center justify-between mb-3 no-print">
+      <div className="relative w-full max-w-md my-8 rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-5 text-[#F8F8F8] max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between mb-3 shrink-0 no-print">
           <div className="text-lg font-semibold">Receipt Preview</div>
           <div className="opacity-80">{invoiceNo}</div>
         </div>
-        <div className="print-area">
+        <div className="print-area overflow-y-auto flex-1 min-h-0 pr-2" style={{ scrollbarWidth: 'thin' }}>
           <div
             className={`receipt ${paperWidth === 58 ? 'thermal-58' : ''}`}
             style={{ width: paperWidth === 58 ? '58mm' : '80mm', margin: '0 auto', background: '#fff', color: '#000', padding: 8, borderRadius: 6 }}
             ref={receiptRef}
           >
-            <div className="store-block" style={{ textAlign: 'center', marginBottom: 6 }}>
+            <div className="store-block" style={{ textAlign: 'center', marginBottom: 10, paddingBottom: 8, borderBottom: '2px solid #000' }}>
               {showLogo && (
-                <img src={proxyImage(logoUrl || '/logo.jpg')} alt="Company Logo" style={{ width: '28mm', maxWidth: 120, height: 'auto', objectFit: 'contain', margin: '0 auto 6px', display: 'block' }} />
+                <img src={proxyImage(logoUrl || '/logo.jpg')} alt="Company Logo" style={{ width: '28mm', maxWidth: 120, height: 'auto', objectFit: 'contain', margin: '0 auto 8px', display: 'block' }} />
               )}
-              <h1 style={{ fontSize: 18, margin: '0 0 4px', fontFamily: 'Arial, Helvetica, sans-serif' }}>{store?.name || 'VoltZone'}</h1>
-              {store?.address && (<div className="muted small">{store.address}</div>)}
+              <h1 style={{ fontSize: 20, margin: '0 0 4px', fontFamily: 'Arial, Helvetica, sans-serif', fontWeight: 700 }}>{store?.name || 'VoltZone'}</h1>
+              {store?.address && (<div className="muted small" style={{ fontSize: 11, color: '#555' }}>{store.address}</div>)}
               {(store?.phone || store?.email) && (
-                <div className="muted small">{[store.phone, store.email].filter(Boolean).join(' | ')}</div>
+                <div className="muted small" style={{ fontSize: 11, color: '#555' }}>{[store.phone, store.email].filter(Boolean).join(' | ')}</div>
               )}
             </div>
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Invoice</span><span>{invoiceNo}</span></div>
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Date</span><span>{new Date().toLocaleDateString()}</span></div>
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Time</span><span>{new Date().toLocaleTimeString()}</span></div>
-            {cashierName && (<div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Cashier</span><span>{cashierName}</span></div>)}
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Payment</span><span>{(method || 'cash').replace(/_/g, ' ').toUpperCase()}</span></div>
-            {promoCode && <div className="row"><span>Promo</span><span>{promoCode}</span></div>}
-            <hr />
+            <div style={{ background: '#f5f5f5', padding: '6px 8px', marginBottom: 8, borderRadius: 4 }}>
+              <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12, marginBottom: 3 }}><span style={{ fontWeight: 600 }}>Invoice</span><span style={{ fontWeight: 700 }}>{invoiceNo}</span></div>
+              <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 11 }}><span>Date</span><span>{new Date().toLocaleDateString()}</span></div>
+              <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 11 }}><span>Time</span><span>{new Date().toLocaleTimeString()}</span></div>
+              {cashierName && (<div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 11 }}><span>Cashier</span><span>{cashierName}</span></div>)}
+              <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 11 }}><span>Payment</span><span style={{ fontWeight: 600 }}>{(method || 'cash').replace(/_/g, ' ').toUpperCase()}</span></div>
+              {promoCode && <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 11 }}><span>Promo</span><span style={{ color: '#0066cc', fontWeight: 600 }}>{promoCode}</span></div>}
+            </div>
+            <hr style={{ borderTop: '2px solid #000', margin: '8px 0' }} />
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', fontSize: 12, padding: '2px 0' }}>Item</th>
-                  <th className="qty" style={{ width: '10mm', textAlign: 'right', fontSize: 12, padding: '2px 0' }}>Qty</th>
-                  <th className="price" style={{ width: '18mm', textAlign: 'right', fontSize: 12, padding: '2px 0' }}>Price</th>
-                  <th className="total" style={{ width: '22mm', textAlign: 'right', fontSize: 12, padding: '2px 0' }}>Total</th>
+                <tr style={{ borderBottom: '2px solid #000' }}>
+                  <th style={{ textAlign: 'left', fontSize: 11, padding: '4px 0', fontWeight: 700 }}>Item</th>
+                  <th className="qty" style={{ width: '10mm', textAlign: 'right', fontSize: 11, padding: '4px 0', fontWeight: 700 }}>Qty</th>
+                  <th className="price" style={{ width: '18mm', textAlign: 'right', fontSize: 11, padding: '4px 0', fontWeight: 700 }}>Price</th>
+                  <th className="total" style={{ width: '22mm', textAlign: 'right', fontSize: 11, padding: '4px 0', fontWeight: 700 }}>Total</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((i) => (
-                  <tr key={`${i.name}-${i.qty}-${i.total}`}>
-                    <td className="item-name" style={{ fontSize: 12, padding: '2px 0' }}>{i.name}</td>
-                    <td className="qty" style={{ textAlign: 'right', fontSize: 12, padding: '2px 0' }}>{i.qty}</td>
-                    <td className="price" style={{ textAlign: 'right', fontSize: 12, padding: '2px 0' }}>{formatLKR(i.price)}</td>
-                    <td className="total" style={{ textAlign: 'right', fontSize: 12, padding: '2px 0' }}>{formatLKR(i.total)}</td>
-                  </tr>
+                {items.map((i, idx) => (
+                  <>
+                    <tr key={`${i.name}-${i.qty}-${i.total}-${idx}`} style={{ borderBottom: '1px solid #ddd' }}>
+                      <td className="item-name" style={{ fontSize: 12, padding: '6px 0', fontWeight: 500 }}>{i.name}</td>
+                      <td className="qty" style={{ textAlign: 'right', fontSize: 12, padding: '6px 0', fontWeight: 600 }}>{i.qty}</td>
+                      <td className="price" style={{ textAlign: 'right', fontSize: 12, padding: '6px 0' }}>{formatLKR(i.price)}</td>
+                      <td className="total" style={{ textAlign: 'right', fontSize: 12, padding: '6px 0', fontWeight: 600 }}>{formatLKR(i.total)}</td>
+                    </tr>
+                    {(i.barcode || i.barcodes) && (
+                      <tr key={`${i.name}-barcode-${idx}`}>
+                        <td colSpan={4} style={{ fontSize: 9, padding: '2px 0 6px 4px', color: '#666', background: '#fafafa' }}>
+                          {i.barcodes && i.barcodes.length > 0 ? (
+                            <div>
+                              <span style={{ fontWeight: 600, fontSize: 10 }}>Barcodes ({i.barcodes.length}):</span>
+                              {i.barcodes.map((bc, bcIdx) => (
+                                <div key={bcIdx} style={{ marginLeft: 4, fontFamily: 'monospace' }}>#{bcIdx + 1}: {bc}</div>
+                              ))}
+                            </div>
+                          ) : i.barcode ? (
+                            <div style={{ fontFamily: 'monospace' }}>
+                              <span style={{ fontWeight: 600, fontSize: 10 }}>Barcode{i.qty > 1 ? ` (${i.qty} units)` : ''}:</span> {i.barcode}
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 ))}
               </tbody>
             </table>
-            <hr />
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Subtotal</span><span>{formatLKR(subtotal)}</span></div>
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Discount</span><span>-{formatLKR(discount)}</span></div>
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><span>Tax</span><span>{formatLKR(tax)}</span></div>
-            <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}><strong>Total</strong><strong>{formatLKR(total)}</strong></div>
+            <hr style={{ borderTop: '2px solid #000', margin: '8px 0' }} />
+            <div style={{ background: '#f9f9f9', padding: '8px', borderRadius: 4 }}>
+              <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12, marginBottom: 2 }}><span>Subtotal</span><span>{formatLKR(subtotal)}</span></div>
+              {discount > 0 && <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12, marginBottom: 2, color: '#d32f2f' }}><span>Discount</span><span>-{formatLKR(discount)}</span></div>}
+              {tax > 0 && <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12, marginBottom: 4 }}><span>Tax</span><span>{formatLKR(tax)}</span></div>}
+              <div className="row" style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 14, paddingTop: 6, borderTop: '2px solid #333' }}><strong style={{ fontWeight: 700 }}>Total</strong><strong style={{ fontWeight: 700 }}>{formatLKR(total)}</strong></div>
+            </div>
             {warranties.length > 0 && (
               <>
-                <hr />
-                <div className="muted" style={{ fontSize: 11 }}>
-                  Warranty for eligible items is linked to Invoice <strong>#{invoiceNo}</strong>. Keep this receipt for reference.
-                </div>
-                {periodLabel && (
-                  <div className="muted" style={{ fontSize: 11 }}>
-                    {uniquePeriods.length > 1 ? 'Periods' : 'Period'}: <strong>{periodLabel}</strong>{endsOn ? <> (ends {endsOn})</> : null}
+                <hr style={{ margin: '8px 0' }} />
+                <div style={{ background: '#e3f2fd', padding: '8px', borderRadius: 4, border: '1px solid #90caf9' }}>
+                  <div className="muted" style={{ fontSize: 10, color: '#1565c0', lineHeight: 1.4 }}>
+                    ✓ Warranty for eligible items is linked to Invoice <strong>#{invoiceNo}</strong>. Keep this receipt for reference.
                   </div>
-                )}
+                  {periodLabel && (
+                    <div className="muted" style={{ fontSize: 10, color: '#1565c0', marginTop: 2 }}>
+                      {uniquePeriods.length > 1 ? 'Periods' : 'Period'}: <strong>{periodLabel}</strong>{endsOn ? <> (ends {endsOn})</> : null}
+                    </div>
+                  )}
+                </div>
               </>
             )}
             {payments && payments.length > 0 && (
               <>
-                <hr />
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Payments</div>
+                <hr style={{ margin: '8px 0' }} />
+                <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>Payments</div>
                 {payments.map((p, idx) => {
                   const labelMethod = (p.method || '').replace(/_/g, ' ').toUpperCase();
                   const label = p.cardBrand ? `${p.cardBrand.toUpperCase()} ${labelMethod}` : labelMethod;
                   return (
-                    <div key={`${p.method}-${idx}`} style={{ marginBottom: 4 }}>
-                      <div className="row"><span>{label}</span><span>{formatLKR(p.amount)}</span></div>
+                    <div key={`${p.method}-${idx}`} style={{ marginBottom: 6, background: '#f5f5f5', padding: '4px 6px', borderRadius: 3 }}>
+                      <div className="row" style={{ fontSize: 12, fontWeight: 600 }}><span>{label}</span><span>{formatLKR(p.amount)}</span></div>
                     {typeof p.tendered === 'number' && (
-                      <div className="row" style={{ fontSize: 11 }}><span>Tendered</span><span>{formatLKR(p.tendered)}</span></div>
+                      <div className="row" style={{ fontSize: 10, color: '#555' }}><span>Tendered</span><span>{formatLKR(p.tendered)}</span></div>
                     )}
                     {typeof p.change === 'number' && (
-                      <div className="row" style={{ fontSize: 11 }}><span>Balance</span><span>{formatLKR(p.change)}</span></div>
+                      <div className="row" style={{ fontSize: 10, color: '#555' }}><span>Balance</span><span style={{ fontWeight: 600 }}>{formatLKR(p.change)}</span></div>
                     )}
                     {p.reference && (
-                      <div className="row" style={{ fontSize: 11 }}><span>Reference</span><span>{p.reference}</span></div>
+                      <div className="row" style={{ fontSize: 9, color: '#666', fontFamily: 'monospace' }}><span>Ref</span><span>{p.reference}</span></div>
                     )}
                     </div>
                   );
                 })}
               </>
             )}
-            <hr />
-            <div className="muted footer" style={{ textAlign: 'center', marginTop: 8 }}>
-              Warranty claims require the Invoice number. Keep this receipt safe.
-              <br />
-              Thank you for your purchase.
+            <hr style={{ borderTop: '2px solid #000', margin: '10px 0' }} />
+            <div className="muted footer" style={{ textAlign: 'center', marginTop: 8, padding: '8px 0', background: '#f9f9f9', borderRadius: 4 }}>
+              <div style={{ fontSize: 11, color: '#333', fontWeight: 600, marginBottom: 4 }}>
+                ⚠️ Warranty claims require the Invoice number.
+              </div>
+              <div style={{ fontSize: 11, color: '#555', marginBottom: 4 }}>
+                Keep this receipt safe.
+              </div>
+              <div style={{ fontSize: 12, color: '#000', fontWeight: 700 }}>
+                Thank you for your purchase! 
+              </div>
             </div>
           </div>
         </div>
-        <div className="flex gap-2 justify-end mt-4 no-print">
+        <div className="flex gap-2 justify-end mt-4 shrink-0 no-print flex-wrap">
           <button
             onClick={() => {
               // Thermal: temporarily force width to 100% of roll and margin 0
@@ -241,7 +273,7 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
                 setTimeout(cleanup, 1200);
               }, 50);
             }}
-            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20"
+            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm"
             title="Use with thermal printers (80mm/58mm). Choose the thermal paper in the printer dialog."
           >
             Print (Thermal)
@@ -253,12 +285,12 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
               const html = node ? node.outerHTML : '';
               openAndPrintFit(html, `Receipt ${invoiceNo}`);
             }}
-            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20"
+            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-sm"
             title="Use when the destination has only A4/B5/etc."
           >
             Print (Fit to page)
           </button>
-          <button onClick={onClose} className="px-4 py-2 rounded-xl" style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}>Close</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-xl font-semibold text-sm" style={{ background: 'linear-gradient(135deg,#FFE100,#FFD100)', color: '#000' }}>Close</button>
         </div>
       </div>
     </div>
