@@ -11,7 +11,7 @@ export async function nextWarrantyNo() {
 }
 
 export async function issueWarranty(params: {
-  productId: string; saleId?: string; saleItemId?: string; customerId: string; issuedBy: string; periodDays: number; coverage?: string[]; exclusions?: string[]; type?: 'manufacturer'|'extended'|'replacement'; requiresActivation?: boolean; serialNumber?: string; batchNumber?: string; branchId?: string;
+  productId: string; saleId?: string; saleItemId?: string; customerId: string; issuedBy: string; periodDays: number; coverage?: string[]; exclusions?: string[]; type?: 'manufacturer'|'extended'|'replacement'; requiresActivation?: boolean; serialNumber?: string; batchNumber?: string; branchId?: string; unitBarcode?: string;
 }) {
   const product = await Product.findById(params.productId).lean();
   const customer = await Customer.findById(params.customerId).lean();
@@ -58,7 +58,7 @@ export async function issueWarranty(params: {
       name: (product as any).name?.en || (product as any).name || '',
       category: product.category?.toString?.() || '',
       brand: (product as any).brand || '',
-      barcode: (product as any).barcode || ''
+      barcode: params.unitBarcode || (product as any).barcode || ''
     },
     saleSnapshot: saleDoc ? { invoiceNo: saleDoc.invoiceNo || '', date: saleDoc.createdAt } : undefined,
     events: [{ type: 'issued', timestamp: now }]

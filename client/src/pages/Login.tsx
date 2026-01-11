@@ -1011,8 +1011,8 @@ const LoginPage = () => {
               <VoltZoneLogo className="w-16 h-16" />
               <div>
                 <h1 className="text-2xl font-bold" style={{ color: '#F8F8F8' }}>{t.title}</h1>
-                <p className="text-sm flex items-center gap-1" style={{ color: '#F8F8F8CC' }}>
-                  <Sparkles className="w-4 h-4" color="#FFE100" /> {t.subtitle}
+                <p className="text-sm" style={{ color: '#F8F8F8CC' }}>
+                  {t.subtitle}
                 </p>
               </div>
             </motion.div>

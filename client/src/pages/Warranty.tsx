@@ -28,6 +28,8 @@ interface WarrantyItem {
   saleSnapshot?: any;
   product?: any;
   customer?: any;
+  barcode?: string;
+  barcodes?: string[];
 }
 
 interface WarrantyClaimItem {
@@ -86,7 +88,7 @@ const WarrantyPage = () => {
   const [creatingClaim, setCreatingClaim] = useState<string | null>(null);
   const [claimDesc, setClaimDesc] = useState('');
   const [claimCategory, setClaimCategory] = useState('mechanical');
-  const [filters, setFilters] = useState({ invoiceNo:'', phone:'', nic:'' });
+  const [filters, setFilters] = useState({ invoiceNo:'', phone:'', nic:'', barcode:'' });
   const [submittingClaim, setSubmittingClaim] = useState(false);
   const [claims, setClaims] = useState<WarrantyClaimItem[]>([]);
   const [claimsLoading, setClaimsLoading] = useState(false);
@@ -162,6 +164,7 @@ const WarrantyPage = () => {
     if (filters.invoiceNo) params.append('invoiceNo', filters.invoiceNo.trim());
     if (filters.phone) params.append('phone', filters.phone.trim());
     if (filters.nic) params.append('nic', filters.nic.trim());
+    if (filters.barcode) params.append('barcode', filters.barcode.trim());
     const token = accessToken || getAccessToken();
     const controller = new AbortController();
     const timeout = setTimeout(()=>controller.abort(), 8000);
@@ -170,7 +173,7 @@ const WarrantyPage = () => {
       const json = await res.json();
       if(json?.success) {
         setItems(json.data.items || []);
-        if((!json.data.items || json.data.items.length===0) && !filters.invoiceNo && !filters.phone && !filters.nic){ await devFallback(); }
+        if((!json.data.items || json.data.items.length===0) && !filters.invoiceNo && !filters.phone && !filters.nic && !filters.barcode){ await devFallback(); }
       } else {
         setError(json?.message || 'Failed to load');
       }
@@ -353,13 +356,26 @@ const WarrantyPage = () => {
               </div>
               <div className="flex flex-col min-w-[120px]">
                 <label htmlFor="flt-nic" className="mb-1 opacity-70 text-[10px] uppercase tracking-wide">NIC</label>
+                <input
+                  id="flt-nic"
+                  placeholder="NIC"
+                  value={filters.nic}
+                  onChange={e=>setFilters(f=>({...f,nic:e.target.value}))}
+                  className="bg-[#242424] border border-white/15 rounded-lg px-2 py-1.5 w-32 sm:w-40 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40"
+                />
+              </div>
+              <div className="flex flex-col min-w-[140px]">
+                <label htmlFor="flt-barcode" className="mb-1 opacity-70 text-[10px] uppercase tracking-wide flex items-center gap-1">
+                  <img src="/scanning.png" alt="" className="w-3 h-3 opacity-70" />
+                  Barcode
+                </label>
                 <div className="flex items-center gap-2">
                   <input
-                    id="flt-nic"
-                    placeholder="NIC"
-                    value={filters.nic}
-                    onChange={e=>setFilters(f=>({...f,nic:e.target.value}))}
-                    className="bg-[#242424] border border-white/15 rounded-lg px-2 py-1.5 w-32 sm:w-40 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40"
+                    id="flt-barcode"
+                    placeholder="Scan or enter barcode"
+                    value={filters.barcode}
+                    onChange={e=>setFilters(f=>({...f,barcode:e.target.value}))}
+                    className="bg-[#242424] border border-white/15 rounded-lg px-2 py-1.5 w-40 sm:w-48 text-xs focus:outline-none focus:ring-2 focus:ring-yellow-300/40 font-mono"
                   />
                   <button
                     onClick={reload}
@@ -370,9 +386,9 @@ const WarrantyPage = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 ml-auto mt-2 sm:mt-4">
-                {(filters.invoiceNo||filters.phone||filters.nic) && (
+                {(filters.invoiceNo||filters.phone||filters.nic||filters.barcode) && (
                   <button
-                    onClick={()=>{setFilters({invoiceNo:'',phone:'',nic:''}); reload();}}
+                    onClick={()=>{setFilters({invoiceNo:'',phone:'',nic:'',barcode:''}); reload();}}
                     className="h-8 text-xs px-2 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10 inline-flex items-center gap-1"
                   >
                     <X className="w-3.5 h-3.5"/> Clear
@@ -451,7 +467,9 @@ const WarrantyPage = () => {
 
             <Panel title="Active" subtitle="In coverage window" emptyLabel="None active" count={active.length}>
               <div className="space-y-3 max-h-80 overflow-auto pr-1 custom-scroll">
-                {active.map(w => (
+                {active.map(w => {
+                  const itemBarcode = w.barcode || w.barcodes?.[0] || w.productSnapshot?.barcode || w.saleSnapshot?.items?.[0]?.barcode;
+                  return (
                   <div key={w._id} className="border border-white/10 rounded-lg p-3 bg-white/[0.02] hover:bg-white/[0.05] transition-colors relative group">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
@@ -460,6 +478,12 @@ const WarrantyPage = () => {
                           <span className="text-xs font-mono">{w.warrantyNo}</span>
                         </div>
                         <div className="opacity-60 text-[11px]">Item: {w.productSnapshot?.name || w.product?.name || 'Product'}</div>
+                        {itemBarcode && (
+                          <div className="opacity-70 text-[11px] flex items-center gap-1">
+                            <img src="/scanning.png" alt="" className="w-3 h-3 opacity-60" />
+                            <span className="font-mono text-emerald-300">{itemBarcode}</span>
+                          </div>
+                        )}
                         <div className="opacity-60 text-[11px]">Period: {w.periodDays}d</div>
                         <div className="opacity-60 text-[11px]">Ends: {w.endDate?new Date(w.endDate).toLocaleDateString(): '-'}</div>
                       </div>
@@ -467,23 +491,36 @@ const WarrantyPage = () => {
                     </div>
                     {w.endDate && (()=>{ const daysLeft = Math.ceil((new Date(w.endDate).getTime()-Date.now())/86400000); return daysLeft<=7 ? <div className="absolute bottom-1 right-1 text-[10px] text-amber-300 pointer-events-none">{daysLeft>0?daysLeft+'d left':'expiring'}</div> : null; })()}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Panel>
 
             <Panel title="All Warranties" subtitle="Most recent first" emptyLabel="No records" count={items.length}>
               <div className="space-y-2 max-h-80 overflow-auto pr-1 custom-scroll">
-                {items.slice().sort((a,b)=> (b.endDate?new Date(b.endDate).getTime():0) - (a.endDate?new Date(a.endDate).getTime():0)).map(w => (
+                {items.slice().sort((a,b)=> (b.endDate?new Date(b.endDate).getTime():0) - (a.endDate?new Date(a.endDate).getTime():0)).map(w => {
+                  const itemBarcode = w.barcode || w.barcodes?.[0] || w.productSnapshot?.barcode || w.saleSnapshot?.items?.[0]?.barcode;
+                  return (
                   <div key={w._id} className="flex items-center gap-3 border border-white/10 rounded-lg px-3 py-2 bg-white/[0.02] hover:bg-white/[0.05] transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono truncate">{w.warrantyNo}</span>
                         {statusChip(w.status)}
                       </div>
-                      <div className="opacity-50 text-[10px] mt-1">Item: {w.productSnapshot?.name || w.product?.name || 'Product'}<br/>Ends {w.endDate?new Date(w.endDate).toLocaleDateString():'—'}</div>
+                      <div className="opacity-50 text-[10px] mt-1">
+                        Item: {w.productSnapshot?.name || w.product?.name || 'Product'}
+                        {itemBarcode && (
+                          <span className="ml-2 inline-flex items-center gap-1">
+                            <img src="/scanning.png" alt="" className="w-2.5 h-2.5 opacity-60 inline" />
+                            <span className="font-mono text-emerald-300">{itemBarcode}</span>
+                          </span>
+                        )}
+                        <br/>Ends {w.endDate?new Date(w.endDate).toLocaleDateString():'—'}
+                      </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Panel>
             {/* Claims panel with status + slip details */}

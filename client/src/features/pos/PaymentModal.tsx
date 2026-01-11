@@ -183,7 +183,13 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         customerIdToUse = await createCustomerIfNeeded();
       }
       const res = await salesApi.create({
-        items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price, barcode: i.barcode })),
+        items: items.map((i) => ({ 
+          product: i.id, 
+          quantity: i.qty, 
+          price: i.price, 
+          barcode: i.barcode,
+          barcodes: i.barcodes // Send all tracked barcodes
+        })),
         discount,
         payments,
         extendedWarrantySelections: warrantySelections,

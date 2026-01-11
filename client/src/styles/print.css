@@ -1,20 +1,32 @@
 /* This file styles the app for printing receipts and documents. */
 /* In simple English: It controls how things look when you print from the POS system. */
 @media print {
-  /* Remove global hide rule to prevent blank print area */
-  /* body * { visibility: hidden !important; } */
+  /* Hide everything by default when printing */
+  body > *:not(.print-area):not([data-sonner-toaster]) {
+    display: none !important;
+    visibility: hidden !important;
+  }
   
-  /* Show regular print area (receipts) */
+  /* Hide the main app container (the fixed modal backdrop and app layout) */
+  body > div:not(.print-area) {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  /* But ensure print-area and its children are visible */
   .print-area,
   .print-area * {
+    display: block !important;
     visibility: visible !important;
   }
+  
   /* Fixed positioning for receipts */
   .print-area {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    background: #fff;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    background: #fff !important;
+    z-index: 99999 !important;
   }
   
   /* LABELS: Override fixed positioning and ensure visibility - MUST come after general .print-area rule */

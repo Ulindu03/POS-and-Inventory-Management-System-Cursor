@@ -480,12 +480,19 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
               <div className="text-sm text-[#F8F8F8]/70">Product</div>
               <div className="font-semibold">{product?.name?.en || product?.name}</div>
               <div className="text-sm">Price: {product?.price?.retail?.toFixed ? product.price.retail.toFixed(2) : product?.price?.retail}</div>
+              <div className="text-sm mt-1">
+                <span className="text-[#F8F8F8]/70">Stock Available: </span>
+                <span className={`font-medium ${(product?.stock?.current ?? 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {product?.stock?.current ?? 0}
+                </span>
+              </div>
             </div>
             <label className="block">
               <div className="text-sm mb-1">Quantity</div>
               <input 
                 type="number" 
-                min={1} 
+                min={1}
+                max={product?.stock?.current ?? 0}
                 value={quantity} 
                 onChange={(e) => {
                   const val = e.target.value;
@@ -500,12 +507,18 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
                 }}
                 onBlur={(e) => {
                   const val = e.target.value;
+                  const stockAvailable = product?.stock?.current ?? 0;
                   if (val === '' || isNaN(parseInt(val, 10)) || parseInt(val, 10) < 1) {
                     setQuantity(1);
+                  } else if (parseInt(val, 10) > stockAvailable) {
+                    setQuantity(stockAvailable > 0 ? stockAvailable : 1);
                   }
                 }}
-                className="w-full bg-white/10 rounded px-3 py-2" 
+                className={`w-full bg-white/10 rounded px-3 py-2 ${typeof quantity === 'number' && quantity > (product?.stock?.current ?? 0) ? 'border border-red-500' : ''}`}
               />
+              {typeof quantity === 'number' && quantity > (product?.stock?.current ?? 0) && (
+                <p className="text-xs text-red-400 mt-1">Quantity exceeds available stock ({product?.stock?.current ?? 0})</p>
+              )}
             </label>
             <label className="block relative z-50">
               <div className="text-sm mb-1">Template</div>
@@ -664,7 +677,7 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
             )}
             <button 
               onClick={onGenerate} 
-              disabled={loading || !quantity || (typeof quantity === 'number' && quantity < 1)} 
+              disabled={loading || !quantity || (typeof quantity === 'number' && quantity < 1) || (typeof quantity === 'number' && quantity > (product?.stock?.current ?? 0))} 
               className="w-full bg-purple-600 hover:bg-purple-700 rounded px-3 py-2 font-semibold disabled:opacity-50"
             >
               {loading 
@@ -757,21 +770,23 @@ export const StickerPrintModal: React.FC<StickerPrintModalProps> = ({ product, o
                         <BarcodeSVG value={code} className="w-full" height={barcodeDims.height} width={barcodeDims.width} />
                         <div className="text-[8px] text-center tracking-widest leading-none">{code}</div>
                         <div style={lineStyle} />
-                        <div className="w-full">
-                          <div className="flex items-center justify-center gap-1 text-[7px] leading-tight w-full">
-                            <div className="min-w-0 max-w-[50%] truncate text-center">{brandText || ''}</div>
-                            <div className="min-w-0 max-w-[50%] truncate text-center">
+                        <div className="w-full flex flex-col items-center">
+                          {brandText && (
+                            <div className="text-[7px] leading-tight text-center w-full truncate">{brandText}</div>
+                          )}
+                          {(skuText || (mode === 'unique_per_unit' && code)) && (
+                            <div className="text-[7px] leading-tight text-center w-full truncate">
                               {mode === 'unique_per_unit' && code 
                                 ? `SKU: ${skuText ? skuText + '-' + String(i + 1).padStart(3, '0') : code}`
-                                : (skuText ? `SKU: ${skuText}` : '')
+                                : `SKU: ${skuText}`
                               }
                             </div>
-                          </div>
+                          )}
                           {warrantyText && (
-                            <div className="text-[7px] text-center leading-tight">Warranty: {warrantyText}</div>
+                            <div className="text-[7px] text-center leading-tight w-full">Warranty: {warrantyText}</div>
                           )}
                           {specsText && (
-                            <div className="text-[7px] text-center leading-tight">{specsText}</div>
+                            <div className="text-[7px] text-center leading-tight w-full">{specsText}</div>
                           )}
                         </div>
                       </div>

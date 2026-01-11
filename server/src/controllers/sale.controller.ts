@@ -144,11 +144,19 @@ export class SaleController {
       }
 
       // Validate barcodes if provided - check if any are already sold
-      const itemsWithBarcodes = items.filter((i: any) => i.barcode);
-      if (itemsWithBarcodes.length > 0) {
-        const barcodes = itemsWithBarcodes.map((i: any) => i.barcode);
+      const allBarcodes: string[] = [];
+      for (const item of items) {
+        // Collect barcodes from both 'barcode' (single) and 'barcodes' (array) fields
+        if (item.barcodes && Array.isArray(item.barcodes)) {
+          allBarcodes.push(...item.barcodes);
+        } else if (item.barcode) {
+          allBarcodes.push(item.barcode);
+        }
+      }
+      
+      if (allBarcodes.length > 0) {
         const soldBarcodes = await UnitBarcode.find({
-          barcode: { $in: barcodes },
+          barcode: { $in: allBarcodes },
           status: { $in: ['sold', 'returned', 'damaged', 'written_off'] }
         }).select('barcode status');
 
@@ -428,11 +436,25 @@ export class SaleController {
           continue;
         }
         const qty = Number(it.quantity) || 0;
+        
+        // Get the barcodes from the original request item
+        const originalItem = items.find((i: any) => String(i.product) === String(it.product));
+        let unitBarcodes: string[] = [];
+        if (originalItem?.barcodes && Array.isArray(originalItem.barcodes)) {
+          unitBarcodes = originalItem.barcodes;
+        } else if (originalItem?.barcode) {
+          unitBarcodes = [originalItem.barcode];
+        }
+        
         for (let q = 0; q < qty; q += 1) {
           try {
             // Determine if any upsell extra days apply (sum of additionalDays for this product)
             const extraDays = (Array.isArray(upsellSelections?.[String(it.product)]) ? upsellSelections[String(it.product)] : [])
               .reduce((s: number, sel: any) => s + (Number(sel.additionalDays) || 0), 0);
+            
+            // Get the specific barcode for this unit (if available)
+            const unitBarcode = unitBarcodes[q] || undefined;
+            
             await issueWarranty({
               productId: String(it.product),
               saleId: String(doc._id),
@@ -444,6 +466,7 @@ export class SaleController {
               exclusions: p.warranty.exclusions || [],
               type: p.warranty.type || 'manufacturer',
               requiresActivation: Boolean(p.warranty.requiresSerial),
+              unitBarcode,
             });
             if (process.env.NODE_ENV !== 'production') {
               // eslint-disable-next-line no-console
@@ -453,6 +476,7 @@ export class SaleController {
                 invoiceNo: doc.invoiceNo,
                 periodDays: (Number(p.warranty.periodDays) || 0) + extraDays,
                 extraDays,
+                unitBarcode,
               });
             }
           } catch (wErr) {
@@ -477,28 +501,60 @@ export class SaleController {
     try {
       const saleItems = (doc as any).items || [];
       for (const it of saleItems) {
-        const qty = Number(it.quantity) || 0;
-        // Find barcodes for this product that are in_stock status and not yet sold
-        const barcodes = await UnitBarcode.find({
-          product: it.product,
-          status: 'in_stock'
-        }).limit(qty).sort({ createdAt: 1 });
+        // Get barcodes from the original request item (stored in it.barcodes or it.barcode)
+        const originalItem = items.find((i: any) => String(i.product) === String(it.product));
+        let barcodesToMark: string[] = [];
+        
+        if (originalItem?.barcodes && Array.isArray(originalItem.barcodes)) {
+          barcodesToMark = originalItem.barcodes;
+        } else if (originalItem?.barcode) {
+          barcodesToMark = [originalItem.barcode];
+        }
+        
+        // Mark each specifically scanned barcode as sold
+        for (const barcodeValue of barcodesToMark) {
+          const bc = await UnitBarcode.findOne({ barcode: barcodeValue });
+          if (bc && bc.status !== 'sold') {
+            bc.status = 'sold';
+            bc.sale = doc._id;
+            bc.soldAt = new Date();
+            bc.customer = customer || undefined;
+            await bc.save();
+            
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('[barcode.track] sold', {
+                barcode: bc.barcode,
+                productId: String(it.product),
+                saleId: String(doc._id),
+                invoiceNo: doc.invoiceNo,
+              });
+            }
+          }
+        }
+        
+        // If no specific barcodes were scanned (item added from grid), find any in_stock barcodes
+        if (barcodesToMark.length === 0) {
+          const qty = Number(it.quantity) || 0;
+          const availableBarcodes = await UnitBarcode.find({
+            product: it.product,
+            status: 'in_stock'
+          }).limit(qty).sort({ createdAt: 1 });
 
-        // Mark each barcode as sold
-        for (const bc of barcodes) {
-          bc.status = 'sold';
-          bc.sale = doc._id;
-          bc.soldAt = new Date();
-          bc.customer = customer || undefined;
-          await bc.save();
-          
-          if (process.env.NODE_ENV !== 'production') {
-            console.log('[barcode.track] sold', {
-              barcode: bc.barcode,
-              productId: String(it.product),
-              saleId: String(doc._id),
-              invoiceNo: doc.invoiceNo,
-            });
+          for (const bc of availableBarcodes) {
+            bc.status = 'sold';
+            bc.sale = doc._id;
+            bc.soldAt = new Date();
+            bc.customer = customer || undefined;
+            await bc.save();
+            
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('[barcode.track] sold (auto)', {
+                barcode: bc.barcode,
+                productId: String(it.product),
+                saleId: String(doc._id),
+                invoiceNo: doc.invoiceNo,
+              });
+            }
           }
         }
       }
@@ -521,9 +577,9 @@ export class SaleController {
         const email = (cust as any)?.email;
         if (email) {
           try {
-            // Enrich items with product names and warranty details for email
+            // Enrich items with product names, warranty, and barcode details for email
             const saleWithDetails = await Sale.findById(doc._id)
-              .populate('items.product', 'name warranty')
+              .populate('items.product', 'name warranty barcode sku')
               .lean();
             const enriched = saleWithDetails || doc;
             const { subject, text, html } = buildSaleReceiptEmail(enriched, cust);

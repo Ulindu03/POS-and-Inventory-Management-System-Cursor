@@ -5,6 +5,7 @@ import { useState, useRef } from 'react';
 import { productsApi } from '@/lib/api/products.api';
 import { usePosStore } from '@/store/pos.store';
 import { toast } from 'sonner';
+import { BarcodeScanner } from './BarcodeScanner';
 
 interface Props {
   onPay?: () => void;
@@ -18,6 +19,7 @@ export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) =>
   const { items, inc, dec, remove, subtotal, tax, total, autoDiscount, totalDiscount, exchangeSlip, clearExchangeSlip, addItem } = useCartStore();
   const customerType = usePosStore((s) => s.customerType);
   const [showBarcodeInput, setShowBarcodeInput] = useState(false);
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [barcode, setBarcode] = useState('');
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -118,16 +120,31 @@ export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) =>
     <div className="flex flex-col h-full min-h-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
       <div className="p-4 border-b border-white/10 font-semibold shrink-0 flex items-center justify-between">
         <span>Cart</span>
-        <button
-          onClick={() => {
-            setShowBarcodeInput(true);
-            setTimeout(() => inputRef.current?.focus(), 100);
-          }}
-          className="p-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors"
-          title="Add by barcode (manual)"
-        >
-          <ScanBarcode className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Manual Barcode Entry Button */}
+          <button
+            onClick={() => {
+              setShowBarcodeInput(true);
+              setTimeout(() => inputRef.current?.focus(), 100);
+            }}
+            className="p-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors"
+            title="Enter barcode manually"
+          >
+            <ScanBarcode className="w-4 h-4" />
+          </button>
+          {/* Camera Scanner Button */}
+          <button
+            onClick={() => setShowCameraScanner((v) => !v)}
+            className={`p-2 rounded-lg transition-colors ${
+              showCameraScanner 
+                ? 'bg-[#FFE100] text-black' 
+                : 'bg-emerald-600 hover:bg-emerald-700'
+            }`}
+            title="Scan with camera"
+          >
+            <img src="/scanning.png" alt="Scan" className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Manual Barcode Input Modal */}
@@ -165,6 +182,14 @@ export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) =>
           </form>
         </div>
       )}
+
+      {/* Camera Barcode Scanner */}
+      {showCameraScanner && (
+        <div className="border-b border-white/10">
+          <BarcodeScanner />
+        </div>
+      )}
+
   <div className="p-4 space-y-3 overflow-auto min-h-0 vz-scroll-gutter pr-fallback scrollbar-hide">
         {items.length === 0 && <div className="opacity-70">No items yet</div>}
         {items.map((i) => (

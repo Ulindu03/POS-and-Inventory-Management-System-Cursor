@@ -43,8 +43,14 @@ export function buildSaleReceiptEmail(sale: any, customer: any) {
     const total = qty * price;
     const warrantyDays = Number(it?.product?.warranty?.periodDays || 0);
     const warrantyEnabled = Boolean(it?.product?.warranty?.enabled && warrantyDays > 0);
-    const barcode = it?.product?.barcode || it?.barcode || null;
-    return { name, qty, price, total, warrantyEnabled, warrantyDays, barcode };
+    // Check multiple barcode sources: item barcodes array, product barcode, or item barcode
+    const barcodes = it?.barcodes || [];
+    const productBarcode = it?.product?.barcode || it?.barcode || null;
+    const sku = it?.product?.sku || it?.sku || null;
+    // Use first barcode from array, or product barcode, or SKU as fallback
+    const barcode = (barcodes.length > 0 ? barcodes[0] : null) || productBarcode || sku;
+    const allBarcodes = barcodes.length > 0 ? barcodes : (productBarcode ? [productBarcode] : []);
+    return { name, qty, price, total, warrantyEnabled, warrantyDays, barcode, allBarcodes, sku };
   });
   const subtotal = items.reduce((s: number, l: any) => s + l.total, 0);
   const discount = Number(sale?.discount || 0);
@@ -125,10 +131,10 @@ export function buildSaleReceiptEmail(sale: any, customer: any) {
               <tr style="border-bottom:1px solid #e9ecef;${idx % 2 === 0 ? 'background:#f8f9fa;' : ''}">
                 <td style="padding:12px;vertical-align:top;">
                   <div style="font-size:14px;color:#212529;font-weight:600;margin-bottom:4px;">${i.name}</div>
-                  ${i.barcode ? `
-                    <div style="background:#fff3cd;border-left:3px solid #ffc107;padding:6px 8px;margin-top:6px;border-radius:4px;">
-                      <div style="font-size:10px;color:#856404;font-weight:600;text-transform:uppercase;margin-bottom:2px;">Barcode${i.qty > 1 ? ` (${i.qty} units)` : ''}</div>
-                      <div style="font-family:'Courier New',monospace;font-size:12px;color:#212529;font-weight:600;">${i.barcode}</div>
+                  ${i.barcode || i.sku ? `
+                    <div style="background:#f8f9fa;border-left:3px solid #6c757d;padding:6px 8px;margin-top:6px;border-radius:4px;">
+                      ${i.sku ? `<div style="font-size:10px;color:#495057;margin-bottom:3px;"><span style="font-weight:600;">SKU:</span> <span style="font-family:'Courier New',monospace;">${i.sku}</span></div>` : ''}
+                      ${i.barcode ? `<div style="font-size:10px;color:#495057;"><span style="font-weight:600;">Barcode:</span> <span style="font-family:'Courier New',monospace;">${i.barcode}</span>${i.allBarcodes && i.allBarcodes.length > 1 ? ` <span style="color:#6c757d;font-size:9px;">(+${i.allBarcodes.length - 1} more)</span>` : ''}</div>` : ''}
                     </div>
                   ` : ''}
                   ${i.warrantyEnabled ? `

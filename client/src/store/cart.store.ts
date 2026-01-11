@@ -7,6 +7,7 @@ export interface CartItem {
 	price: number; // Effective unit price (after discounts)
 	qty: number;
 	barcode?: string;
+	barcodes?: string[]; // Track multiple barcodes when qty > 1
 	basePrice?: number; // Original unit price before discounts
 	discountAmount?: number; // Per-unit savings
 	discountType?: 'percentage' | 'fixed';
@@ -97,9 +98,17 @@ export const useCartStore = create<CartState>((set, get) => ({
 		const discountType = item.discountType;
 		const discountValue = item.discountValue;
 		const priceTier = item.priceTier;
+		const newBarcode = item.barcode;
+		
 		set((state) => {
 			const existing = state.items.find((i) => i.id === item.id);
 			if (existing) {
+				// Collect all barcodes: existing barcodes + new barcode
+				const existingBarcodes = existing.barcodes || (existing.barcode ? [existing.barcode] : []);
+				const updatedBarcodes = newBarcode && !existingBarcodes.includes(newBarcode)
+					? [...existingBarcodes, newBarcode]
+					: existingBarcodes;
+				
 				return {
 					items: state.items.map((i) => (i.id === item.id ? {
 						...i,
@@ -110,6 +119,8 @@ export const useCartStore = create<CartState>((set, get) => ({
 						discountType: discountType ?? i.discountType,
 						discountValue: discountValue ?? i.discountValue,
 						priceTier: priceTier ?? i.priceTier,
+						barcodes: updatedBarcodes.length > 0 ? updatedBarcodes : undefined,
+						barcode: updatedBarcodes[0], // Keep first barcode for compatibility
 					} : i)),
 				};
 			}
@@ -124,6 +135,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 						discountType,
 						discountValue,
 						priceTier,
+						barcodes: newBarcode ? [newBarcode] : undefined,
 					},
 				],
 			};
