@@ -3,13 +3,15 @@
 // - Lets you pick products and scan barcodes on the left.
 // - Shows the cart and checkout on the right.
 // - After payment, it creates a receipt and updates other pages (like warranty and customer history).
+// - Supports comprehensive keyboard shortcuts for ultra-fast operation.
 import { AppLayout } from '@/components/common/Layout/Layout';
-import { ProductGrid } from '@/features/pos/ProductGrid';
+import { ProductGrid, ProductGridRef } from '@/features/pos/ProductGrid';
 import { Cart } from '@/features/pos/Cart';
 import { PaymentModal } from '@/features/pos/PaymentModal';
 import { ReceiptModal } from '@/features/pos/ReceiptModal';
 import { BarcodeScanner } from '@/features/pos/BarcodeScanner';
-import { useState } from 'react';
+import { ShortcutHelpOverlay } from '@/features/pos/ShortcutHelpOverlay';
+import { useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
@@ -21,7 +23,9 @@ import { salesApi } from '@/lib/api/sales.api';
 import { getAccessToken } from '@/lib/api/token';
 import { ExchangeSlipModal } from '@/features/pos/ExchangeSlipModal';
 import { toast } from 'sonner';
-// Replaced lucide icons with custom FS.png from public
+import { usePOSShortcuts, POSFocusArea } from '@/hooks/usePOSShortcuts';
+import type { ProductListItem } from '@/lib/api/products.api';
+import { Keyboard } from '@/lib/safe-lucide-react';
 
 const POS = () => {
   // State for payment modal visibility
@@ -50,6 +54,18 @@ const POS = () => {
   // State for return and refund modal
   const [openReturn, setOpenReturn] = useState(false);
   const [openExchange, setOpenExchange] = useState(false);
+  // State for shortcut help overlay
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  
+  // Keyboard navigation state
+  const [focusArea, setFocusArea] = useState<POSFocusArea>('products');
+  const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
+  const [selectedCartIndex, setSelectedCartIndex] = useState(-1);
+  const [products, setProducts] = useState<ProductListItem[]>([]);
+  
+  // Refs for keyboard navigation
+  const productGridRef = useRef<ProductGridRef>(null);
+  const cartRef = useRef<HTMLDivElement>(null);
   
   // Get cart state and actions from store
   const clear = useCartStore((s) => s.clear);
@@ -68,6 +84,68 @@ const POS = () => {
   // Get current user info for receipt
   const user = useAuthStore((s) => s.user);
   const { t } = useTranslation();
+  
+  // Handle products loaded from ProductGrid
+  const handleProductsLoaded = useCallback((loadedProducts: ProductListItem[]) => {
+    setProducts(loadedProducts);
+  }, []);
+  
+  // Check if any modal is open
+  const isModalOpen = open || openDamage || openReturn || openExchange || Boolean(receipt) || showShortcutHelp;
+  
+  // Initialize keyboard shortcuts
+  usePOSShortcuts({
+    onPay: () => setOpen(true),
+    onHold: async () => {
+      if (exchangeSlip) {
+        toast.error('Remove the exchange slip before holding the sale');
+        return;
+      }
+      if (items.length === 0) {
+        toast.error('Cart is empty');
+        return;
+      }
+      const payload = { items: items.map((i) => ({ product: i.id, quantity: i.qty, price: i.price })), discount: manualDiscount };
+      const res = await salesApi.hold(payload);
+      setHold(res.data.ticket);
+      toast.success('Sale held', { description: `Ticket: ${res.data.ticket.invoiceNo}` });
+    },
+    onResume: () => {
+      toast.info('Resume held sale - Coming soon');
+      // TODO: Implement resume held sale modal
+    },
+    onDamage: () => setOpenDamage(true),
+    onReturn: () => setOpenReturn(true),
+    onExchange: () => setOpenExchange(true),
+    onClear: () => {
+      clear();
+      toast.info('Cart cleared');
+    },
+    onPrint: () => {
+      if (receipt) {
+        window.print();
+      } else {
+        toast.info('No receipt to print');
+      }
+    },
+    onShowHelp: () => setShowShortcutHelp((v) => !v),
+    onFocusProductSearch: () => {
+      productGridRef.current?.focusSearch();
+    },
+    onFocusCart: () => {
+      cartRef.current?.focus();
+    },
+    focusArea,
+    setFocusArea,
+    isModalOpen,
+    selectedProductIndex,
+    setSelectedProductIndex,
+    selectedCartIndex,
+    setSelectedCartIndex,
+    productCount: products.length,
+    productsPerRow: 5,
+    products,
+  });
   return (
     <AppLayout>
       {/* Main POS layout with product grid and cart */}
@@ -98,6 +176,16 @@ const POS = () => {
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs">
+              {/* Keyboard shortcuts help button */}
+              <button
+                type="button"
+                onClick={() => setShowShortcutHelp(true)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/30 text-yellow-300 transition"
+                title="Keyboard Shortcuts (?)"
+              >
+                <Keyboard className="w-4 h-4" />
+                <span className="hidden sm:inline">Shortcuts</span>
+              </button>
               {/* Quick access to warranty management */}
               <Link
                 to="/warranty"
@@ -120,7 +208,12 @@ const POS = () => {
             </div>
           </div>
           {/* Product grid for selecting items */}
-          <ProductGrid />
+          <ProductGrid 
+            ref={productGridRef}
+            selectedIndex={selectedProductIndex}
+            onProductsLoaded={handleProductsLoaded}
+            onFocus={() => setFocusArea('products')}
+          />
           {/* Barcode scanner for quick product lookup */}
           <BarcodeScanner />
         </div>
@@ -128,6 +221,9 @@ const POS = () => {
         <div className="md:col-span-1 lg:col-span-1 flex flex-col min-h-0">
           <div className="flex-1 min-h-0">
             <Cart
+              ref={cartRef}
+              selectedIndex={selectedCartIndex}
+              onFocus={() => setFocusArea('cart')}
               onPay={() => setOpen(true)}
               onClear={clear}
               onDamage={() => setOpenDamage(true)}
@@ -170,6 +266,8 @@ const POS = () => {
         open={open}
         onClose={() => setOpen(false)}
         onComplete={async (sale) => {
+          // Get CURRENT items from store (not stale closure) to ensure barcodes are captured
+          const currentItems = useCartStore.getState().items;
           // Capture totals now (before clearing cart) so the receipt shows correct values
           const snapshot = {
             subtotal,
@@ -178,17 +276,23 @@ const POS = () => {
             total,
           };
           // Attempt to fetch warranties issued for this sale (if any)
-          let warranties: any[] = [];
+          interface WarrantyItem {
+            warrantyNo: string;
+            status: string;
+            periodDays: number;
+            endDate?: string;
+          }
+          let warranties: WarrantyItem[] = [];
           try {
             const token = getAccessToken();
             const res = await fetch(`/api/warranty?saleId=${encodeURIComponent(sale.id)}&page=1&pageSize=100`, { headers: token? { Authorization: `Bearer ${token}` } : {} });
             const json = await res.json();
             if (json?.success) warranties = json.data.items || [];
-          } catch {}
+          } catch { /* Warranty fetch failed silently */ }
           setReceipt({
             invoiceNo: sale.invoiceNo,
             saleId: sale.id,
-            items: items.map((i) => ({ name: i.name, qty: i.qty, price: i.price, total: i.price * i.qty, barcode: i.barcode })),
+            items: currentItems.map((i) => ({ name: i.name, qty: i.qty, price: i.price, total: i.price * i.qty, barcode: i.barcode, barcodes: i.barcodes })),
             ...snapshot,
             method: sale.method,
             payments: sale.payments,
@@ -198,22 +302,23 @@ const POS = () => {
           try {
             if (warranties.length) window.dispatchEvent(new Event('warranty:updated'));
             // Broadcast sale created with optional customer id to refresh customer purchase history
-            const detail: any = { saleId: sale.id, invoiceNo: sale.invoiceNo, customerId: sale.customerId };
+            interface SaleDetail { saleId: string; invoiceNo: string; customerId?: string | null; ts?: number }
+            const detail: SaleDetail = { saleId: sale.id, invoiceNo: sale.invoiceNo, customerId: sale.customerId };
             window.dispatchEvent(new CustomEvent('sales:created', { detail }));
             // Cross-tab broadcast via BroadcastChannel and storage event (so other tabs update too)
             try {
-              const bc = new (window as any).BroadcastChannel ? new BroadcastChannel('sales') : null;
-              if (bc) {
+              if (typeof BroadcastChannel !== 'undefined') {
+                const bc = new BroadcastChannel('sales');
                 bc.postMessage({ type: 'created', ...detail, ts: Date.now() });
                 bc.close();
               }
-            } catch {}
+            } catch { /* BroadcastChannel not supported */ }
             try {
               localStorage.setItem('sales:lastCreated', JSON.stringify({ ...detail, ts: Date.now() }));
               // clear shortly after to avoid buildup
-              setTimeout(() => { try { localStorage.removeItem('sales:lastCreated'); } catch {} }, 250);
-            } catch {}
-          } catch {}
+              setTimeout(() => { try { localStorage.removeItem('sales:lastCreated'); } catch { /* ignore */ } }, 250);
+            } catch { /* localStorage failed */ }
+          } catch { /* Broadcast failed silently */ }
           setOpen(false);
           clear();
         }}
@@ -236,10 +341,14 @@ const POS = () => {
         cashierName={user?.firstName || user?.username}
         paperWidth={80}
       />
+      
+      {/* Keyboard shortcuts help overlay */}
+      <ShortcutHelpOverlay 
+        open={showShortcutHelp} 
+        onClose={() => setShowShortcutHelp(false)} 
+      />
     </AppLayout>
   );
 };
 
 export default POS;
-
-

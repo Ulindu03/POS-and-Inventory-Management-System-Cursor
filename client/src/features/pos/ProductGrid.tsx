@@ -3,10 +3,27 @@ import { usePosStore } from '@/store/pos.store';
 import { productsApi, categoriesApi, type ProductListItem, type CategoryItem } from '@/lib/api/products.api';
 import { motion } from 'framer-motion';
 import { proxyImage } from '@/lib/proxyImage';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { formatLKR } from '@/lib/utils/currency';
 
-export const ProductGrid = () => {
+export interface ProductGridRef {
+  focusSearch: () => void;
+}
+
+interface ProductGridProps {
+  /** Currently selected product index for keyboard navigation */
+  selectedIndex?: number;
+  /** Callback when products are loaded (passes product array) */
+  onProductsLoaded?: (products: ProductListItem[]) => void;
+  /** Callback when search input is focused */
+  onFocus?: () => void;
+}
+
+export const ProductGrid = forwardRef<ProductGridRef, ProductGridProps>(({ 
+  selectedIndex = -1, 
+  onProductsLoaded,
+  onFocus 
+}, ref) => {
   const addItem = useCartStore((s) => s.addItem);
   const [items, setItems] = useState<ProductListItem[]>([]);
   const [q, setQ] = useState('');
@@ -14,6 +31,30 @@ export const ProductGrid = () => {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [category, setCategory] = useState<string>('');
   const customerType = usePosStore((s) => s.customerType);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const productRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Expose focusSearch method to parent
+  useImperativeHandle(ref, () => ({
+    focusSearch: () => {
+      searchInputRef.current?.focus();
+    }
+  }));
+
+  // Scroll selected product into view
+  useEffect(() => {
+    if (selectedIndex >= 0 && productRefs.current[selectedIndex]) {
+      productRefs.current[selectedIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
+  }, [selectedIndex]);
+
+  // Notify parent when products change
+  useEffect(() => {
+    onProductsLoaded?.(items);
+  }, [items, onProductsLoaded]);
 
   useEffect(() => {
     let mounted = true;
@@ -47,10 +88,12 @@ export const ProductGrid = () => {
     <div className="space-y-3 min-h-0">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         <input
+          ref={searchInputRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search products..."
-          className="w-full rounded-xl bg-white/10 border border-white/10 px-3 py-2 focus:outline-none text-[#F8F8F8]"
+          onFocus={onFocus}
+          placeholder="Search products... (F1)"
+          className="w-full rounded-xl bg-white/10 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400/50 text-[#F8F8F8]"
         />
         <select
           value={category}
@@ -69,13 +112,14 @@ export const ProductGrid = () => {
         <div className="opacity-80">Loading...</div>
     ) : (
   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 md:gap-3 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
-          {items.map((p) => {
+          {items.map((p, index) => {
             // Prefer inventory/effectiveStock where available
             const eff = p.effectiveStock || undefined;
             const current = (eff?.current ?? p.inventory?.currentStock ?? p.stock?.current ?? 0);
             const min = (eff?.minimum ?? p.inventory?.minimumStock ?? p.stock?.minimum ?? 0);
             const out = current <= 0; // hard stop
             const low = !out && min > 0 && current <= min; // low-stock hint only
+            const isSelected = index === selectedIndex;
 
             const retailTier = p.pricing?.retail;
             const wholesaleTier = p.pricing?.wholesale;
@@ -102,6 +146,7 @@ export const ProductGrid = () => {
 
             return (
               <motion.button
+                ref={(el) => { productRefs.current[index] = el; }}
                 key={p._id}
                 whileHover={{ scale: out ? 1 : 1.02 }}
                 whileTap={{ scale: out ? 1 : 0.98 }}
@@ -112,6 +157,7 @@ export const ProductGrid = () => {
                       name: p.name.en,
                       price: finalPrice,
                       basePrice,
+                      barcode: p.barcode, // Include product's default barcode
                       discountAmount: perUnitSavings,
                       discountType: discountType ?? undefined,
                       discountValue: discountValue ?? undefined,
@@ -120,7 +166,11 @@ export const ProductGrid = () => {
                   }
                 }}
                 disabled={out}
-                className={`relative text-left rounded-2xl p-4 border border-white/10 bg-white/5 backdrop-blur-md ${out ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/10'} transition`}
+                className={`relative text-left rounded-2xl p-4 border-2 backdrop-blur-md transition-all duration-150 ${
+                  isSelected 
+                    ? 'border-yellow-400 bg-yellow-400/10 ring-2 ring-yellow-400/30 shadow-[0_0_20px_rgba(250,204,21,0.3)]' 
+                    : 'border-white/10 bg-white/5 hover:bg-white/10'
+                } ${out ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 {/* Product image thumbnail */}
                 <div className="relative w-full aspect-square rounded-2xl overflow-hidden mb-2 bg-white flex items-center justify-center" style={{ minHeight: 110, maxHeight: 110 }}>
@@ -181,6 +231,6 @@ export const ProductGrid = () => {
       )}
     </div>
   );
-};
+});
 
-
+ProductGrid.displayName = 'ProductGrid';

@@ -135,6 +135,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 						discountType,
 						discountValue,
 						priceTier,
+						barcode: newBarcode, // Explicitly set barcode
 						barcodes: newBarcode ? [newBarcode] : undefined,
 					},
 				],

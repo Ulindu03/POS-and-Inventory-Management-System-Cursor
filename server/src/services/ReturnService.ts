@@ -37,6 +37,7 @@ interface SaleLookupOptions {
   customerNIC?: string;
   customerEmail?: string;
   productName?: string;
+  barcode?: string;
   dateFrom?: Date;
   dateTo?: Date;
   searchDays?: number;
@@ -200,6 +201,46 @@ export class ReturnService {
       }
     }
     
+    // Barcode search - find sale via UnitBarcode tracking
+    let barcodeProductId: any = null; // Track product ID from barcode for filtering
+    if (options.barcode) {
+      const barcodeRecord = await UnitBarcode.findOne({
+        barcode: options.barcode.trim()
+      }).select('sale product');
+      
+      if (barcodeRecord?.sale) {
+        // If barcode has a linked sale, add it to OR conditions
+        saleOrConditions.push({ _id: barcodeRecord.sale });
+        // Track the product ID to filter items later
+        barcodeProductId = barcodeRecord.product;
+        // Update filters with OR conditions if not already set
+        if (!filters.$or) {
+          filters.$or = saleOrConditions;
+        }
+      } else if (barcodeRecord?.product) {
+        // Barcode exists but not sold yet - search by product
+        barcodeProductId = barcodeRecord.product;
+        if (!filters['items.product']) {
+          filters['items.product'] = barcodeRecord.product;
+        }
+      } else {
+        // Also try searching by product barcode field (legacy/fallback)
+        const productByBarcode = await Product.findOne({
+          barcode: options.barcode.trim()
+        }).select('_id');
+        
+        if (productByBarcode) {
+          barcodeProductId = productByBarcode._id;
+          if (!filters['items.product']) {
+            filters['items.product'] = productByBarcode._id;
+          }
+        } else {
+          // No barcode found anywhere
+          return [];
+        }
+      }
+    }
+    
     // Debug logging
     if (options.customerPhone || options.invoiceNo || options.customerNIC) {
       console.log('Sale lookup filters:', JSON.stringify(filters, null, 2));
@@ -228,7 +269,15 @@ export class ReturnService {
     const salesWithItems = sales.map((sale: any) => {
       // Ensure items array exists - use the items from the sale directly
       // The populate should have already populated items.product
-      const saleItems = sale.items || [];
+      let saleItems = sale.items || [];
+      
+      // If barcode search was used, filter items to only show the matching product
+      if (barcodeProductId) {
+        saleItems = saleItems.filter((item: any) => {
+          const itemProductId = item.product?._id?.toString() || item.product?.toString();
+          return itemProductId === barcodeProductId.toString();
+        });
+      }
       
       // Map items to ensure proper structure
       const items = saleItems.map((item: any) => {

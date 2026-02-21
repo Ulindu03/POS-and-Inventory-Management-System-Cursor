@@ -1,6 +1,6 @@
 import { formatLKR } from '@/lib/utils/currency';
 import { proxyImage } from '@/lib/proxyImage';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { settingsApi } from '@/lib/api/settings.api';
 import { BarcodeSVG } from '@/components/ui/BarcodeSVG';
 
@@ -135,7 +135,7 @@ function openAndPrintFit(receiptEl: HTMLElement | null, title: string) {
       setTimeout(() => {
         printWin.focus();
         printWin.print();
-        setTimeout(() => { try { printWin.close(); } catch {} }, 500);
+        setTimeout(() => { try { printWin.close(); } catch { /* ignore */ } }, 500);
       }, 150);
     } else {
       // Wait a bit more for images
@@ -147,11 +147,40 @@ function openAndPrintFit(receiptEl: HTMLElement | null, title: string) {
   setTimeout(tryPrint, 200);
 }
 
-export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discount, tax, total, method, payments, promoCode, cashierName, paperWidth = 80, warranties = [] }: Props) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discount, tax, total, method: _method, payments, promoCode, cashierName, paperWidth = 80, warranties = [] }: Props) => {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [showLogo, setShowLogo] = useState<boolean>(true);
   const [store, setStore] = useState<{ name?: string; address?: string; phone?: string; email?: string } | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
+  const doneBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // Keyboard handler for Enter/Escape to close
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape' || e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    }
+  }, [onClose]);
+
+  // Set up keyboard listener and auto-focus
+  useEffect(() => {
+    if (!open) return;
+    
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // Auto-focus Done button after a small delay
+    const timer = setTimeout(() => {
+      doneBtnRef.current?.focus();
+    }, 100);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      clearTimeout(timer);
+    };
+  }, [open, handleKeyDown]);
+
   useEffect(() => {
     if (!open) return;
     let mounted = true;
@@ -255,13 +284,18 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
                   <tr key={`${i.name}-${i.qty}-${i.total}-${idx}`}>
                     <td style={{ padding: '1.5mm 0', verticalAlign: 'top', borderBottom: '1px solid #eee' }}>
                       <div className="item-name" style={{ fontWeight: 500, fontSize: 10 }}>{i.name}</div>
-                      {(i.barcode || (i.barcodes && i.barcodes.length > 0)) && (
-                        <div className="barcode-row" style={{ fontSize: 8, color: '#666', marginTop: 1, fontFamily: 'monospace' }}>
-                          {i.barcodes && i.barcodes.length > 0
-                            ? `BC: ${i.barcodes.slice(0, 2).join(', ')}${i.barcodes.length > 2 ? ` +${i.barcodes.length - 2}` : ''}`
-                            : `BC: ${i.barcode}`}
+                      {/* Show all unique barcodes for the item */}
+                      {i.barcodes && i.barcodes.length > 0 ? (
+                        <div className="barcode-list" style={{ fontSize: 8, color: '#666', marginTop: 1, fontFamily: 'monospace' }}>
+                          {i.barcodes.map((bc, bcIdx) => (
+                            <div key={`${bc}-${bcIdx}`}>BC: {bc}</div>
+                          ))}
                         </div>
-                      )}
+                      ) : i.barcode ? (
+                        <div className="barcode-row" style={{ fontSize: 8, color: '#666', marginTop: 1, fontFamily: 'monospace' }}>
+                          BC: {i.barcode}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="r" style={{ textAlign: 'right', padding: '1.5mm 0', verticalAlign: 'top', borderBottom: '1px solid #eee', fontWeight: 600 }}>{i.qty}</td>
                     <td className="r" style={{ textAlign: 'right', padding: '1.5mm 0', verticalAlign: 'top', borderBottom: '1px solid #eee', fontSize: 9 }}>{formatLKR(i.price)}</td>
@@ -399,8 +433,8 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
                 document.body.appendChild(printContainer);
 
                 const cleanup = () => {
-                  try { document.body.removeChild(printContainer); } catch {}
-                  try { document.head.removeChild(style); } catch {}
+                  try { document.body.removeChild(printContainer); } catch { /* ignore */ }
+                  try { document.head.removeChild(style); } catch { /* ignore */ }
                   window.removeEventListener('afterprint', cleanup);
                 };
                 window.addEventListener('afterprint', cleanup);
@@ -436,8 +470,9 @@ export const ReceiptModal = ({ open, onClose, invoiceNo, items, subtotal, discou
           
           {/* Close Button */}
           <button 
+            ref={doneBtnRef}
             onClick={onClose} 
-            className="w-full py-2.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 active:scale-[0.98]" 
+            className="w-full py-2.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-yellow-300/50" 
             style={{ background: 'linear-gradient(135deg, #FFE100, #FFD100)', color: '#000' }}
           >
             Done

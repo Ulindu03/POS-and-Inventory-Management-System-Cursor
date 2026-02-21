@@ -16,8 +16,6 @@ import {
   Sparkles,
   Mail,
   ArrowLeft,
-  Maximize2,
-  Minimize2,
   ScanFace,
   CheckCircle2,
   Lightbulb
@@ -436,25 +434,6 @@ const LoginPage = () => {
     return () => clearInterval(id);
   }, [resetResendCooldown]);
 
-  const handleResetResend = async () => {
-    if (!formData.email) { toast.error(t.fillFields); return; }
-    try {
-      setIsLoading(true);
-      const res = await authApi.resetInit({ email: formData.email });
-      const preview = res?.data?.emailPreviewUrl || res?.data?.preview;
-      setResetResendCooldown(60);
-      toast.success(t.resetOtpCodeSent);
-      if (preview) {
-        console.log('Reset OTP preview:', preview);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error('Could not resend code');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);                 // Action to login with username/password
   const loginWithFace = useAuthStore((s) => s.loginWithFace);
@@ -491,7 +470,7 @@ const LoginPage = () => {
           await tryLoad(root);
           setModelsLoaded(true);
           return;
-        } catch (e) {
+        } catch {
           // continue to next candidate quietly
         }
       }
@@ -529,12 +508,13 @@ const LoginPage = () => {
       } else {
         toast.error('Unexpected response');
       }
-    } catch (err:any) {
+    } catch (err: unknown) {
       console.error(err);
       // Standardized message for failed face recognition attempts
       const faceFailMsg = 'Face not recognized.Please Try Again.';
-      const status = err?.response?.status;
-      const backendMsg: string | undefined = err?.response?.data?.message;
+      const axiosErr = err as { response?: { status?: number; data?: { message?: string } } };
+      const status = axiosErr?.response?.status;
+      const backendMsg: string | undefined = axiosErr?.response?.data?.message;
       // If it's a server error (5xx) or a validation (4xx but not auth) unrelated to face, show backend message.
       // Otherwise (typical 401/403 or custom mismatch), force our clearer face message to avoid vague "Invalid token" etc.
       if (status && status >= 500) {
@@ -557,7 +537,7 @@ const LoginPage = () => {
       setIsScanning(true);
       setFaceDetected(false);
       const tick = async () => {
-        const videoEl = (webcamRef.current as any)?.video as HTMLVideoElement | undefined;
+        const videoEl = (webcamRef.current as Webcam | null)?.video as HTMLVideoElement | undefined;
         if (!videoEl) return;
         try {
           const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.6 });
@@ -585,6 +565,7 @@ const LoginPage = () => {
     };
     if (showFaceModal && modelsLoaded) startScan(); else stopScan();
     return () => stopScan();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showFaceModal, modelsLoaded]);
 
   // Helper: map role to a simple label used in OTP messages
@@ -599,38 +580,50 @@ const LoginPage = () => {
   // Fullscreen API handling
   useEffect(() => {
     const handleChange = () => {
-      const fsElement = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
+      const doc = document as Document & {
+        webkitFullscreenElement?: Element;
+        mozFullScreenElement?: Element;
+        msFullscreenElement?: Element;
+      };
+      const fsElement = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement;
       setIsFullscreen(!!fsElement);
     };
     document.addEventListener('fullscreenchange', handleChange);
-    document.addEventListener('webkitfullscreenchange', handleChange as any);
-    document.addEventListener('mozfullscreenchange', handleChange as any);
-    document.addEventListener('MSFullscreenChange', handleChange as any);
+    document.addEventListener('webkitfullscreenchange', handleChange);
+    document.addEventListener('mozfullscreenchange', handleChange);
+    document.addEventListener('MSFullscreenChange', handleChange);
     return () => {
       document.removeEventListener('fullscreenchange', handleChange);
-      document.removeEventListener('webkitfullscreenchange', handleChange as any);
-      document.removeEventListener('mozfullscreenchange', handleChange as any);
-      document.removeEventListener('MSFullscreenChange', handleChange as any);
+      document.removeEventListener('webkitfullscreenchange', handleChange);
+      document.removeEventListener('mozfullscreenchange', handleChange);
+      document.removeEventListener('MSFullscreenChange', handleChange);
     };
   }, []);
 
   const toggleFullscreen = () => {
     try {
       if (!isFullscreen) {
-        const el: any = document.documentElement;
+        const el = document.documentElement as HTMLElement & {
+          webkitRequestFullscreen?: () => Promise<void>;
+          mozRequestFullScreen?: () => Promise<void>;
+          msRequestFullscreen?: () => Promise<void>;
+        };
         if (el.requestFullscreen) el.requestFullscreen();
         else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
         else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
         else if (el.msRequestFullscreen) el.msRequestFullscreen();
       } else {
-        const doc: any = document;
+        const doc = document as Document & {
+          webkitExitFullscreen?: () => Promise<void>;
+          mozCancelFullScreen?: () => Promise<void>;
+          msExitFullscreen?: () => Promise<void>;
+        };
         if (doc.exitFullscreen) doc.exitFullscreen();
         else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
         else if (doc.mozCancelFullScreen) doc.mozCancelFullScreen();
         else if (doc.msExitFullscreen) doc.msExitFullscreen();
       }
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('Fullscreen toggle failed', e);
     }
   };
@@ -650,9 +643,10 @@ const LoginPage = () => {
           setCurrentView('login');
           setResetOtpPhase('idle');
           setResetOtp('');
-        } catch (err:any) {
+        } catch (err: unknown) {
           console.error(err);
-          toast.error(err?.response?.data?.message || t.invalidOrExpiredCode);
+          const axiosErr = err as { response?: { data?: { message?: string } } };
+          toast.error(axiosErr?.response?.data?.message || t.invalidOrExpiredCode);
         } finally {
           setIsLoading(false);
         }
@@ -670,15 +664,16 @@ const LoginPage = () => {
           // Dev helper
           console.log('Reset OTP preview:', emailPreview);
         }
-      } catch (err:any) {
+      } catch (err: unknown) {
         console.error(err);
+        const axiosErr = err as { response?: { data?: { message?: string } } };
         // Fallback to the old direct reset link flow if backend doesn't support OTP
         try {
-          const res = await authApi.forgotPassword(formData.email);
+          await authApi.forgotPassword(formData.email);
           toast.success(t.resetSent);
           setCurrentView('login');
-        } catch (e:any) {
-          toast.error(err?.response?.data?.message || t.couldNotStartReset);
+        } catch {
+          toast.error(axiosErr?.response?.data?.message || t.couldNotStartReset);
         }
       } finally {
         setIsLoading(false);
@@ -707,7 +702,7 @@ const LoginPage = () => {
       toast.success(t.loginSuccess);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      console.error(err); // eslint-disable-line no-console
+      console.error(err);
       toast.error(t.loginError);
     } finally {
       setIsLoading(false);
@@ -752,7 +747,6 @@ const LoginPage = () => {
       toast.success(t.loginSuccess);
       // Navigation handled by isAuthenticated effect; avoid intermediate login flash
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error(err);
       toast.error('Invalid OTP');
     } finally {
@@ -865,6 +859,7 @@ const LoginPage = () => {
                   style={{ aspectRatio: '4 / 3' }}
                 >
                   <Webcam
+                    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
                     ref={webcamRef as any}
                     audio={false}
                     screenshotFormat="image/jpeg"
@@ -1082,7 +1077,7 @@ const LoginPage = () => {
                       <div className="mt-4">
                         {/* Face icon above button if available */}
                         <div className="flex justify-center mb-2">
-                          <img src="/face.png" alt="Face" className="w-8 h-8 opacity-90" onError={(e:any)=>{ e.currentTarget.style.display='none'; }} />
+                          <img src="/face.png" alt="Face" className="w-8 h-8 opacity-90" onError={(e: React.SyntheticEvent<HTMLImageElement>)=>{ e.currentTarget.style.display='none'; }} />
                         </div>
                         <button
                           type="button"
@@ -1286,8 +1281,9 @@ const LoginPage = () => {
                         await authApi.resetInit({ email: formData.email });
                         setResetResendCooldown(60);
                         toast.success('Code resent');
-                      } catch (e:any) {
-                        toast.error(e?.response?.data?.message || 'Could not resend code');
+                      } catch (e: unknown) {
+                        const axiosErr = e as { response?: { data?: { message?: string } } };
+                        toast.error(axiosErr?.response?.data?.message || 'Could not resend code');
                       } finally {
                         setIsLoading(false);
                       }

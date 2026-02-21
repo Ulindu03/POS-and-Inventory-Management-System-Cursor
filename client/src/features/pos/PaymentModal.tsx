@@ -1,7 +1,7 @@
 import { useCartStore } from '@/store/cart.store';
 import { usePosStore } from '@/store/pos.store';
 import { formatLKR } from '@/lib/utils/currency';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { salesApi, PaymentMethod } from '@/lib/api/sales.api';
 import { returnsApi } from '@/lib/api/returns.api';
@@ -56,7 +56,43 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   const [linkedType, setLinkedType] = useState<string | undefined>(undefined);
   const [saveHover, setSaveHover] = useState(false);
   const [cashReceived, setCashReceived] = useState('');
+  
+  // Refs for keyboard navigation
+  const modalRef = useRef<HTMLDivElement>(null);
+  const cashInputRef = useRef<HTMLInputElement>(null);
+  const cashBtnRef = useRef<HTMLButtonElement>(null);
+  const cardBtnRef = useRef<HTMLButtonElement>(null);
+  const visaBtnRef = useRef<HTMLButtonElement>(null);
+  const mastercardBtnRef = useRef<HTMLButtonElement>(null);
+  const completeBtnRef = useRef<HTMLButtonElement>(null);
+  const cancelBtnRef = useRef<HTMLButtonElement>(null);
+  const lookupPhoneRef = useRef<HTMLInputElement>(null);
+  const findBtnRef = useRef<HTMLButtonElement>(null);
   const [cardBrand, setCardBrand] = useState<CardBrand | null>(null);
+  
+  // Reset form state when modal opens
+  useEffect(() => {
+    if (open) {
+      // Reset all customer-related state
+      setLookupPhone('');
+      setNewPhone('');
+      setNewName('');
+      setNewEmail('');
+      setCustomerId(null);
+      setLinkedName('');
+      setLinkedType(undefined);
+      setLookupError('');
+      setCreatingCustomer(false);
+      setCustomerLookupLoading(false);
+      // Reset payment state
+      setMethod('cash');
+      setCashReceived('');
+      setCardBrand(null);
+      setWarrantySelections({});
+      setLoading(false);
+    }
+  }, [open]);
+  
   const cashReceivedNumber = useMemo(() => {
     const cleaned = cashReceived.replace(/,/g, '').trim();
     return cleaned ? Number(cleaned) : 0;
@@ -245,6 +281,106 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
   };
   // Build list of cart items that have extended warranty options defined on product (assumes product object carries warranty.extendedOptions)
   const upsellItems = items.filter((i: any) => i.product?.warranty?.enabled && i.product?.warranty?.allowExtendedUpsell && Array.isArray(i.product?.warranty?.extendedOptions) && i.product.warranty.extendedOptions.length > 0);
+
+  // Keyboard navigation handler
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Stop propagation to prevent POS shortcuts from firing
+    e.stopPropagation();
+    
+    // Escape closes the modal
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+
+    // Don't interfere with input typing for arrow keys
+    const target = e.target as HTMLElement;
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+
+    // Arrow Left/Right to toggle Cash/Card when not in an input (or when in method button area)
+    if (!isInput && requireAdditionalPayment) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const newMethod = method === 'cash' ? 'card' : 'cash';
+        handleMethodSelect(newMethod);
+        // Focus the appropriate button
+        if (newMethod === 'cash') {
+          cashBtnRef.current?.focus();
+        } else {
+          cardBtnRef.current?.focus();
+        }
+        return;
+      }
+    }
+
+    // Arrow keys for card brand selection when card method is active
+    if (!isInput && method === 'card' && requireAdditionalPayment) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const newBrand = cardBrand === 'visa' ? 'mastercard' : 'visa';
+        setCardBrand(newBrand);
+        if (newBrand === 'visa') {
+          visaBtnRef.current?.focus();
+        } else {
+          mastercardBtnRef.current?.focus();
+        }
+        return;
+      }
+    }
+
+    // Enter on Complete Sale button or general Enter when form is valid
+    if (e.key === 'Enter' && !isInput) {
+      // If Complete Sale button is focused, let native click handle it
+      if (document.activeElement === completeBtnRef.current) {
+        return;
+      }
+      // Complete sale if valid
+      if (canComplete && !loading) {
+        e.preventDefault();
+        completeSale();
+        return;
+      }
+    }
+
+    // Tab handling is default browser behavior - no custom handling needed
+  }, [method, cardBrand, requireAdditionalPayment, canComplete, loading, onClose, handleMethodSelect, completeSale]);
+
+  // Set up keyboard listener
+  useEffect(() => {
+    if (!open) return;
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, handleKeyDown]);
+
+  // Auto-focus management when modal opens or method changes
+  useEffect(() => {
+    if (!open) return;
+    
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      if (requireAdditionalPayment) {
+        if (method === 'cash') {
+          cashInputRef.current?.focus();
+          cashInputRef.current?.select();
+        } else if (method === 'card') {
+          // Focus first card brand or the current selection
+          if (cardBrand === 'mastercard') {
+            mastercardBtnRef.current?.focus();
+          } else {
+            visaBtnRef.current?.focus();
+          }
+        }
+      } else {
+        // Exchange slip covers everything, focus Complete Sale
+        completeBtnRef.current?.focus();
+      }
+    }, 50);
+    
+    return () => clearTimeout(timer);
+  }, [open, method, requireAdditionalPayment]);
+
   if (!open) return null;
 
   return (
@@ -256,8 +392,14 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         onClick={onClose}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClose(); }}
       />
-      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-5 text-[#F8F8F8]">
-        <div className="text-lg font-semibold mb-3">Payment</div>
+      <div 
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-modal-title"
+        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-5 text-[#F8F8F8]"
+      >
+        <div id="payment-modal-title" className="text-lg font-semibold mb-3">Payment</div>
         <div className="opacity-80 mb-2">
           Amount due:&nbsp;
           <span className="font-semibold text-[#F8F8F8]">{formatLKR(amountDue)}</span>
@@ -295,10 +437,12 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             Apply an exchange slip from the cart to accept store credit.
           </div>
         )}
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-2 gap-3 mb-6" role="group" aria-label="Payment method selection">
           <button
+            ref={cashBtnRef}
             onClick={() => handleMethodSelect('cash')}
             disabled={!requireAdditionalPayment}
+            aria-pressed={method === 'cash' && requireAdditionalPayment}
             className={`group relative overflow-hidden rounded-xl border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
               method === 'cash' && requireAdditionalPayment
                 ? 'border-blue-400 bg-white/20 text-white shadow-[0_0_20px_rgba(0,102,255,0.32)]'
@@ -322,8 +466,10 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             />
           </button>
           <button
+            ref={cardBtnRef}
             onClick={() => handleMethodSelect('card')}
             disabled={!requireAdditionalPayment}
+            aria-pressed={method === 'card' && requireAdditionalPayment}
             className={`group relative overflow-hidden rounded-xl border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
               method === 'card' && requireAdditionalPayment
                 ? 'border-blue-400 bg-white/20 text-white shadow-[0_0_20px_rgba(0,102,255,0.32)]'
@@ -351,14 +497,24 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
           <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="text-xs opacity-80 mb-2">Cash received</div>
             <input
+              ref={cashInputRef}
               type="number"
               min="0"
               step="0.01"
               inputMode="decimal"
               value={cashReceived}
               onChange={(e) => setCashReceived(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation(); // Prevent POS shortcuts
+                // Enter in cash input moves to Complete Sale
+                if (e.key === 'Enter' && canComplete && !loading) {
+                  e.preventDefault();
+                  completeSale();
+                }
+              }}
               className="w-full bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-sm"
               placeholder="Enter amount tendered"
+              aria-label="Cash received amount"
             />
             <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
               <div className="flex items-center justify-between rounded-lg bg-white/5 px-2 py-1">
@@ -382,14 +538,32 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         {requireAdditionalPayment && method === 'card' && (
           <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="text-xs opacity-80 mb-2">Choose card network</div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3" role="group" aria-label="Card brand selection">
               {([['visa', '/visa.png'], ['mastercard', '/mastercard.png']] as Array<[CardBrand, string]>).map(([brand, icon]) => {
                 const active = cardBrand === brand;
+                const btnRef = brand === 'visa' ? visaBtnRef : mastercardBtnRef;
                 return (
                   <button
+                    ref={btnRef}
                     key={brand}
                     type="button"
                     onClick={() => setCardBrand(brand)}
+                    aria-pressed={active}
+                    onKeyDown={(e) => {
+                      e.stopPropagation(); // Prevent POS shortcuts
+                      // Arrow navigation between card brands
+                      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        const newBrand = brand === 'visa' ? 'mastercard' : 'visa';
+                        setCardBrand(newBrand);
+                        (newBrand === 'visa' ? visaBtnRef : mastercardBtnRef).current?.focus();
+                      }
+                      // Enter to confirm and complete
+                      if (e.key === 'Enter' && canComplete && !loading) {
+                        e.preventDefault();
+                        completeSale();
+                      }
+                    }}
                     className={`flex flex-col items-center justify-center rounded-xl border px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-yellow-200/70 ${
                       active
                         ? 'border-yellow-400 bg-white/20 text-white shadow-[0_0_15px_rgba(255,225,0,0.25)]'
@@ -418,9 +592,24 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             <div className="flex gap-2 text-sm items-end">
               <div className="flex-1 space-y-1">
                 <label htmlFor="pos-lookup-phone" className="block text-[11px] opacity-70">Phone</label>
-                <input id="pos-lookup-phone" value={lookupPhone} onChange={e=>{ setLookupPhone(e.target.value); setLookupError(''); }} placeholder="Enter phone" className="w-full bg-white/10 border border-white/10 rounded-lg px-2 py-1" />
+                <input 
+                  ref={lookupPhoneRef}
+                  id="pos-lookup-phone" 
+                  value={lookupPhone} 
+                  onChange={e=>{ setLookupPhone(e.target.value); setLookupError(''); }} 
+                  placeholder="Enter phone" 
+                  className="w-full bg-white/10 border border-white/10 rounded-lg px-2 py-1"
+                  onKeyDown={(e) => {
+                    e.stopPropagation(); // Prevent POS shortcuts
+                    if (e.key === 'Enter' && lookupPhone && !customerLookupLoading) {
+                      e.preventDefault();
+                      findBtnRef.current?.click();
+                    }
+                  }}
+                />
               </div>
               <button
+                ref={findBtnRef}
                 type="button"
                 disabled={!lookupPhone || customerLookupLoading}
                 onClick={async ()=>{
@@ -439,6 +628,8 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
                       setLinkedType(j.data.type);
                       setLookupError('');
                       toast.success('Customer found & linked');
+                      // Focus Complete Sale button after successful find
+                      setTimeout(() => completeBtnRef.current?.focus(), 100);
                     } else {
                       setCustomerId(null);
                       setLinkedName('');
@@ -470,16 +661,38 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="col-span-1 space-y-1">
                 <label htmlFor="pos-new-phone" className="block text-[11px] opacity-70">Phone</label>
-                <input id="pos-new-phone" value={newPhone} onChange={e=>setNewPhone(e.target.value)} placeholder="Enter phone" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
+                <input 
+                  id="pos-new-phone" 
+                  value={newPhone} 
+                  onChange={e=>setNewPhone(e.target.value)} 
+                  placeholder="Enter phone" 
+                  className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full"
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
               </div>
               <div className="col-span-1 space-y-1">
                 <label htmlFor="pos-new-name" className="block text-[11px] opacity-70">Name</label>
-                <input id="pos-new-name" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Name" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
+                <input 
+                  id="pos-new-name" 
+                  value={newName} 
+                  onChange={e=>setNewName(e.target.value)} 
+                  placeholder="Name" 
+                  className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full"
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
               </div>
               <div className="col-span-2 flex items-end">
                 <div className="flex-1 mr-2 space-y-1">
                   <label htmlFor="pos-new-email" className="block text-[11px] opacity-70">Email (optional)</label>
-                  <input id="pos-new-email" type="email" value={newEmail} onChange={e=>setNewEmail(e.target.value)} placeholder="customer@example.com" className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full" />
+                  <input 
+                    id="pos-new-email" 
+                    type="email" 
+                    value={newEmail} 
+                    onChange={e=>setNewEmail(e.target.value)} 
+                    placeholder="customer@example.com" 
+                    className="bg-white/10 border border-white/10 rounded-lg px-2 py-1 w-full"
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
                 </div>
                 <button
                   type="button"
@@ -495,8 +708,13 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
           </div>
         </div>
         <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20">Cancel</button>
+          <button 
+            ref={cancelBtnRef}
+            onClick={onClose} 
+            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20"
+          >Cancel</button>
           <button
+            ref={completeBtnRef}
             disabled={loading || !canComplete}
             onClick={completeSale}
             className="px-4 py-2 rounded-xl font-semibold disabled:opacity-60"

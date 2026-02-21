@@ -1,7 +1,7 @@
 import { useCartStore } from '@/store/cart.store';
 import { formatLKR } from '@/lib/utils/currency';
 import { Minus, Plus, Trash2, ScanBarcode, X } from '@/lib/safe-lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, forwardRef, useEffect } from 'react';
 import { productsApi } from '@/lib/api/products.api';
 import { usePosStore } from '@/store/pos.store';
 import { toast } from 'sonner';
@@ -13,9 +13,21 @@ interface Props {
   onDamage?: () => void;
   onHold?: () => void;
   onExchange?: () => void;
+  /** Currently selected cart item index for keyboard navigation */
+  selectedIndex?: number;
+  /** Callback when cart gets focus */
+  onFocus?: () => void;
 }
 
-export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) => {
+export const Cart = forwardRef<HTMLDivElement, Props>(({ 
+  onPay, 
+  onClear, 
+  onDamage, 
+  onHold, 
+  onExchange,
+  selectedIndex = -1,
+  onFocus,
+}, ref) => {
   const { items, inc, dec, remove, subtotal, tax, total, autoDiscount, totalDiscount, exchangeSlip, clearExchangeSlip, addItem } = useCartStore();
   const customerType = usePosStore((s) => s.customerType);
   const [showBarcodeInput, setShowBarcodeInput] = useState(false);
@@ -23,6 +35,17 @@ export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) =>
   const [barcode, setBarcode] = useState('');
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  
+  // Scroll selected item into view
+  useEffect(() => {
+    if (selectedIndex >= 0 && itemRefs.current[selectedIndex]) {
+      itemRefs.current[selectedIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
+  }, [selectedIndex]);
   
   const promoSavings = autoDiscount();
   const couponSavings = Math.max(0, totalDiscount() - promoSavings);
@@ -117,9 +140,17 @@ export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) =>
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
+    <div 
+      ref={ref}
+      tabIndex={0}
+      onFocus={onFocus}
+      className="flex flex-col h-full min-h-0 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-yellow-400/30"
+    >
       <div className="p-4 border-b border-white/10 font-semibold shrink-0 flex items-center justify-between">
-        <span>Cart</span>
+        <div className="flex items-center gap-2">
+          <span>Cart</span>
+          <span className="text-xs text-white/40">(F2)</span>
+        </div>
         <div className="flex items-center gap-2">
           {/* Manual Barcode Entry Button */}
           <button
@@ -192,8 +223,18 @@ export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) =>
 
   <div className="p-4 space-y-3 overflow-auto min-h-0 vz-scroll-gutter pr-fallback scrollbar-hide">
         {items.length === 0 && <div className="opacity-70">No items yet</div>}
-        {items.map((i) => (
-          <div key={i.id} className="flex items-center justify-between gap-3">
+        {items.map((i, index) => {
+          const isSelected = index === selectedIndex;
+          return (
+          <div 
+            key={i.id} 
+            ref={(el) => { itemRefs.current[index] = el; }}
+            className={`flex items-center justify-between gap-3 p-2 -mx-2 rounded-xl transition-all duration-150 ${
+              isSelected 
+                ? 'bg-yellow-400/15 border border-yellow-400/40 shadow-[0_0_10px_rgba(250,204,21,0.2)]' 
+                : 'border border-transparent'
+            }`}
+          >
             <div>
               <div className="flex items-center gap-2">
                 <div className="text-sm font-medium text-[#F8F8F8]">{i.name}</div>
@@ -246,7 +287,8 @@ export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) =>
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
   <div className="mt-auto p-4 border-t border-white/10 space-y-2 shrink-0">
         <div className="flex justify-between text-sm opacity-90"><span>Subtotal</span><span>{formatLKR(subtotal())}</span></div>
@@ -322,6 +364,6 @@ export const Cart = ({ onPay, onClear, onDamage, onHold, onExchange }: Props) =>
       </div>
     </div>
   );
-};
+});
 
-
+Cart.displayName = 'Cart';

@@ -26,6 +26,7 @@ export interface SaleLookupOptions {
   customerName?: string;
   customerPhone?: string;
   customerNIC?: string;
+  barcode?: string;
   dateFrom?: string;
   dateTo?: string;
   searchDays?: number;

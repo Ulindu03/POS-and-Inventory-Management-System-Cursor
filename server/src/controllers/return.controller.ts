@@ -19,6 +19,7 @@ export class ReturnController {
         customerNIC,
         customerEmail, 
         productName,
+        barcode,
         dateFrom,
         dateTo,
         searchDays = 30 
@@ -31,6 +32,7 @@ export class ReturnController {
         customerNIC,
         customerEmail,
         productName,
+        barcode,
         dateFrom: dateFrom ? new Date(dateFrom) : undefined,
         dateTo: dateTo ? new Date(dateTo) : undefined,
         searchDays

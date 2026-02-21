@@ -520,7 +520,8 @@ export const receiveItems = async (req: Request, res: Response) => {
 
           // Mark barcodes as in_stock when inventory is received
           try {
-            const result = await UnitBarcode.updateMany(
+            // Mongoose updateMany doesn't support limit; find IDs first, then update
+            const barcodesToUpdate = await UnitBarcode.find(
               { 
                 product: product._id, 
                 status: 'generated',
@@ -529,14 +530,22 @@ export const receiveItems = async (req: Request, res: Response) => {
                   { inStockAt: null }
                 ]
               },
-              { 
-                $set: { 
-                  status: 'in_stock',
-                  inStockAt: new Date()
-                } 
-              },
-              { limit: netQuantity }
-            );
+              { _id: 1 }
+            ).limit(netQuantity).lean();
+
+            const idsToUpdate = barcodesToUpdate.map((b) => b._id);
+
+            const result = idsToUpdate.length > 0
+              ? await UnitBarcode.updateMany(
+                  { _id: { $in: idsToUpdate } },
+                  { 
+                    $set: { 
+                      status: 'in_stock',
+                      inStockAt: new Date()
+                    } 
+                  }
+                )
+              : { modifiedCount: 0 };
 
             if (process.env.NODE_ENV !== 'production' && result.modifiedCount > 0) {
               console.log('[barcode.track.receive]', {

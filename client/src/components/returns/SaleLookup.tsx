@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { returnsApi, SaleLookupOptions } from '@/lib/api/returns.api';
 import { format, isValid, parseISO } from 'date-fns';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { ScanBarcode, X, Camera } from '@/lib/safe-lucide-react';
+import { toast } from 'sonner';
 
 interface SaleLookupProps {
   onSaleSelected: (sale: any) => void;
@@ -11,11 +14,94 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const scannerDivId = useRef(`return-scanner-${Math.random().toString(36).slice(2)}`);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+        scannerRef.current = null;
+      }
+    };
+  }, []);
+
+  const startScanner = async () => {
+    setShowScanner(true);
+    // Wait for DOM to render the scanner div
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    try {
+      scannerRef.current = new Html5Qrcode(scannerDivId.current, {
+        verbose: false,
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.QR_CODE,
+        ],
+      });
+      
+      await scannerRef.current.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 100 } },
+        async (decodedText) => {
+          // Stop scanner after successful scan
+          await stopScanner();
+          // Set the barcode and trigger search
+          setSearchOptions(prev => ({ ...prev, barcode: decodedText.trim() }));
+          toast.success(`Barcode scanned: ${decodedText}`);
+          // Auto-search after scan
+          setTimeout(() => handleBarcodeSearch(decodedText.trim()), 200);
+        },
+        () => {} // Ignore scan errors
+      );
+    } catch (err) {
+      console.error('Scanner start error:', err);
+      toast.error('Could not start camera. Please enter barcode manually.');
+      setShowScanner(false);
+    }
+  };
+
+  const stopScanner = async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+      } catch {}
+      scannerRef.current = null;
+    }
+    setShowScanner(false);
+  };
+
+  const handleBarcodeSearch = async (barcode: string) => {
+    if (!barcode) return;
+    setIsLoading(true);
+    try {
+      const response = await returnsApi.lookupSales({ barcode });
+      setSearchResults(response.data.sales);
+      if (response.data.count === 0) {
+        toast.error('No sales found for this barcode');
+      } else {
+        toast.success(`Found ${response.data.count} sale(s)`);
+      }
+    } catch (error) {
+      console.error('Barcode lookup error:', error);
+      toast.error('Failed to search by barcode');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchOptions.invoiceNo &&
         !searchOptions.customerName &&
-        !searchOptions.customerPhone) {
+        !searchOptions.customerPhone &&
+        !searchOptions.barcode) {
       alert('Please provide at least one search criteria');
       return;
     }
@@ -116,6 +202,26 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
 
   return (
     <div className="space-y-8">
+      {/* Barcode Scanner Modal */}
+      {showScanner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="relative bg-[#1E1E1E] rounded-2xl p-6 max-w-md w-full mx-4 border border-white/10">
+            <button
+              onClick={stopScanner}
+              className="absolute top-3 right-3 p-2 rounded-full hover:bg-white/10 transition"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+            <h4 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Camera className="w-5 h-5 text-blue-400" />
+              Scan Product Barcode
+            </h4>
+            <div id={scannerDivId.current} className="w-full rounded-xl overflow-hidden bg-black" style={{ minHeight: 200 }} />
+            <p className="text-xs text-gray-400 mt-3 text-center">Point camera at barcode to scan</p>
+          </div>
+        </div>
+      )}
+
       {/* Lookup Card */}
       <div className="relative rounded-3xl p-8 bg-[#1E1E1E] border border-white/10 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.6)] overflow-hidden">
         <div className="absolute inset-0 pointer-events-none rounded-3xl bg-gradient-to-br from-white/5 via-blue-500/5 to-purple-500/5" />
@@ -123,6 +229,37 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
           <h3 className="text-2xl font-bold tracking-wide bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent mb-2">Sale Lookup</h3>
           <p className="text-sm text-gray-400 mb-6">Provide any criteria (at least one) to search for a sale.</p>
         </div>
+
+        {/* Barcode Scanner Section */}
+        <div className="relative mb-6 p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20">
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="block text-xs font-medium mb-1 uppercase tracking-wide text-emerald-300" htmlFor="barcode">
+                <ScanBarcode className="w-4 h-4 inline mr-1" />
+                Product Barcode
+              </label>
+              <div className="flex gap-2">
+                <input 
+                  id="barcode" 
+                  className="flex-1 px-3 py-2 rounded-xl bg-[#27272A] border border-emerald-500/30 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40 outline-none text-sm" 
+                  value={searchOptions.barcode || ''} 
+                  onChange={e => handleInputChange('barcode', e.target.value)} 
+                  onKeyDown={e => { if (e.key === 'Enter' && searchOptions.barcode) handleBarcodeSearch(searchOptions.barcode); }}
+                  placeholder="Scan or enter barcode"
+                />
+                <button 
+                  onClick={startScanner}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm flex items-center gap-2 transition shadow-lg shadow-emerald-500/20"
+                >
+                  <Camera className="w-4 h-4" />
+                  Scan
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-emerald-400/70 mt-2">Quick lookup: Scan product barcode to find the original sale</p>
+        </div>
+
         <div className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
             <label className="block text-xs font-medium mb-1 uppercase tracking-wide text-gray-400" htmlFor="invoiceNo">Invoice Number</label>
@@ -136,7 +273,6 @@ const SaleLookup: React.FC<SaleLookupProps> = ({ onSaleSelected }) => {
             <label className="block text-xs font-medium mb-1 uppercase tracking-wide text-gray-400" htmlFor="customerPhone">Customer Phone</label>
             <input id="customerPhone" className="w-full px-3 py-2 rounded-xl bg-[#27272A] border border-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 outline-none text-sm" value={searchOptions.customerPhone || ''} onChange={e=>handleInputChange('customerPhone', e.target.value)} placeholder="+94" />
           </div>
-          {/* Removed customerEmail, productName, searchDays fields as per request */}
         </div>
         <div className="flex justify-end mt-8">
           <button onClick={handleSearch} disabled={isLoading} className="relative px-6 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_20px_-4px_rgba(59,130,246,0.6)] transition">
