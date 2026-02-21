@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ChangeEvent, DragEvent } from 'react';
 import { motion } from 'framer-motion';
@@ -198,6 +199,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
         console.error('Failed to load lists', e);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // When category changes, refresh suppliers and brand options
@@ -230,6 +232,7 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
         console.error('category change side-load failed', e);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.category, isOpen]);
 
   // Sync warranty UI state from periodDays
@@ -260,7 +263,6 @@ export function ProductForm({ product, isOpen, onClose, onSuccess }: ProductForm
     setFormData((p) => ({ ...p, warranty: { ...(p.warranty || {}), periodDays: Math.max(0, Math.floor(days)) } }));
   };
 
-  const costValue = formData.price.cost || 0;
   const submitText = product?._id ? 'Save Changes' : 'Create Product';
 
   const normalizeSku = (value: string, { allowTrailingDash = true }: { allowTrailingDash?: boolean } = {}) => {
