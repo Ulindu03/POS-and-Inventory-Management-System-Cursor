@@ -11,6 +11,7 @@ import { PurchaseOrder } from '../models/PurchaseOrder.model';
 import { emit as emitRealtime } from '../services/realtime.service';
 import fs from 'fs';
 import { getPublicUrl } from '../utils/upload';
+import { uploadToSupabase } from '../services/supabase.service';
 
 type DiscountStatus = 'disabled' | 'scheduled' | 'active' | 'expired' | 'none';
 
@@ -440,13 +441,29 @@ export class ProductController {
     }
   }
 
-  // Handle product image upload (via multer)
+  // Handle product image upload (via multer) - uploads to Supabase Storage
   static async uploadImage(req: Request, res: Response, next: NextFunction) {
     try {
-      const file = (req as Request & { file?: { filename: string; path: string } }).file;
+      const file = (req as Request & { file?: { filename: string; path: string; mimetype?: string } }).file;
       if (!file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
       }
+
+      // Try uploading to Supabase Storage first (works on cloud hosts like Render)
+      const supabaseResult = await uploadToSupabase({
+        path: file.path,
+        filename: `products/${Date.now()}-${file.filename}`,
+        contentType: file.mimetype || 'image/jpeg',
+      });
+
+      if (supabaseResult.url) {
+        // Clean up local temp file after successful Supabase upload
+        fs.unlink(file.path, () => {});
+        return res.json({ success: true, data: { url: supabaseResult.url, filename: file.filename } });
+      }
+
+      // Fallback to local storage if Supabase not configured
+      console.warn('[upload] Supabase upload failed, using local storage:', supabaseResult.error);
       const url = getPublicUrl(file.filename);
       return res.json({ success: true, data: { url, filename: file.filename } });
     } catch (err) {

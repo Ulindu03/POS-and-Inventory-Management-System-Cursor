@@ -6,7 +6,7 @@
 // - /password-reset/* is the new two-step reset: send OTP first, verify, then email reset link.
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
-import { isSmtpConfigured, verifySmtpConnection, smtpDiagnostics } from '../services/email.service';
+import { isSmtpConfigured, verifySmtpConnection, smtpDiagnostics, resetTransporter } from '../services/email.service';
 import { authenticate } from '../middleware/auth.middleware';
 
 // Optional: add validation if available later
@@ -86,6 +86,7 @@ router.get('/smtp-status', async (_req, res) => {
 
 // Force a re-evaluation of transporter (useful after adding env vars without restart in some dev setups)
 router.post('/smtp-reload', async (_req, res) => {
+	resetTransporter();
 	const configured = isSmtpConfigured();
 	const verify = configured ? await verifySmtpConnection() : { ok: false, error: 'not configured' };
 	return res.json({ success: true, message: 'SMTP reloaded', data: { configured, verify, diagnostics: smtpDiagnostics() } });

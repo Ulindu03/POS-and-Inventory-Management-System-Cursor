@@ -258,16 +258,26 @@ export class AuthController {
     if (requiresOtpForLogin(user.role)) {
         const needsNewOtp = !user.otpCode || !user.otpExpires || user.otpExpires.getTime() < Date.now();
         let emailResult: any = null;
+        
         if (needsNewOtp) {
           const otp = Math.floor(100000 + Math.random() * 900000).toString();
           user.otpCode = otp;
           user.otpExpires = new Date(Date.now() + 5 * 60 * 1000);
           user.otpAttempts = (user.otpAttempts || 0) + 1;
           await user.save();
-          emailResult = await sendOtpEmail(user.email, user.otpCode);
-          // eslint-disable-next-line no-console
-          console.log('[auth] Store Owner OTP generated', { user: user.username, sent: emailResult.ok, email: user.email, otp: process.env.DEBUG_SHOW_OTP ? otp : 'hidden', error: emailResult.ok ? undefined : emailResult.error });
         }
+        
+        // Always send the OTP email (even if reusing existing OTP)
+        emailResult = await sendOtpEmail(user.email, user.otpCode!);
+        console.log('[auth] OTP email attempt', { 
+          user: user.username, 
+          sent: emailResult.ok, 
+          email: user.email, 
+          newOtp: needsNewOtp,
+          otp: process.env.DEBUG_SHOW_OTP ? user.otpCode : 'hidden', 
+          error: emailResult.ok ? undefined : emailResult.error 
+        });
+        
         return res.json({
           success: true,
           message: 'OTP required',

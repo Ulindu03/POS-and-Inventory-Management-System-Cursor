@@ -68,16 +68,44 @@ connectDB();
 
 // Middleware
 app.use(helmet());
-// CORS: allow all origins in development to avoid dev-port/origin churn; restrict in production
+
+// CORS: Build allowed origins list from env + defaults
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+  // Always allow these for development flexibility
+  const defaults = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:3000',
+  ];
+  return [...new Set([...defaults, ...envOrigins])];
+};
+
+const allowedOrigins = getAllowedOrigins();
+console.log('[CORS] Allowed origins:', allowedOrigins);
+
 app.use(cors({
-  origin: (_origin, cb) => {
+  origin: (origin, cb) => {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return cb(null, true);
+    // In development, allow all origins
     if ((process.env.NODE_ENV || 'development') !== 'production') {
-      // allow any origin in development
       return cb(null, true);
     }
-    // no origin (e.g., curl/postman) or allowed list match
-    // Note: socket.io will use its own CORS below too
-    return cb(null, true);
+    // In production, check against allowed list
+    if (allowedOrigins.includes(origin)) {
+      return cb(null, true);
+    }
+    // Also allow any Vercel preview URLs
+    if (origin.endsWith('.vercel.app')) {
+      return cb(null, true);
+    }
+    console.warn('[CORS] Blocked origin:', origin);
+    return cb(null, true); // Still allow but log - change to cb(new Error('Not allowed')) to block
   },
   credentials: true,
 }));
@@ -515,14 +543,23 @@ app.get('/api/dev/list-users', async (_req, res) => {
 // Socket.io
 const io = new IOServer(httpServer, {
   cors: {
-  origin: (_origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
+    origin: (origin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
+      // Allow requests with no origin
+      if (!origin) return cb(null, true);
+      // In development, allow all
       if ((process.env.NODE_ENV || 'development') !== 'production') {
         return cb(null, true);
-  }
+      }
+      // In production, check allowed list
+      if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        return cb(null, true);
+      }
+      console.warn('[Socket.io CORS] Blocked origin:', origin);
+      return cb(null, true); // Allow but log
+    },
+    credentials: true,
   },
-  credentials: true,
-  },
-  transports: ['websocket'],
+  transports: ['websocket', 'polling'],
   pingTimeout: 30000,
   pingInterval: 25000,
 });

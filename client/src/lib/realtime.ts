@@ -17,7 +17,7 @@ export function getSocket() {
     const url = import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || window.location.origin;
     socket = io(url, {
       withCredentials: true,
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'], // Allow polling fallback for cross-origin
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
