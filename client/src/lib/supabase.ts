@@ -4,6 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://xuhaikzzwmuxmfnxbyin.supabase.co';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1aGFpa3p6d211eG1mbnhieWluIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzOTMxNjEsImV4cCI6MjA3MTk2OTE2MX0.1npfWI10jdp4-Qw_xp2Z6qLqjMu5R8e42fHJNPt4a0w';
 
+// Bucket name for Supabase Storage
+const SUPABASE_BUCKET = 'Images';
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export async function uploadToSupabaseImages(
@@ -16,13 +19,13 @@ export async function uploadToSupabaseImages(
   const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
   const key = `${folder}/${base}-${unique}${ext}`;
 
-  const { error } = await supabase.storage.from('Images').upload(key, file, {
+  const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(key, file, {
     upsert: false,
     contentType: file.type || undefined,
   });
   if (error) throw error;
 
-  const { data } = supabase.storage.from('Images').getPublicUrl(key);
+  const { data } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(key);
   return { path: key, url: data.publicUrl };
 }
 
@@ -31,7 +34,7 @@ export function getImagesPathFromPublicUrl(publicUrl: string): string | null {
   try {
     const u = new URL(publicUrl);
     const marker = '/storage/v1/object/public/Images/';
-    const idx = u.pathname.indexOf('/storage/v1/object/public/Images/');
+    const idx = u.pathname.indexOf(marker);
     if (idx === -1) return null;
     const path = u.pathname.substring(idx + marker.length);
     return decodeURIComponent(path);
@@ -44,7 +47,7 @@ export function getImagesPathFromPublicUrl(publicUrl: string): string | null {
 export async function deleteSupabasePublicImage(publicUrl: string): Promise<{ success: boolean; error?: string }> {
   const path = getImagesPathFromPublicUrl(publicUrl);
   if (!path) return { success: false, error: 'Not a Supabase Images URL' };
-  const { error } = await supabase.storage.from('Images').remove([path]);
+  const { error } = await supabase.storage.from(SUPABASE_BUCKET).remove([path]);
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
