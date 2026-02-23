@@ -3,6 +3,13 @@
 //   <img src={proxyImage(remoteUrl)} alt="..." />
 // If remoteUrl is already relative or same-origin, it returns as-is.
 
+// Get the API base URL (without /api suffix for the proxy endpoint)
+const getApiBaseUrl = (): string => {
+  const apiUrl = import.meta.env.VITE_API_URL || '/api';
+  // Remove trailing /api to get base URL
+  return apiUrl.replace(/\/api\/?$/, '');
+};
+
 export function proxyImage(url: string | undefined | null): string {
   if (!url) return '';
   try {
@@ -13,7 +20,8 @@ export function proxyImage(url: string | undefined | null): string {
     // Avoid double-proxying
     if (lower.includes('/api/proxy/img?')) return url;
     const encoded = encodeURIComponent(url);
-    return `/api/proxy/img?url=${encoded}`;
+    const baseUrl = getApiBaseUrl();
+    return `${baseUrl}/api/proxy/img?url=${encoded}`;
   } catch {
     return url;
   }
