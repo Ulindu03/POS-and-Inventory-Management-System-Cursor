@@ -216,6 +216,9 @@ app.get('/api/proxy/img', async (req, res): Promise<void> => {
     res.setHeader('Content-Type', ct);
     // Cache for 1 hour; customize if needed
     res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=3600');
+    // Allow cross-origin resource sharing for images
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     // NEVER forward upstream set-cookie
     res.removeHeader('Set-Cookie');
     res.send(data);
