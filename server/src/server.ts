@@ -1,4 +1,8 @@
 // Main server bootstrap: sets up Express, middlewares, database connection, routes, and Swagger docs.
+import dns from 'dns';
+// Force IPv4 DNS resolution to avoid ENETUNREACH on hosts that don't support IPv6 (e.g. Render)
+dns.setDefaultResultOrder('ipv4first');
+
 import express from 'express';
 import http from 'http';
 import { Server as IOServer, Socket } from 'socket.io';
