@@ -22,7 +22,7 @@ export interface CreateSalePayload {
 export const salesApi = {
   create: async (payload: CreateSalePayload) => {
     const { data } = await client.post('/sales', payload);
-    return data as { success: true; data: { sale: { id: string; invoiceNo: string; total: number } } };
+    return data as { success: true; data: { sale: { id: string; invoiceNo: string; total: number }; emailReceipt?: { enabled: boolean; queued: boolean; customerHasEmail: boolean } } };
   },
   validateDiscount: async (payload: { code: string; subtotal: number }) => {
     const { data } = await client.post('/sales/validate-discount', payload);

@@ -28,8 +28,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       {/* Catch any JavaScript errors and show fallback UI */}
       <ErrorBoundary>
-        {/* Toast notifications appear in top-right corner */}
-        <Toaster position="top-right" richColors />
+        {/* Toast notifications appear in top-right corner, expanded so they don't overlap */}
+        <Toaster position="top-right" richColors expand visibleToasts={5} gap={8} />
         {/* Main application component */}
         <App />
       </ErrorBoundary>

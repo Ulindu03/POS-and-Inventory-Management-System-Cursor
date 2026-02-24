@@ -1,16 +1,18 @@
 import { Settings } from '../models/Settings.model';
 import { sendEmailRaw } from './emailProvider';
 
-async function getFlags() {
+export async function getNotificationFlags() {
   const s = await Settings.findOne();
+  const hasSmtpCreds = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
   return {
-    email: Boolean(s?.notifications?.email?.enabled),
-    sms: Boolean(s?.notifications?.sms?.enabled),
+    // If settings doc missing, fall back to "enabled when SMTP configured"
+    email: s?.notifications?.email?.enabled ?? hasSmtpCreds,
+    sms: s?.notifications?.sms?.enabled ?? false,
   };
 }
 
 export async function sendEmail(subject: string, to: string, text: string, html?: string) {
-  const { email } = await getFlags();
+  const { email } = await getNotificationFlags();
   console.log('[email:debug] settings email enabled:', email, 'subject:', subject, 'to:', to);
   if (!email) {
     console.log('[email][skipped][disabled]', subject);
@@ -27,7 +29,7 @@ export async function sendEmail(subject: string, to: string, text: string, html?
 }
 
 export async function sendSMS(to: string, text: string) {
-  const { sms } = await getFlags();
+  const { sms } = await getNotificationFlags();
   if (!sms) return false;
   // TODO: integrate provider (e.g., Twilio)
   console.log(`[sms] to=${to} text=${text}`);

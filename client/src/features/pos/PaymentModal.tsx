@@ -232,6 +232,7 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         customer: customerIdToUse || undefined,
       });
       const sale = res.data.sale;
+      const emailReceipt = res.data.emailReceipt;
 
       if (exchangeSlip) {
         try {
@@ -253,6 +254,20 @@ export const PaymentModal = ({ open, onClose, onComplete }: Props) => {
         payments: paymentSummaries,
       });
       toast.success('Sale completed');
+
+      // Email receipt notification
+      if (emailReceipt) {
+        if (emailReceipt.queued && emailReceipt.customerHasEmail) {
+          toast.success('📧 Email receipt is being sent to the customer.', { duration: 5000 });
+        } else if (!emailReceipt.enabled) {
+          toast.warning('Email receipts are disabled in settings.', { duration: 4000 });
+        } else if (!emailReceipt.customerHasEmail) {
+          toast.warning('Customer has no valid email — receipt not emailed.', { duration: 4000 });
+        }
+      } else if (!customerIdToUse) {
+        // No customer was selected for the sale
+        toast.info('No customer selected — email receipt skipped.', { duration: 3000 });
+      }
     } catch (err: any) {
       const status = err?.response?.status;
       const errorCode = err?.response?.data?.code;

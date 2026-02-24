@@ -3,7 +3,7 @@ import { PurchaseOrder } from '../models/PurchaseOrder.model';
 import { Product } from '../models/Product.model';
 import { Payment } from '../models/Payment.model';
 import { UnitBarcode } from '../models/UnitBarcode.model';
-import { isResendConfigured, sendViaResend } from '../services/resendProvider';
+import { isSmtpConfigured } from '../services/email.service';
 import { Request as ExpressRequest } from 'express';
 
 // Get all purchase orders with filtering and pagination
@@ -637,24 +637,30 @@ export const sendPurchaseOrderEmail = async (req: ExpressRequest, res: Response)
       </table>
     </body></html>`;
 
-    const from = process.env.EMAIL_FROM || 'onboarding@resend.dev';
-    const poSubject = `Purchase Order ${po.poNumber}`;
-
-    // Send via Resend (HTTP-based, works on Render free tier)
-    if (!isResendConfigured()) {
-      return res.status(500).json({ success: false, message: 'No email provider configured (set RESEND_API_KEY)' });
+    if (!isSmtpConfigured()) {
+      return res.status(500).json({ success: false, message: 'SMTP not configured' });
     }
-
+    const nodemailer = require('nodemailer');
+    const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = Number(process.env.SMTP_PORT || 587);
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      tls: { rejectUnauthorized: false },
+      // Force IPv4 — Render and many hosts lack IPv6 connectivity
+      dnsOptions: { family: 4 },
+    } as any);
     try {
-      const r = await sendViaResend({ from, to: supplier.email, subject: poSubject, html });
-      if (r?.ok) {
-        po.set({ emailSent: true, emailSentAt: new Date() });
-        await po.save();
-        return res.json({ success: true, message: 'Email sent via Resend', data: { emailSent: true } });
-      }
-      return res.status(500).json({ success: false, message: 'Email sending failed', error: r?.error });
-    } catch (e: any) {
-      return res.status(500).json({ success: false, message: 'Failed to send email', error: e?.message });
+      await transporter.sendMail({ from, to: supplier.email, subject: `Purchase Order ${po.poNumber}`, html });
+      // Do NOT auto-advance status here. Keep as 'draft' until the user explicitly marks as "Sent".
+      po.set({ emailSent: true, emailSentAt: new Date() });
+      await po.save();
+      return res.json({ success: true, message: 'Email sent', data: { emailSent: true } });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: 'Failed to send email', error: err?.message });
     }
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Unexpected error' });

@@ -11,7 +11,7 @@ import { issueWarranty } from '../services/warranty.service';
 import { emit as emitRealtime } from '../services/realtime.service';
 import { Counter } from '../models/Counter.model';
 import { Customer } from '../models/Customer.model';
-import { sendEmail, buildSaleReceiptEmail } from '../services/notify.service';
+import { sendEmail, buildSaleReceiptEmail, getNotificationFlags } from '../services/notify.service';
 import { UnitBarcode } from '../models/UnitBarcode.model';
 
 const nextInvoiceNo = async (): Promise<string> => {
@@ -569,33 +569,67 @@ export class SaleController {
     // eslint-disable-next-line no-console
     console.log('[sales.create] success', { id: String(doc._id), invoiceNo: doc.invoiceNo, total: doc.total });
   }
-  // Non-blocking e-receipt email
+  // Determine email receipt status for response + schedule non-blocking send
+  let emailReceipt: { enabled: boolean; queued: boolean; customerHasEmail: boolean } = {
+    enabled: false,
+    queued: false,
+    customerHasEmail: false,
+  };
+
   if (doc?.customer) {
-    setTimeout(async () => {
-      try {
-        const cust = await Customer.findById(doc.customer).select('name email');
-        const email = (cust as any)?.email;
-        if (email) {
+    try {
+      const cust = await Customer.findById(doc.customer).select('name email').lean();
+      const custEmail = (cust as any)?.email || '';
+      // Filter out auto-generated fake emails (e.g. phone@temp.local)
+      const isRealEmail = custEmail && !custEmail.endsWith('@temp.local') && custEmail.includes('@');
+
+      const flags = await getNotificationFlags();
+      emailReceipt.enabled = flags.email;
+      emailReceipt.customerHasEmail = Boolean(isRealEmail);
+
+      console.log('[email][sale_receipt][check]', {
+        invoiceNo: doc.invoiceNo,
+        custEmail: custEmail || 'none',
+        isRealEmail,
+        emailEnabled: flags.email,
+      });
+
+      if (flags.email && isRealEmail) {
+        emailReceipt.queued = true;
+        // Non-blocking e-receipt email
+        setTimeout(async () => {
           try {
-            // Enrich items with product names, warranty, and barcode details for email
             const saleWithDetails = await Sale.findById(doc._id)
               .populate('items.product', 'name warranty barcode sku')
               .lean();
             const enriched = saleWithDetails || doc;
             const { subject, text, html } = buildSaleReceiptEmail(enriched, cust);
-            await sendEmail(subject, email, text, html);
+            const sent = await sendEmail(subject, custEmail, text, html);
+            console.log('[email][sale_receipt]', sent ? 'SENT' : 'FAILED', doc.invoiceNo, custEmail);
           } catch (e: any) {
             console.error('[email][sale_receipt][error]', doc.invoiceNo, e?.message || e);
           }
-        } else {
-          console.log('[email][sale_receipt][skipped][no_email]', doc.invoiceNo);
-        }
-      } catch (e) {
-        console.error('[email][sale_receipt][error_fetch_customer]', doc.invoiceNo, e);
+        }, 0);
+      } else if (!isRealEmail) {
+        console.log('[email][sale_receipt][skipped]', doc.invoiceNo, custEmail ? 'fake/temp email' : 'no email');
       }
-    }, 0);
+    } catch (e) {
+      console.error('[email][sale_receipt][error_prepare]', doc.invoiceNo, e);
+    }
   }
-  return res.status(201).json({ success: true, data: { sale: { id: doc._id, invoiceNo: doc.invoiceNo, total: doc.total } } });
+
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.log('[sales.create] emailReceipt flags', emailReceipt);
+  }
+
+  return res.status(201).json({
+    success: true,
+    data: {
+      sale: { id: doc._id, invoiceNo: doc.invoiceNo, total: doc.total },
+      emailReceipt,
+    },
+  });
     } catch (err) {
   return next(err);
     }

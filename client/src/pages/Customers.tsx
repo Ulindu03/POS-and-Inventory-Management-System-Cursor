@@ -2,13 +2,13 @@
 // This file shows the Customers page.
 // In simple English:
 // - Lets you view, add, edit, and manage customers and their purchase history.
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AppLayout } from '@/components/common/Layout/Layout';
 import { CustomerList } from '@/features/customers/CustomerList';
 import { CustomerForm } from '@/features/customers/CustomerForm';
 import { CustomerProfile } from '@/features/customers/CustomerProfile';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Users, TrendingUp } from 'lucide-react';
+import { Users, TrendingUp, Search, X } from 'lucide-react';
 import { 
   getCustomers, 
   getCustomerStats, 
@@ -35,6 +35,7 @@ const Customers = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customerTypeFilter, setCustomerTypeFilter] = useState<'all' | 'retail' | 'wholesale'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Load customers and stats from API
   useEffect(() => {
@@ -327,10 +328,23 @@ const handleDeleteCustomer = async (customer: Customer) => {
   const activeCustomers = stats?.activeCustomers || customers.filter(c => c.isActive).length;
   const retailCount = customers.filter((c) => (c.type || '').toLowerCase() === 'retail').length;
   const wholesaleCount = customers.filter((c) => (c.type || '').toLowerCase() === 'wholesale').length;
-  const filteredCustomers = customers.filter((c) => {
-    if (customerTypeFilter === 'all') return true;
-    return (c.type || '').toLowerCase() === customerTypeFilter;
-  });
+  const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return customers.filter((c) => {
+      // Type filter
+      if (customerTypeFilter !== 'all' && (c.type || '').toLowerCase() !== customerTypeFilter) return false;
+      // Search filter
+      if (q) {
+        const name = (c.name || '').toLowerCase();
+        const email = (c.email || '').toLowerCase();
+        const phone = (c.phone || '').replace(/\s+/g, '').toLowerCase();
+        const code = (c.customerCode || '').toLowerCase();
+        const queryNorm = q.replace(/\s+/g, '');
+        if (!name.includes(q) && !email.includes(q) && !phone.includes(queryNorm) && !code.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [customers, customerTypeFilter, searchQuery]);
   // Total credit card removed by request
   
 
@@ -404,8 +418,31 @@ const handleDeleteCustomer = async (customer: Customer) => {
             transition={{ duration: 0.6, delay: 0.5 }}
             className="bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 p-8 shadow-2xl"
           >
+            {/* Search Bar */}
+            <div className="relative mb-6">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="w-5 h-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search by name, phone, email, or customer code..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-10 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400/50 focus:ring-1 focus:ring-yellow-400/30 transition-all text-sm"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
             <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center md:justify-between">
-              <p className="text-gray-400 text-sm"></p>
+              <p className="text-gray-400 text-sm">{searchQuery ? `${filteredCustomers.length} result${filteredCustomers.length !== 1 ? 's' : ''} found` : ''}</p>
               <div className="inline-flex rounded-2xl border border-white/10 bg-white/5 p-1 text-sm font-semibold text-white">
                 {([
                   { label: 'All', value: 'all', count: customers.length },

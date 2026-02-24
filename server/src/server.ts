@@ -47,10 +47,25 @@ import { swaggerSpec } from './config/swagger';
 // Load environment variables
 dotenv.config();
 
+// Immediately log raw presence of critical SMTP env vars to diagnose loading issues
+// (values partially redacted). This runs BEFORE any service captures them.
+(() => {
+  const redact = (v?: string) => (v ? v.slice(0, 2) + '***' : 'missing');
+  console.log('[startup][env-check] SMTP vars', {
+    host: process.env.SMTP_HOST ? 'set' : 'missing',
+    user: redact(process.env.SMTP_USER),
+    pass: process.env.SMTP_PASS ? 'set' : 'missing',
+    from: redact(process.env.EMAIL_FROM),
+    enableEthereal: process.env.ENABLE_ETHEREAL_FALLBACK,
+    nodeEnv: process.env.NODE_ENV,
+    cwd: process.cwd(),
+  });
+})();
+
 // Create Express app and HTTP server
 const app = express();
 const httpServer = http.createServer(app);
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT || 5000);
 
 // Connect to MongoDB
 connectDB();
@@ -584,7 +599,35 @@ setIO(io);
 // cache busting is invoked directly in controllers after mutations
 
 // Start server
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server listening on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
-  console.log('[email] provider: Resend, configured:', Boolean(process.env.RESEND_API_KEY));
-});
+const startServer = (port: number, retriesLeft = 10) => {
+  const onListening = () => {
+    const addr = httpServer.address();
+    const actualPort = typeof addr === 'object' && addr ? addr.port : port;
+    console.log(`🚀 Server listening on http://localhost:${actualPort} (${process.env.NODE_ENV || 'development'})`);
+    const redacted = (v?: string) => v ? v.slice(0,3) + '***' : 'none';
+    console.log('[smtp] config summary', {
+      host: process.env.SMTP_HOST || 'gmail-service-or-missing',
+      user: redacted(process.env.SMTP_USER),
+      passSet: Boolean(process.env.SMTP_PASS),
+      from: process.env.EMAIL_FROM,
+    });
+  };
+
+  const onError = (err: any) => {
+    httpServer.off('listening', onListening);
+    if (err?.code === 'EADDRINUSE' && retriesLeft > 0) {
+      const nextPort = port + 1;
+      console.warn(`[startup] Port ${port} is in use. Retrying on ${nextPort}...`);
+      startServer(nextPort, retriesLeft - 1);
+      return;
+    }
+    console.error('[startup] Server failed to start:', err);
+    process.exit(1);
+  };
+
+  httpServer.once('listening', onListening);
+  httpServer.once('error', onError);
+  httpServer.listen(port);
+};
+
+startServer(PORT);
