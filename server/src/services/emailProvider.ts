@@ -33,7 +33,7 @@ function getTransporter(): nodemailer.Transporter | null {
     const isGmail = !host || host.includes('gmail');
     
     const smtpHost = isGmail ? 'smtp.gmail.com' : host!;
-    const smtpPortFinal = isGmail ? 465 : smtpPort;
+    const smtpPortFinal = isGmail ? 587 : smtpPort;
     cachedTransporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPortFinal,

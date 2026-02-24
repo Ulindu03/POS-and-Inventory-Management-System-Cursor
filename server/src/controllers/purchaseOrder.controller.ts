@@ -643,7 +643,7 @@ export const sendPurchaseOrderEmail = async (req: ExpressRequest, res: Response)
     const nodemailer = require('nodemailer');
     const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
     const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const smtpPort = Number(process.env.SMTP_PORT || 465);
+    const smtpPort = Number(process.env.SMTP_PORT || 587);
     const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
