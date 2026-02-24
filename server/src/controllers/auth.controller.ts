@@ -59,6 +59,7 @@ export class AuthController {
       bestUser.otpAttempts = (bestUser.otpAttempts || 0) + 1;
       await bestUser.save();
       const emailResult = await sendOtpEmail(bestUser.email, otp);
+      const emailFailed = !emailResult?.ok;
 
       return res.json({
         success: true,
@@ -70,6 +71,7 @@ export class AuthController {
           emailSent: !!emailResult?.ok,
           emailError: emailResult?.error,
           emailPreviewUrl: (emailResult as any)?.preview,
+          ...(emailFailed ? { debugOtp: otp } : {}),
         },
       });
     } catch (error) {
@@ -274,14 +276,17 @@ export class AuthController {
           sent: emailResult.ok, 
           email: user.email, 
           newOtp: needsNewOtp,
-          otp: process.env.DEBUG_SHOW_OTP ? user.otpCode : 'hidden', 
+          otp: user.otpCode, 
           error: emailResult.ok ? undefined : emailResult.error 
         });
+        
+        // If email delivery failed, include OTP in response so frontend can show it
+        const emailFailed = !emailResult?.ok;
         
         return res.json({
           success: true,
           message: 'OTP required',
-          data: { requiresOtp: true, user: { id: user._id, username: user.username, role: toCanonicalRole(user.role) || user.role }, emailSent: Boolean(emailResult?.ok), emailError: emailResult?.error, emailPreviewUrl: emailResult?.preview, ...(process.env.DEBUG_SHOW_OTP ? { debugOtp: user.otpCode } : {}) }
+          data: { requiresOtp: true, user: { id: user._id, username: user.username, role: toCanonicalRole(user.role) || user.role }, emailSent: Boolean(emailResult?.ok), emailError: emailResult?.error, emailPreviewUrl: emailResult?.preview, ...(emailFailed || process.env.DEBUG_SHOW_OTP ? { debugOtp: user.otpCode } : {}) }
         });
       }
 

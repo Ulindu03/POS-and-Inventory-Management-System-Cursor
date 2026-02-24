@@ -504,6 +504,10 @@ const LoginPage = () => {
         setEmailSent(res?.emailSent ?? null);
         setEmailError(res?.emailError || null);
         setEmailPreviewUrl(res?.emailPreviewUrl || null);
+        // If email failed, backend returns debugOtp — auto-fill it
+        if (res.debugOtp) {
+          setOtp(res.debugOtp);
+        }
         toast.success('Face matched. OTP sent to your email');
       } else {
         toast.error('Unexpected response');
@@ -692,10 +696,14 @@ const LoginPage = () => {
         setEmailError(res.emailError || null);
         setEmailPreviewUrl(res.emailPreviewUrl || null);
         setOtpRole(res?.user?.role || null);
+        // If email failed, backend returns debugOtp — auto-fill it
+        if (res.debugOtp) {
+          setOtp(res.debugOtp);
+        }
         const label = roleLabel(res?.user?.role);
-  toast.success(res.emailSent ? `🔐 OTP sent to the ${label} account email` : '🔐 OTP generated (email not sent)', {
-          description: res.emailSent ? 'Check your email for the 6-digit verification code' : 'Use the development OTP to proceed',
-          duration: 5000,
+  toast.success(res.emailSent ? `🔐 OTP sent to the ${label} account email` : `🔐 OTP: ${res.debugOtp || 'check logs'}`, {
+          description: res.emailSent ? 'Check your email for the 6-digit verification code' : res.debugOtp ? 'OTP has been auto-filled for you' : 'Check Render logs for the OTP',
+          duration: 8000,
         });
         return;
       }
