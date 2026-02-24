@@ -47,7 +47,9 @@ function getTransporter() {
         // Don't fail on invalid certs (some SMTP servers have self-signed)
         rejectUnauthorized: false,
       },
-    });
+      // Force IPv4 — Render and many hosts lack IPv6 connectivity
+      dnsOptions: { family: 4 },
+    } as any);
     console.log('[email] Created SMTP transporter for', smtpHost);
     
     // Verify transporter in background (don't block)

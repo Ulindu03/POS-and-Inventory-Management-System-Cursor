@@ -642,13 +642,17 @@ export const sendPurchaseOrderEmail = async (req: ExpressRequest, res: Response)
     }
     const nodemailer = require('nodemailer');
     const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = Number(process.env.SMTP_PORT || 465);
     const transporter = nodemailer.createTransport({
-      service: process.env.SMTP_HOST ? undefined : 'gmail',
-      host: process.env.SMTP_HOST || undefined,
-      port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined,
-      secure: process.env.SMTP_PORT === '465',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-    });
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      tls: { rejectUnauthorized: false },
+      // Force IPv4 — Render and many hosts lack IPv6 connectivity
+      dnsOptions: { family: 4 },
+    } as any);
     try {
       await transporter.sendMail({ from, to: supplier.email, subject: `Purchase Order ${po.poNumber}`, html });
       // Do NOT auto-advance status here. Keep as 'draft' until the user explicitly marks as "Sent".

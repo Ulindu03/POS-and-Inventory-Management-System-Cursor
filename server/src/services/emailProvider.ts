@@ -32,22 +32,18 @@ function getTransporter(): nodemailer.Transporter | null {
     // Check if it's Gmail
     const isGmail = !host || host.includes('gmail');
     
-    if (isGmail) {
-      cachedTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass },
-      });
-      console.log('[emailProvider] Created Gmail transporter');
-    } else {
-      cachedTransporter = nodemailer.createTransport({
-        host,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: { user, pass },
-        tls: { rejectUnauthorized: false },
-      });
-      console.log('[emailProvider] Created SMTP transporter for', host);
-    }
+    const smtpHost = isGmail ? 'smtp.gmail.com' : host!;
+    const smtpPortFinal = isGmail ? 465 : smtpPort;
+    cachedTransporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPortFinal,
+      secure: smtpPortFinal === 465,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
+      // Force IPv4 — Render and many hosts lack IPv6 connectivity
+      dnsOptions: { family: 4 },
+    } as any);
+    console.log('[emailProvider] Created SMTP transporter for', smtpHost, 'port', smtpPortFinal);
     return cachedTransporter;
   } catch (err) {
     console.error('[emailProvider] Failed to create transporter:', err);
