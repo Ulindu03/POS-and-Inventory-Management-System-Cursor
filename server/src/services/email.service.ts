@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { sendViaResend, isResendConfigured } from './resendProvider';
 
 // IMPORTANT: Do NOT snapshot env vars at import time (dotenv might load later).
 // Always read them dynamically so the service works even if .env loads after imports.
@@ -73,20 +74,27 @@ function getTransporter() {
 
 // Send a standard password reset link email.
 export async function sendPasswordResetEmail(to: string, resetUrl: string) {
-  const t = getTransporter();
   const { from } = env();
+  const subject = 'VoltZone POS - Password Reset';
+  const html = `<p>You requested a password reset.</p><p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 30 minutes.</p>`;
+
+  // Try Resend first
+  if (isResendConfigured()) {
+    console.log('[email] Sending password reset via Resend to:', to);
+    const r = await sendViaResend({ from, to, subject, html });
+    if (r?.ok) return { ok: true, id: r.id };
+    console.warn('[email] Resend failed for password reset:', r?.error, '— trying SMTP');
+  }
+
+  // Fallback: SMTP
+  const t = getTransporter();
   if (!t) {
-    console.error('[email] Cannot send password reset - SMTP not configured');
-    return { ok: false, error: 'SMTP not configured' };
+    console.error('[email] Cannot send password reset - no email provider available');
+    return { ok: false, error: 'No email provider configured' };
   }
   try {
-    console.log('[email] Sending password reset email to:', to);
-    const info = await t.sendMail({
-      from,
-      to,
-      subject: 'VoltZone POS - Password Reset',
-      html: `<p>You requested a password reset.</p><p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 30 minutes.</p>`,
-    });
+    console.log('[email] Sending password reset via SMTP to:', to);
+    const info = await t.sendMail({ from, to, subject, html });
     console.log('[email] Password reset email sent:', info.messageId);
     return { ok: true, id: info.messageId };
   } catch (err: any) {
@@ -95,16 +103,30 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string) {
   }
 }
 
-// Send the login OTP to the user's email. If real SMTP is not configured and
-// Ethereal fallback is enabled, we create a temporary Ethereal inbox and return a preview link.
+// Send the login OTP to the user's email.
 export async function sendOtpEmail(to: string, otp: string) {
+  const { from } = env();
+  const subject = 'VoltZone POS Store Owner Login OTP';
+  const html = `<p>Your one-time password (OTP) is:</p><p style="font-size:22px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in 5 minutes. If you did not request it, ignore this email.</p>`;
+
+  // Try Resend first
+  if (isResendConfigured()) {
+    console.log('[email] Sending OTP via Resend to:', to);
+    const r = await sendViaResend({ from, to, subject, html });
+    if (r?.ok) {
+      console.log('[email] OTP sent via Resend:', r.id);
+      return { ok: true, id: r.id };
+    }
+    console.warn('[email] Resend failed for OTP:', r?.error, '— trying SMTP');
+  }
+
+  // Fallback: SMTP
   const t = getTransporter();
-  const { from, enableEthereal } = env();
+  const { enableEthereal } = env();
   if (!t) {
     if (!enableEthereal) {
-      // eslint-disable-next-line no-console
-      console.warn('[email] SMTP not configured and Ethereal fallback disabled.');
-      return { ok: false, error: 'SMTP not configured' };
+      console.warn('[email] No email provider available for OTP.');
+      return { ok: false, error: 'No email provider configured' };
     }
     etherealReady ??= nodemailer.createTestAccount().then(acc => {
         transporter = nodemailer.createTransport({
@@ -113,16 +135,14 @@ export async function sendOtpEmail(to: string, otp: string) {
             secure: acc.smtp.secure,
             auth: { user: acc.user, pass: acc.pass },
         });
-        // eslint-disable-next-line no-console
         console.log('[email] Using Ethereal test account', acc.user);
       }).catch(err => {
-        // eslint-disable-next-line no-console
         console.warn('[email] Ethereal account creation failed', err);
       });
     await etherealReady;
     if (!transporter) {
-      console.warn('[email] SMTP not configured and Ethereal fallback failed. OTP:', otp);
-      return { ok: false, error: 'SMTP not configured' };
+      console.warn('[email] All email providers failed. OTP:', otp);
+      return { ok: false, error: 'No email provider configured' };
     }
   }
   try {
@@ -131,15 +151,10 @@ export async function sendOtpEmail(to: string, otp: string) {
       console.error('[email] No transporter available for OTP email');
       return { ok: false, error: 'no transporter available' };
     }
-    console.log('[email] Sending OTP email to:', to);
-    const info = await active.sendMail({
-      from,
-      to,
-      subject: 'VoltZone POS Store Owner Login OTP',
-      html: `<p>Your one-time password (OTP) is:</p><p style="font-size:22px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in 5 minutes. If you did not request it, ignore this email.</p>`
-    });
+    console.log('[email] Sending OTP via SMTP to:', to);
+    const info = await active.sendMail({ from, to, subject, html });
     const preview = nodemailer.getTestMessageUrl(info) || undefined;
-    console.log('[email] OTP email sent successfully:', info.messageId);
+    console.log('[email] OTP email sent via SMTP:', info.messageId);
     return { ok: true, id: info.messageId, preview, fallbackUsed: !t };
   } catch (err:any) {
     console.error('[email] OTP send failed:', err.message, err.code, err.response);
@@ -149,12 +164,25 @@ export async function sendOtpEmail(to: string, otp: string) {
 
 // Send the password reset OTP (step 1 of the new reset flow)
 export async function sendResetOtpEmail(to: string, otp: string) {
+  const { from } = env();
+  const subject = 'VoltZone POS - Password Reset Code';
+  const html = `<p>Your password reset verification code is:</p><p style="font-size:22px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in 10 minutes.</p>`;
+
+  // Try Resend first
+  if (isResendConfigured()) {
+    console.log('[email] Sending reset OTP via Resend to:', to);
+    const r = await sendViaResend({ from, to, subject, html });
+    if (r?.ok) return { ok: true, id: r.id };
+    console.warn('[email] Resend failed for reset OTP:', r?.error, '— trying SMTP');
+  }
+
+  // Fallback: SMTP
   const t = getTransporter();
-  const { from, enableEthereal } = env();
+  const { enableEthereal } = env();
   if (!t) {
     if (!enableEthereal) {
-      console.warn('[email] SMTP not configured and Ethereal fallback disabled. (reset OTP)');
-      return { ok: false, error: 'SMTP not configured' };
+      console.warn('[email] No email provider available for reset OTP.');
+      return { ok: false, error: 'No email provider configured' };
     }
     etherealReady ??= nodemailer.createTestAccount().then(acc => {
         transporter = nodemailer.createTransport({
@@ -169,19 +197,14 @@ export async function sendResetOtpEmail(to: string, otp: string) {
       });
     await etherealReady;
     if (!transporter) {
-      console.warn('[email] SMTP not configured and Ethereal fallback failed. Reset OTP:', otp);
-      return { ok: false, error: 'SMTP not configured' };
+      console.warn('[email] All providers failed. Reset OTP:', otp);
+      return { ok: false, error: 'No email provider configured' };
     }
   }
   try {
     const active = (transporter || t);
     if (!active) return { ok: false, error: 'no transporter available' };
-    const info = await active.sendMail({
-      from,
-      to,
-      subject: 'VoltZone POS - Password Reset Code',
-      html: `<p>Your password reset verification code is:</p><p style="font-size:22px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in 10 minutes.</p>`
-    });
+    const info = await active.sendMail({ from, to, subject, html });
     const preview = nodemailer.getTestMessageUrl(info) || undefined;
     return { ok: true, id: info.messageId, preview, fallbackUsed: !t };
   } catch (err: any) {

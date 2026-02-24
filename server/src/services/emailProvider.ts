@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { sendViaResend, isResendConfigured } from './resendProvider';
 
 interface SendParams {
   to: string;
@@ -40,7 +41,6 @@ function getTransporter(): nodemailer.Transporter | null {
       secure: smtpPortFinal === 465,
       auth: { user, pass },
       tls: { rejectUnauthorized: false },
-      // Force IPv4 — Render and many hosts lack IPv6 connectivity
       dnsOptions: { family: 4 },
     } as any);
     console.log('[emailProvider] Created SMTP transporter for', smtpHost, 'port', smtpPortFinal);
@@ -53,13 +53,32 @@ function getTransporter(): nodemailer.Transporter | null {
 
 export async function sendEmailRaw(p: SendParams) {
   const provider = process.env.EMAIL_PROVIDER || 'log';
-  console.log('[emailProvider] provider:', provider, 'SMTP configured:', !!process.env.SMTP_USER);
+  console.log('[emailProvider] provider:', provider, 'Resend:', isResendConfigured(), 'SMTP:', !!process.env.SMTP_USER);
   
-  if (provider !== 'smtp') {
+  if (provider !== 'smtp' && provider !== 'resend') {
     console.log('[emailProvider:log] Would send email:', p.subject, 'to:', p.to);
     return;
   }
   
+  // ── Try Resend first (HTTP-based, works everywhere) ──
+  if (isResendConfigured()) {
+    const result = await sendViaResend({
+      from: getFromHeader(),
+      to: p.to,
+      subject: p.subject,
+      html: p.html,
+      text: p.text,
+    });
+    if (result) {
+      if (result.ok) {
+        console.log('[emailProvider] Sent via Resend:', result.id);
+        return;
+      }
+      console.warn('[emailProvider] Resend failed:', result.error, '— falling back to SMTP');
+    }
+  }
+  
+  // ── Fallback: SMTP ──
   const transporter = getTransporter();
   if (!transporter) {
     console.error('[emailProvider] Cannot send - no transporter available');
@@ -74,9 +93,9 @@ export async function sendEmailRaw(p: SendParams) {
       html: p.html,
       text: p.text
     });
-    console.log('[emailProvider] Email sent:', info.messageId);
+    console.log('[emailProvider] Email sent via SMTP:', info.messageId);
   } catch (err: any) {
-    console.error('[emailProvider] Send failed:', err.message, err.code);
+    console.error('[emailProvider] SMTP send failed:', err.message, err.code);
     throw err;
   }
 }

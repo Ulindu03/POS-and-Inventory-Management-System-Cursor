@@ -4,6 +4,7 @@ import { Product } from '../models/Product.model';
 import { Payment } from '../models/Payment.model';
 import { UnitBarcode } from '../models/UnitBarcode.model';
 import { isSmtpConfigured } from '../services/email.service';
+import { sendViaResend, isResendConfigured } from '../services/resendProvider';
 import { Request as ExpressRequest } from 'express';
 
 // Get all purchase orders with filtering and pagination
@@ -637,11 +638,29 @@ export const sendPurchaseOrderEmail = async (req: ExpressRequest, res: Response)
       </table>
     </body></html>`;
 
+    const from = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@voltzone.lk';
+    const poSubject = `Purchase Order ${po.poNumber}`;
+
+    // ── Try Resend first (HTTP-based, works on Render free tier) ──
+    if (isResendConfigured()) {
+      try {
+        const r = await sendViaResend({ from, to: supplier.email, subject: poSubject, html });
+        if (r?.ok) {
+          po.set({ emailSent: true, emailSentAt: new Date() });
+          await po.save();
+          return res.json({ success: true, message: 'Email sent via Resend', data: { emailSent: true } });
+        }
+        console.warn('[PO] Resend failed:', r?.error, '— trying SMTP');
+      } catch (e: any) {
+        console.warn('[PO] Resend error:', e?.message, '— trying SMTP');
+      }
+    }
+
+    // ── Fallback: SMTP ──
     if (!isSmtpConfigured()) {
-      return res.status(500).json({ success: false, message: 'SMTP not configured' });
+      return res.status(500).json({ success: false, message: 'No email provider configured' });
     }
     const nodemailer = require('nodemailer');
-    const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
     const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
     const smtpPort = Number(process.env.SMTP_PORT || 587);
     const transporter = nodemailer.createTransport({
@@ -650,12 +669,10 @@ export const sendPurchaseOrderEmail = async (req: ExpressRequest, res: Response)
       secure: smtpPort === 465,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
       tls: { rejectUnauthorized: false },
-      // Force IPv4 — Render and many hosts lack IPv6 connectivity
       dnsOptions: { family: 4 },
     } as any);
     try {
-      await transporter.sendMail({ from, to: supplier.email, subject: `Purchase Order ${po.poNumber}`, html });
-      // Do NOT auto-advance status here. Keep as 'draft' until the user explicitly marks as "Sent".
+      await transporter.sendMail({ from, to: supplier.email, subject: poSubject, html });
       po.set({ emailSent: true, emailSentAt: new Date() });
       await po.save();
       return res.json({ success: true, message: 'Email sent', data: { emailSent: true } });
