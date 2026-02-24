@@ -1,5 +1,6 @@
 import swaggerJSDoc from 'swagger-jsdoc';
 import path from 'path';
+import fs from 'fs';
 import { version } from '../../package.json';
 
 const swaggerDefinition = {
@@ -24,14 +25,37 @@ const swaggerDefinition = {
   security: [{ bearerAuth: [] }],
 };
 
-const srcRoot = path.resolve(__dirname, '..');
-// In production (dist/), only .js files exist. Use simple glob patterns.
-const apisGlobs = [
-  path.join(srcRoot, 'routes', '**', '*.js').replace(/\\/g, '/'),
-  path.join(srcRoot, 'controllers', '**', '*.js').replace(/\\/g, '/'),
+/**
+ * Recursively find files matching an extension inside a directory.
+ * Returns forward-slash normalised absolute paths.
+ */
+function findFiles(dir: string, ext: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  const results: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...findFiles(full, ext));
+    } else if (entry.name.endsWith(ext)) {
+      results.push(full.replace(/\\/g, '/'));
+    }
+  }
+  return results;
+}
+
+const distRoot = path.resolve(__dirname, '..');
+const projectRoot = path.resolve(distRoot, '..');
+
+// swagger-jsdoc v1 does NOT expand globs — it reads each path literally.
+// Resolve files ourselves so it always gets real file paths.
+const apiFiles = [
+  ...findFiles(path.join(distRoot, 'routes'), '.js'),
+  ...findFiles(path.join(distRoot, 'controllers'), '.js'),
+  ...findFiles(path.join(projectRoot, 'src', 'routes'), '.ts'),
+  ...findFiles(path.join(projectRoot, 'src', 'controllers'), '.ts'),
 ];
 
 export const swaggerSpec = swaggerJSDoc({
   swaggerDefinition: swaggerDefinition as any,
-  apis: apisGlobs,
+  apis: apiFiles,
 });
