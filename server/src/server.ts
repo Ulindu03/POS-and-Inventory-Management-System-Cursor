@@ -47,21 +47,6 @@ import { swaggerSpec } from './config/swagger';
 // Load environment variables
 dotenv.config();
 
-// Immediately log raw presence of critical SMTP env vars to diagnose loading issues
-// (values partially redacted). This runs BEFORE any service captures them.
-(() => {
-  const redact = (v?: string) => (v ? v.slice(0, 2) + '***' : 'missing');
-  console.log('[startup][env-check] SMTP vars', {
-    host: process.env.SMTP_HOST ? 'set' : 'missing',
-    user: redact(process.env.SMTP_USER),
-    pass: process.env.SMTP_PASS ? 'set' : 'missing',
-    from: redact(process.env.EMAIL_FROM),
-    enableEthereal: process.env.ENABLE_ETHEREAL_FALLBACK,
-    nodeEnv: process.env.NODE_ENV,
-    cwd: process.cwd(),
-  });
-})();
-
 // Create Express app and HTTP server
 const app = express();
 const httpServer = http.createServer(app);
@@ -601,11 +586,5 @@ setIO(io);
 // Start server
 httpServer.listen(PORT, () => {
   console.log(`🚀 Server listening on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
-  const redacted = (v?: string) => v ? v.slice(0,3) + '***' : 'none';
-  console.log('[smtp] config summary', {
-    host: process.env.SMTP_HOST || 'gmail-service-or-missing',
-    user: redacted(process.env.SMTP_USER),
-    passSet: Boolean(process.env.SMTP_PASS),
-    from: process.env.EMAIL_FROM,
-  });
+  console.log('[email] provider: Resend, configured:', Boolean(process.env.RESEND_API_KEY));
 });

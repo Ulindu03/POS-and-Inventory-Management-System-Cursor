@@ -6,7 +6,7 @@
 // - /password-reset/* is the new two-step reset: send OTP first, verify, then email reset link.
 import { Router } from 'express';
 import { AuthController } from '../controllers/auth.controller';
-import { isSmtpConfigured, verifySmtpConnection, smtpDiagnostics, resetTransporter } from '../services/email.service';
+import { isEmailConfigured, emailDiagnostics } from '../services/email.service';
 import { authenticate } from '../middleware/auth.middleware';
 
 // Optional: add validation if available later
@@ -77,19 +77,16 @@ router.post('/otp-login/verify', AuthController.adminLoginVerify);
 // Token utilities
 router.post('/refresh-token', AuthController.refreshToken);
 router.post('/logout', AuthController.logout);
-// Helper endpoints to check SMTP health in dev
+// Helper endpoint to check email provider health
 router.get('/smtp-status', async (_req, res) => {
-	const configured = isSmtpConfigured();
-	const verify = configured ? await verifySmtpConnection() : { ok: false, error: 'not configured' };
-	return res.json({ success: true, data: { configured, verify, diagnostics: smtpDiagnostics() } });
+	const configured = isEmailConfigured();
+	return res.json({ success: true, data: { configured, provider: 'resend', diagnostics: emailDiagnostics() } });
 });
 
-// Force a re-evaluation of transporter (useful after adding env vars without restart in some dev setups)
+// Kept for backward compatibility — no-op reload (Resend is stateless)
 router.post('/smtp-reload', async (_req, res) => {
-	resetTransporter();
-	const configured = isSmtpConfigured();
-	const verify = configured ? await verifySmtpConnection() : { ok: false, error: 'not configured' };
-	return res.json({ success: true, message: 'SMTP reloaded', data: { configured, verify, diagnostics: smtpDiagnostics() } });
+	const configured = isEmailConfigured();
+	return res.json({ success: true, message: 'Email provider checked', data: { configured, provider: 'resend', diagnostics: emailDiagnostics() } });
 });
 
 /**

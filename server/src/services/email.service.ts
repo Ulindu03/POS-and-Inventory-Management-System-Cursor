@@ -1,259 +1,85 @@
-import nodemailer from 'nodemailer';
+/**
+ * Email service — uses Resend HTTP API exclusively.
+ * SMTP/nodemailer has been removed. Resend works on all hosts including
+ * Render free tier which blocks outbound SMTP ports.
+ */
 import { sendViaResend, isResendConfigured } from './resendProvider';
 
-// IMPORTANT: Do NOT snapshot env vars at import time (dotenv might load later).
-// Always read them dynamically so the service works even if .env loads after imports.
-function env() {
-  return {
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-    from: process.env.EMAIL_FROM || 'voltzone003@gmail.com',
-    enableEthereal: process.env.ENABLE_ETHEREAL_FALLBACK === 'true',
-  } as const;
-}
-
-let transporter: nodemailer.Transporter | null = null; // real SMTP transporter (Gmail or custom)
-let etherealReady: Promise<void> | null = null; // lazily create Ethereal test account if needed
-let transporterVerified = false; // track if we've verified the connection
-
-// Build or return the current SMTP transporter.
-function getTransporter() {
-  if (transporter) return transporter;
-  const { host, port, user, pass } = env();
-  
-  console.log('[email] Creating transporter with config:', {
-    host: host || '(gmail service)',
-    port,
-    user: user ? user.substring(0, 5) + '***' : 'NOT SET',
-    pass: pass ? '***set***' : 'NOT SET',
-  });
-  
-  if (!user || !pass) {
-    console.warn('[email] SMTP user or pass not configured');
-    return null;
-  }
-  
-  try {
-    // Use explicit host/port configuration (more reliable than service shortcut)
-    const smtpHost = host || 'smtp.gmail.com';
-    
-    transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port,
-      secure: port === 465, // true for 465, false for other ports
-      auth: { user, pass },
-      tls: {
-        // Don't fail on invalid certs (some SMTP servers have self-signed)
-        rejectUnauthorized: false,
-      },
-      // Force IPv4 — Render and many hosts lack IPv6 connectivity
-      dnsOptions: { family: 4 },
-    } as any);
-    console.log('[email] Created SMTP transporter for', smtpHost);
-    
-    // Verify transporter in background (don't block)
-    if (!transporterVerified) {
-      transporter.verify()
-        .then(() => {
-          transporterVerified = true;
-          console.log('[email] SMTP connection verified successfully');
-        })
-        .catch((err) => {
-          console.error('[email] SMTP verification failed:', err.message);
-          // Don't null out transporter - let send attempts show the real error
-        });
-    }
-  } catch (e) {
-    console.error('[email] transporter creation failed', e);
-    return null;
-  }
-  return transporter;
+function getFrom(): string {
+  return process.env.EMAIL_FROM || 'onboarding@resend.dev';
 }
 
 // Send a standard password reset link email.
 export async function sendPasswordResetEmail(to: string, resetUrl: string) {
-  const { from } = env();
+  const from = getFrom();
   const subject = 'VoltZone POS - Password Reset';
   const html = `<p>You requested a password reset.</p><p>Click <a href="${resetUrl}">here</a> to reset your password. This link expires in 30 minutes.</p>`;
 
-  // Try Resend first
-  if (isResendConfigured()) {
-    console.log('[email] Sending password reset via Resend to:', to);
-    const r = await sendViaResend({ from, to, subject, html });
-    if (r?.ok) return { ok: true, id: r.id };
-    console.warn('[email] Resend failed for password reset:', r?.error, '— trying SMTP');
+  if (!isResendConfigured()) {
+    console.warn('[email] Resend not configured — cannot send password reset');
+    return { ok: false, error: 'No email provider configured (set RESEND_API_KEY)' };
   }
 
-  // Fallback: SMTP
-  const t = getTransporter();
-  if (!t) {
-    console.error('[email] Cannot send password reset - no email provider available');
-    return { ok: false, error: 'No email provider configured' };
-  }
-  try {
-    console.log('[email] Sending password reset via SMTP to:', to);
-    const info = await t.sendMail({ from, to, subject, html });
-    console.log('[email] Password reset email sent:', info.messageId);
-    return { ok: true, id: info.messageId };
-  } catch (err: any) {
-    console.error('[email] Password reset email failed:', err.message, err.code);
-    return { ok: false, error: err?.message || 'send failed' };
-  }
+  console.log('[email] Sending password reset via Resend to:', to);
+  const r = await sendViaResend({ from, to, subject, html });
+  if (r?.ok) return { ok: true, id: r.id };
+  console.error('[email] Resend failed for password reset:', r?.error);
+  return { ok: false, error: r?.error || 'Resend send failed' };
 }
 
 // Send the login OTP to the user's email.
 export async function sendOtpEmail(to: string, otp: string) {
-  const { from } = env();
+  const from = getFrom();
   const subject = 'VoltZone POS Store Owner Login OTP';
   const html = `<p>Your one-time password (OTP) is:</p><p style="font-size:22px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in 5 minutes. If you did not request it, ignore this email.</p>`;
 
-  // Try Resend first
-  if (isResendConfigured()) {
-    console.log('[email] Sending OTP via Resend to:', to);
-    const r = await sendViaResend({ from, to, subject, html });
-    if (r?.ok) {
-      console.log('[email] OTP sent via Resend:', r.id);
-      return { ok: true, id: r.id };
-    }
-    console.warn('[email] Resend failed for OTP:', r?.error, '— trying SMTP');
+  if (!isResendConfigured()) {
+    console.warn('[email] Resend not configured — cannot send OTP');
+    return { ok: false, error: 'No email provider configured (set RESEND_API_KEY)' };
   }
 
-  // Fallback: SMTP
-  const t = getTransporter();
-  const { enableEthereal } = env();
-  if (!t) {
-    if (!enableEthereal) {
-      console.warn('[email] No email provider available for OTP.');
-      return { ok: false, error: 'No email provider configured' };
-    }
-    etherealReady ??= nodemailer.createTestAccount().then(acc => {
-        transporter = nodemailer.createTransport({
-          host: acc.smtp.host,
-            port: acc.smtp.port,
-            secure: acc.smtp.secure,
-            auth: { user: acc.user, pass: acc.pass },
-        });
-        console.log('[email] Using Ethereal test account', acc.user);
-      }).catch(err => {
-        console.warn('[email] Ethereal account creation failed', err);
-      });
-    await etherealReady;
-    if (!transporter) {
-      console.warn('[email] All email providers failed. OTP:', otp);
-      return { ok: false, error: 'No email provider configured' };
-    }
+  console.log('[email] Sending OTP via Resend to:', to);
+  const r = await sendViaResend({ from, to, subject, html });
+  if (r?.ok) {
+    console.log('[email] OTP sent via Resend:', r.id);
+    return { ok: true, id: r.id };
   }
-  try {
-    const active = (transporter || t);
-    if (!active) {
-      console.error('[email] No transporter available for OTP email');
-      return { ok: false, error: 'no transporter available' };
-    }
-    console.log('[email] Sending OTP via SMTP to:', to);
-    const info = await active.sendMail({ from, to, subject, html });
-    const preview = nodemailer.getTestMessageUrl(info) || undefined;
-    console.log('[email] OTP email sent via SMTP:', info.messageId);
-    return { ok: true, id: info.messageId, preview, fallbackUsed: !t };
-  } catch (err:any) {
-    console.error('[email] OTP send failed:', err.message, err.code, err.response);
-    return { ok: false, error: err?.message || 'send failed' };
-  }
+  console.error('[email] Resend failed for OTP:', r?.error);
+  return { ok: false, error: r?.error || 'Resend send failed' };
 }
 
 // Send the password reset OTP (step 1 of the new reset flow)
 export async function sendResetOtpEmail(to: string, otp: string) {
-  const { from } = env();
+  const from = getFrom();
   const subject = 'VoltZone POS - Password Reset Code';
   const html = `<p>Your password reset verification code is:</p><p style="font-size:22px;font-weight:bold;letter-spacing:4px;">${otp}</p><p>This code expires in 10 minutes.</p>`;
 
-  // Try Resend first
-  if (isResendConfigured()) {
-    console.log('[email] Sending reset OTP via Resend to:', to);
-    const r = await sendViaResend({ from, to, subject, html });
-    if (r?.ok) return { ok: true, id: r.id };
-    console.warn('[email] Resend failed for reset OTP:', r?.error, '— trying SMTP');
+  if (!isResendConfigured()) {
+    console.warn('[email] Resend not configured — cannot send reset OTP');
+    return { ok: false, error: 'No email provider configured (set RESEND_API_KEY)' };
   }
 
-  // Fallback: SMTP
-  const t = getTransporter();
-  const { enableEthereal } = env();
-  if (!t) {
-    if (!enableEthereal) {
-      console.warn('[email] No email provider available for reset OTP.');
-      return { ok: false, error: 'No email provider configured' };
-    }
-    etherealReady ??= nodemailer.createTestAccount().then(acc => {
-        transporter = nodemailer.createTransport({
-          host: acc.smtp.host,
-            port: acc.smtp.port,
-            secure: acc.smtp.secure,
-            auth: { user: acc.user, pass: acc.pass },
-        });
-        console.log('[email] Using Ethereal test account', acc.user);
-      }).catch(err => {
-        console.warn('[email] Ethereal account creation failed', err);
-      });
-    await etherealReady;
-    if (!transporter) {
-      console.warn('[email] All providers failed. Reset OTP:', otp);
-      return { ok: false, error: 'No email provider configured' };
-    }
-  }
-  try {
-    const active = (transporter || t);
-    if (!active) return { ok: false, error: 'no transporter available' };
-    const info = await active.sendMail({ from, to, subject, html });
-    const preview = nodemailer.getTestMessageUrl(info) || undefined;
-    return { ok: true, id: info.messageId, preview, fallbackUsed: !t };
-  } catch (err: any) {
-    console.error('[email] reset OTP send failed', err);
-    return { ok: false, error: err?.message || 'send failed' };
-  }
+  console.log('[email] Sending reset OTP via Resend to:', to);
+  const r = await sendViaResend({ from, to, subject, html });
+  if (r?.ok) return { ok: true, id: r.id };
+  console.error('[email] Resend failed for reset OTP:', r?.error);
+  return { ok: false, error: r?.error || 'Resend send failed' };
 }
 
-// Whether real SMTP credentials are configured
-export function isSmtpConfigured() {
-  const { user, pass } = env();
-  // Only need user and pass - host is optional (defaults to Gmail service)
-  return Boolean(user && pass);
+/** Whether Resend is configured (replaces old isSmtpConfigured) */
+export function isEmailConfigured() {
+  return isResendConfigured();
 }
 
-// Reset transporter to force re-creation (useful for config changes)
-export function resetTransporter() {
-  transporter = null;
-  transporterVerified = false;
-  console.log('[email] Transporter reset - will be re-created on next use');
-}
+// Keep legacy name as alias so existing imports don't break
+export const isSmtpConfigured = isEmailConfigured;
 
-// Verify SMTP connectivity
-export async function verifySmtpConnection() {
-  // Reset and recreate transporter for fresh verification
-  resetTransporter();
-  const t = getTransporter();
-  const { host, user } = env();
-  if (!t) return { ok: false, error: 'Transporter not created - check SMTP_USER and SMTP_PASS' };
-  try {
-    await t.verify();
-    return { ok: true, host: host || 'gmail-service', user };
-  } catch (err:any) {
-    return { ok: false, error: err?.message || 'verify failed', code: err?.code, host: host || 'gmail-service', user };
-  }
-}
-
-// Basic diagnostics to help debug SMTP configuration
-export function smtpDiagnostics() {
-  const { host, port, user, pass, from } = env();
+/** Diagnostics for the email provider */
+export function emailDiagnostics() {
   return {
-    hasUser: Boolean(user),
-    hasPass: Boolean(pass),
-    hasHost: Boolean(host),
-    usingGmailService: !host || host.includes('gmail'),
-    port,
-    fromMatchesUser: from ? from === user : null,
-    emailFrom: from,
-    transporterCreated: transporter !== null,
-    transporterVerified,
+    provider: 'resend',
+    configured: isResendConfigured(),
+    from: getFrom(),
+    apiKeySet: Boolean(process.env.RESEND_API_KEY),
   };
 }
