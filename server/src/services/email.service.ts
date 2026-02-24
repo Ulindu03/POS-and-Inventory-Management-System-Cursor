@@ -23,7 +23,7 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string) {
   console.log('[email] Sending password reset via Resend to:', to);
   const r = await sendViaResend({ from, to, subject, html });
   if (r?.ok) return { ok: true, id: r.id };
-  console.error('[email] Resend failed for password reset:', r?.error);
+  console.warn('[email] Resend send skipped (free-tier limitation?):', r?.error?.message || r?.error);
   return { ok: false, error: r?.error || 'Resend send failed' };
 }
 
@@ -44,7 +44,7 @@ export async function sendOtpEmail(to: string, otp: string) {
     console.log('[email] OTP sent via Resend:', r.id);
     return { ok: true, id: r.id };
   }
-  console.error('[email] Resend failed for OTP:', r?.error);
+  console.warn('[email] Resend OTP delivery skipped (free-tier limitation?):', r?.error?.message || r?.error);
   return { ok: false, error: r?.error || 'Resend send failed' };
 }
 
@@ -62,7 +62,7 @@ export async function sendResetOtpEmail(to: string, otp: string) {
   console.log('[email] Sending reset OTP via Resend to:', to);
   const r = await sendViaResend({ from, to, subject, html });
   if (r?.ok) return { ok: true, id: r.id };
-  console.error('[email] Resend failed for reset OTP:', r?.error);
+  console.warn('[email] Resend reset OTP delivery skipped (free-tier limitation?):', r?.error?.message || r?.error);
   return { ok: false, error: r?.error || 'Resend send failed' };
 }
 
