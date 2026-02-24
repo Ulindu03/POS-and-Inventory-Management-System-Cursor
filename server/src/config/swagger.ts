@@ -25,11 +25,11 @@ const swaggerDefinition = {
 };
 
 const srcRoot = path.resolve(__dirname, '..');
+// In production (dist/), only .js files exist. Use simple glob patterns.
 const apisGlobs = [
-  // Deep scan for TypeScript/JavaScript route and controller files
-  path.join(srcRoot, 'routes', '**', '*.{ts,js}'),
-  path.join(srcRoot, 'controllers', '**', '*.{ts,js}'),
-].map((p) => p.replace(/\\/g, '/'));
+  path.join(srcRoot, 'routes', '**', '*.js').replace(/\\/g, '/'),
+  path.join(srcRoot, 'controllers', '**', '*.js').replace(/\\/g, '/'),
+];
 
 export const swaggerSpec = swaggerJSDoc({
   swaggerDefinition: swaggerDefinition as any,
