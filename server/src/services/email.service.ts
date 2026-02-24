@@ -35,30 +35,20 @@ function getTransporter() {
   }
   
   try {
-    // Check if it's Gmail (either by service shortcut or explicit host)
-    const isGmail = !host || host.includes('gmail');
+    // Use explicit host/port configuration (more reliable than service shortcut)
+    const smtpHost = host || 'smtp.gmail.com';
     
-    if (isGmail) {
-      // Use Gmail service for better compatibility
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass },
-      });
-      console.log('[email] Created Gmail transporter');
-    } else {
-      // Generic SMTP with proper TLS settings
-      transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: port === 465, // true for 465, false for other ports
-        auth: { user, pass },
-        tls: {
-          // Don't fail on invalid certs (some SMTP servers have self-signed)
-          rejectUnauthorized: false,
-        },
-      });
-      console.log('[email] Created custom SMTP transporter for', host);
-    }
+    transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port,
+      secure: port === 465, // true for 465, false for other ports
+      auth: { user, pass },
+      tls: {
+        // Don't fail on invalid certs (some SMTP servers have self-signed)
+        rejectUnauthorized: false,
+      },
+    });
+    console.log('[email] Created SMTP transporter for', smtpHost);
     
     // Verify transporter in background (don't block)
     if (!transporterVerified) {
