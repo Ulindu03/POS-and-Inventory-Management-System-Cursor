@@ -32,6 +32,6 @@ const apisGlobs = [
 ].map((p) => p.replace(/\\/g, '/'));
 
 export const swaggerSpec = swaggerJSDoc({
-  definition: swaggerDefinition as any,
+  swaggerDefinition: swaggerDefinition as any,
   apis: apisGlobs,
 });
